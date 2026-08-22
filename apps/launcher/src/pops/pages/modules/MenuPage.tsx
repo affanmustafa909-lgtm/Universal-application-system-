@@ -1,0 +1,1710 @@
+import { Button } from "@platform/ui";
+import {
+  canCreateMenuCatalog,
+  canManageMenuCatalog,
+  formatMenuItemLabel,
+  menuItemDisplayPrice,
+  type MenuCategory,
+  type MenuItem,
+} from "@platform/contracts";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSessionStore } from "../../../stores/sessionStore";
+import { usePopsStore } from "../../../stores/popsStore";
+import {
+  createMenuCategory,
+  createMenuItem,
+  deleteMenuCategory,
+  deleteMenuItem,
+  fetchBranchMenuAdmin,
+  updateMenuCategory,
+  updateMenuItem,
+  uploadMenuImage,
+} from "../../api/menu";
+import { accentValueClass, amberPillActiveClass, linkActionClass, linkDangerClass, linkWarningClass, mutedClass, noticeSuccessClass, pillInactiveClass } from "../../lib/themeClasses";
+import { Badge } from "../../ui/Badge";
+import { MenuImagePicker, MenuImageThumb } from "../../ui/MenuImagePicker";
+import { PageHeader } from "../../ui/PageHeader";
+import { SimpleTable } from "../../ui/SimpleTable";
+import {
+  createHappyHourSlotId,
+  DEFAULT_HAPPY_HOUR_SETTINGS,
+  formatHappyHourSlot,
+  formatHappyHourSlots,
+  loadHappyHourSettings,
+  normalizeHappyHourSlot,
+  saveHappyHourSettings,
+  type HappyHourSettings,
+  type HappyHourTimeSlot,
+} from "../../lib/happyHourSettings";
+import { isHappyHourActive } from "../../lib/posHappyHour";
+import {
+  exportMenuExcel,
+  importMenuRows,
+  parseMenuCategorySheet,
+  parseMenuImportFile,
+  downloadMenuImportTemplateExcel,
+} from "../../lib/menuImportExport";
+import {
+  DEFAULT_PRINTER_SECTIONS,
+  loadPrinterSections,
+  PRINTER_SECTIONS_CHANGED_EVENT,
+  type PrinterSection,
+} from "../../lib/printerSections";
+import {
+  itemHasSectionOverride,
+  loadPrinterRouting,
+  PRINTER_ROUTING_CHANGED_EVENT,
+  setCategorySections,
+  setItemSections,
+} from "../../lib/printerRouting";
+
+type VariantRow = { label: string; price: string; barcode: string };
+
+const VARIANT_PRESETS = ["Small", "Medium", "Large", "Full", "Half", "Quarter", "Plate", "Single"] as const;
+
+function emptyVariantRow(): VariantRow {
+  return { label: "", price: "", barcode: "" };
+}
+
+function variantsPayloadFromForm(form: ItemFormState): { label: string; price: number; barcode?: string }[] {
+  if (form.simplePrice) {
+    const price = Number(form.simplePriceValue);
+    if (!Number.isFinite(price) || price < 1) {
+      throw new Error("Enter a valid Simple Price (PKR).");
+    }
+    return [{ label: "Standard", price: Math.round(price) }];
+  }
+  const variants = form.variants
+    .filter((v) => v.price.trim())
+    .map((v) => ({
+      label: v.label.trim() || "Standard",
+      price: Number(v.price),
+      barcode: v.barcode.trim() || undefined,
+    }));
+  if (variants.length === 0) {
+    throw new Error("Add at least one sub-category with a price.");
+  }
+  return variants;
+}
+
+type ItemFormState = {
+  name: string;
+  secondaryName: string;
+  featured: boolean;
+  discountable: boolean;
+  nonDiscountable: boolean;
+  nonTaxable: boolean;
+  askForPrice: boolean;
+  askForQty: boolean;
+  allowManualDiscount: boolean;
+  defaultDiscountPct: string;
+  /** Flat price — hide size list; tickets print name only. */
+  simplePrice: boolean;
+  /** Used when simplePrice is on (single PKR field). */
+  simplePriceValue: string;
+  variants: VariantRow[];
+};
+
+function menuItemToEditForm(item: MenuItem): ItemFormState {
+  const onlySilent =
+    item.variants.length <= 1 &&
+    (!item.variants[0] ||
+      !item.variants[0].label.trim() ||
+      /^(standard|regular|default|normal)$/i.test(item.variants[0].label.trim()));
+  const simplePrice = Boolean(item.simplePrice) || onlySilent;
+  const price =
+    item.variants[0]?.price != null ? String(item.variants[0].price) : String(item.price ?? "");
+  return {
+    name: item.name,
+    secondaryName: item.secondaryName ?? "",
+    featured: item.featured,
+    discountable: item.discountable && !item.nonDiscountable,
+    nonDiscountable: item.nonDiscountable || !item.discountable,
+    nonTaxable: item.nonTaxable,
+    askForPrice: item.askForPrice,
+    askForQty: item.askForQty,
+    allowManualDiscount: item.allowManualDiscount,
+    defaultDiscountPct: String(item.defaultDiscountPct ?? 0),
+    simplePrice,
+    simplePriceValue: price,
+    variants:
+      item.variants.length > 0
+        ? item.variants.map((v) => ({
+            label: v.label,
+            price: String(v.price),
+            barcode: v.barcode ?? "",
+          }))
+        : [{ label: "", price: String(item.price), barcode: item.barcode ?? "" }],
+  };
+}
+
+function MenuItemFlagFields({
+  form,
+  onChange,
+}: {
+  form: ItemFormState;
+  onChange: (next: ItemFormState) => void;
+}): JSX.Element {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-4">
+        <label className="flex items-center gap-2 text-xs text-slate-400">
+          <input
+            type="checkbox"
+            className="accent-amber-500"
+            checked={form.discountable && !form.nonDiscountable}
+            onChange={(e) =>
+              onChange({
+                ...form,
+                discountable: e.target.checked,
+                nonDiscountable: !e.target.checked,
+                allowManualDiscount: e.target.checked ? form.allowManualDiscount : false,
+              })
+            }
+          />
+          Discountable
+        </label>
+        <label className="flex items-center gap-2 text-xs text-slate-400">
+          <input
+            type="checkbox"
+            className="accent-amber-500"
+            checked={form.nonDiscountable || !form.discountable}
+            onChange={(e) =>
+              onChange({
+                ...form,
+                nonDiscountable: e.target.checked,
+                discountable: !e.target.checked,
+                allowManualDiscount: e.target.checked ? false : form.allowManualDiscount,
+              })
+            }
+          />
+          Non-Discountable
+        </label>
+        <label className="flex items-center gap-2 text-xs text-slate-400">
+          <input
+            type="checkbox"
+            className="accent-amber-500"
+            checked={form.nonTaxable}
+            onChange={(e) =>
+              onChange({
+                ...form,
+                nonTaxable: e.target.checked,
+                allowManualDiscount: e.target.checked ? false : form.allowManualDiscount,
+              })
+            }
+          />
+          Non-Taxable
+        </label>
+      </div>
+      <div className="flex flex-wrap gap-4">
+        <label className="flex items-center gap-2 text-xs text-slate-400">
+          <input
+            type="checkbox"
+            className="accent-amber-500"
+            checked={form.askForPrice}
+            onChange={(e) => onChange({ ...form, askForPrice: e.target.checked })}
+          />
+          Ask for Price
+        </label>
+        <label className="flex items-center gap-2 text-xs text-slate-400">
+          <input
+            type="checkbox"
+            className="accent-amber-500"
+            checked={form.askForQty}
+            onChange={(e) => onChange({ ...form, askForQty: e.target.checked })}
+          />
+          Ask for Qty
+        </label>
+        <label className="flex items-center gap-2 text-xs text-slate-400">
+          <input
+            type="checkbox"
+            className="accent-amber-500"
+            checked={form.allowManualDiscount && form.discountable && !form.nonDiscountable && !form.nonTaxable}
+            disabled={!form.discountable || form.nonDiscountable || form.nonTaxable}
+            onChange={(e) =>
+              onChange({
+                ...form,
+                allowManualDiscount: e.target.checked,
+                defaultDiscountPct: e.target.checked ? form.defaultDiscountPct : "0",
+              })
+            }
+          />
+          Item Manual Discount (% or PKR)
+        </label>
+      </div>
+      {form.allowManualDiscount && form.discountable && !form.nonDiscountable && !form.nonTaxable ? (
+        <label className="block text-xs text-slate-400">
+          Default Discount %
+          <input
+            type="number"
+            min={0}
+            max={100}
+            className="mt-1 w-full max-w-[8rem] rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+            value={form.defaultDiscountPct}
+            onChange={(e) => onChange({ ...form, defaultDiscountPct: e.target.value })}
+          />
+          <span className="mt-1 block text-[10px] text-slate-500">
+            Applied automatically when this item is added on POS (staff can still change Disc % / Disc Rs).
+          </span>
+        </label>
+      ) : null}
+      <p className="text-[10px] text-slate-500">
+        Secondary name (Urdu) is used for kitchen printing and bills. Discountable / Non-Discountable
+        control bill discounts. Non-Taxable removes tax and hides bill Disc % / Disc Rs on POS. Ask for
+        Price/Qty prompts on add. Manual discount is per line.
+      </p>
+    </div>
+  );
+}
+
+function MenuItemVariantFields({
+  form,
+  onChange,
+}: {
+  form: ItemFormState;
+  onChange: (next: ItemFormState) => void;
+}): JSX.Element {
+  return (
+    <div className="space-y-3">
+      <label className="flex items-start gap-2 text-xs text-slate-300">
+        <input
+          type="checkbox"
+          className="mt-0.5 accent-amber-500"
+          checked={form.simplePrice}
+          onChange={(e) => {
+            const on = e.target.checked;
+            const priceFromVariants = form.variants.find((v) => v.price.trim())?.price ?? form.simplePriceValue;
+            onChange({
+              ...form,
+              simplePrice: on,
+              simplePriceValue: on ? priceFromVariants || form.simplePriceValue : form.simplePriceValue,
+              variants: on
+                ? [{ label: "Standard", price: priceFromVariants || form.simplePriceValue, barcode: "" }]
+                : form.variants.length > 0
+                  ? form.variants
+                  : [emptyVariantRow()],
+            });
+          }}
+        />
+        <span>
+          <span className="font-medium text-slate-200">Simple Price</span>
+          <span className="mt-0.5 block text-[10px] text-slate-500">
+            On: one price only — POS adds the item directly; kitchen / bill print name without Standard /
+            Half / Full.
+          </span>
+        </span>
+      </label>
+
+      {form.simplePrice ? (
+        <label className="block text-xs text-slate-400">
+          Price (PKR)
+          <input
+            type="number"
+            min={1}
+            required
+            className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+            value={form.simplePriceValue}
+            onChange={(e) =>
+              onChange({
+                ...form,
+                simplePriceValue: e.target.value,
+                variants: [{ label: "Standard", price: e.target.value, barcode: "" }],
+              })
+            }
+            placeholder="e.g. 120"
+          />
+        </label>
+      ) : (
+        <div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-xs font-medium text-slate-300">Sub-categories (sizes)</div>
+            <div className="flex flex-wrap gap-1">
+              {VARIANT_PRESETS.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  className="rounded-md border border-slate-700 px-2 py-0.5 text-[10px] text-slate-400 hover:border-amber-500/40 hover:text-white"
+                  onClick={() =>
+                    onChange({
+                      ...form,
+                      variants: [...form.variants, { ...emptyVariantRow(), label: preset }],
+                    })
+                  }
+                >
+                  + {preset}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="mt-1 text-[10px] text-slate-500">
+            Add Full, Half, Quarter, or custom sizes. POS shows a picker when a dish has more than one.
+          </p>
+          <ul className="mt-2 space-y-2">
+            {form.variants.map((row, index) => (
+              <li
+                key={index}
+                className="grid gap-2 rounded-md border border-slate-800 bg-slate-950/40 p-2 sm:grid-cols-12"
+              >
+                <label className="block text-[10px] text-slate-500 sm:col-span-3">
+                  Label
+                  <input
+                    className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-white"
+                    placeholder="Full"
+                    value={row.label}
+                    onChange={(e) =>
+                      onChange({
+                        ...form,
+                        variants: form.variants.map((v, i) =>
+                          i === index ? { ...v, label: e.target.value } : v,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+                <label className="block text-[10px] text-slate-500 sm:col-span-2">
+                  Price (PKR)
+                  <input
+                    type="number"
+                    min={1}
+                    className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-white"
+                    value={row.price}
+                    onChange={(e) =>
+                      onChange({
+                        ...form,
+                        variants: form.variants.map((v, i) =>
+                          i === index ? { ...v, price: e.target.value } : v,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+                <label className="block text-[10px] text-slate-500 sm:col-span-3">
+                  Barcode
+                  <input
+                    className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-white"
+                    value={row.barcode}
+                    onChange={(e) =>
+                      onChange({
+                        ...form,
+                        variants: form.variants.map((v, i) =>
+                          i === index ? { ...v, barcode: e.target.value } : v,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+                <div className="flex items-end justify-end sm:col-span-4">
+                  {form.variants.length > 1 ? (
+                    <button
+                      type="button"
+                      className={`pb-1.5 text-[10px] ${linkDangerClass}`}
+                      onClick={() =>
+                        onChange({
+                          ...form,
+                          variants: form.variants.filter((_, i) => i !== index),
+                        })
+                      }
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className={`mt-2 text-xs ${linkWarningClass}`}
+            onClick={() => onChange({ ...form, variants: [...form.variants, emptyVariantRow()] })}
+          >
+            + Add sub-category
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MenuItemEditModal({
+  item,
+  loading,
+  error,
+  branchCode,
+  sections,
+  onClose,
+  onSave,
+}: {
+  item: MenuItem;
+  loading: boolean;
+  error: string | null;
+  branchCode: string | undefined;
+  sections: PrinterSection[];
+  onClose: () => void;
+  onSave: (form: ItemFormState, imageFile: File | null, clearImage: boolean) => void;
+}): JSX.Element {
+  const [form, setForm] = useState<ItemFormState>(() => menuItemToEditForm(item));
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [clearImage, setClearImage] = useState(false);
+  const [printOverride, setPrintOverride] = useState(() => itemHasSectionOverride(branchCode, item.id));
+  const [printSections, setPrintSections] = useState<string[]>(
+    () => loadPrinterRouting(branchCode).byItem[item.id] ?? loadPrinterRouting(branchCode).byCategory[item.categoryId] ?? [],
+  );
+
+  useEffect(() => {
+    setForm(menuItemToEditForm(item));
+  }, [item]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 p-4 dark:bg-black/60">
+      <div
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="menu-item-edit-title"
+      >
+        <h2 id="menu-item-edit-title" className="text-lg font-semibold text-white">
+          Edit menu item
+        </h2>
+        <p className="mt-1 text-xs text-slate-400">{item.name}</p>
+        <form
+          className="mt-4 space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!form.name.trim()) return;
+            onSave(form, imageFile, clearImage);
+          }}
+        >
+          <label className="block text-xs text-slate-400">
+            Dish name
+            <input
+              className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              required
+            />
+          </label>
+          <label className="block text-xs text-slate-400">
+            Item secondary name (Urdu)
+            <input
+              dir="rtl"
+              lang="ur"
+              className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+              placeholder="اردو نام"
+              value={form.secondaryName}
+              onChange={(e) => setForm((f) => ({ ...f, secondaryName: e.target.value }))}
+            />
+            <span className="mt-1 block text-[10px] text-slate-500">
+              Used for kitchen printing notification and bill.
+            </span>
+          </label>
+          <label className="flex items-center gap-2 text-xs text-slate-400">
+            <input
+              type="checkbox"
+              className="accent-amber-500"
+              checked={form.featured}
+              onChange={(e) => setForm((f) => ({ ...f, featured: e.target.checked }))}
+            />
+            <span className="inline-flex items-center gap-1">
+              <span aria-hidden className="text-amber-700 dark:text-amber-300">★</span>
+              Feature this dish on POS
+            </span>
+          </label>
+          <MenuItemFlagFields form={form} onChange={setForm} />
+          <div>
+            <label className="flex items-center gap-2 text-xs text-slate-400">
+              <input
+                type="checkbox"
+                className="accent-amber-500"
+                checked={!printOverride}
+                onChange={(e) => {
+                  const useCategory = e.target.checked;
+                  setPrintOverride(!useCategory);
+                  if (useCategory && branchCode) {
+                    setItemSections(branchCode, item.id, null);
+                    setPrintSections(loadPrinterRouting(branchCode).byCategory[item.categoryId] ?? []);
+                  }
+                }}
+              />
+              Use category's printing
+            </label>
+            {printOverride ? (
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {sections
+                  .filter((s) => s.enabled)
+                  .map((section) => {
+                    const assigned = printSections.includes(section.id);
+                    return (
+                      <button
+                        key={section.id}
+                        type="button"
+                        onClick={() => {
+                          const next = assigned
+                            ? printSections.filter((id) => id !== section.id)
+                            : [...printSections, section.id];
+                          setPrintSections(next);
+                          if (branchCode) setItemSections(branchCode, item.id, next);
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${
+                          assigned
+                            ? "border-amber-400 bg-amber-500/15 text-amber-200"
+                            : "border-slate-700 bg-slate-950 text-slate-400 hover:border-slate-600"
+                        }`}
+                      >
+                        <span aria-hidden>{section.icon}</span>
+                        {section.name}
+                      </button>
+                    );
+                  })}
+              </div>
+            ) : null}
+          </div>
+          <MenuItemVariantFields form={form} onChange={setForm} />
+          <MenuImagePicker
+            label="Dish photo"
+            value={clearImage ? null : item.imageUrl}
+            previewFile={imageFile}
+            onFileSelect={(file) => {
+              setImageFile(file);
+              setClearImage(false);
+            }}
+            onClear={() => {
+              setImageFile(null);
+              setClearImage(true);
+            }}
+            disabled={loading}
+          />
+          {error ? <p className="text-xs text-red-300">{error}</p> : null}
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" className="text-xs" disabled={loading}>
+              {loading ? "Saving…" : "Save changes"}
+            </Button>
+            <Button type="button" variant="ghost" className="text-xs" onClick={onClose} disabled={loading}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function MenuPage(): JSX.Element {
+  const queryClient = useQueryClient();
+  const branch = usePopsStore((s) => s.branch);
+  const claims = useSessionStore((s) => s.claims);
+  const perms = claims?.permissions ?? [];
+  const canEdit = canManageMenuCatalog(perms);
+  const canCreate = canCreateMenuCatalog(perms);
+
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryImage, setNewCategoryImage] = useState<File | null>(null);
+  const [itemForm, setItemForm] = useState<ItemFormState>({
+    name: "",
+    secondaryName: "",
+    featured: false,
+    discountable: true,
+    nonDiscountable: false,
+    nonTaxable: false,
+    askForPrice: false,
+    askForQty: false,
+    allowManualDiscount: false,
+    defaultDiscountPct: "0",
+    simplePrice: false,
+    simplePriceValue: "",
+    variants: [emptyVariantRow()],
+  });
+  const [newItemImage, setNewItemImage] = useState<File | null>(null);
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [categoryImageUploading, setCategoryImageUploading] = useState(false);
+  const [categoryReorderBusy, setCategoryReorderBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [happyHourDraft, setHappyHourDraft] = useState<HappyHourSettings>(DEFAULT_HAPPY_HOUR_SETTINGS);
+  const [happyHourNotice, setHappyHourNotice] = useState<string | null>(null);
+  const [menuTransferNotice, setMenuTransferNotice] = useState<string | null>(null);
+  const [menuTransferBusy, setMenuTransferBusy] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const [printerSections, setPrinterSections] = useState<PrinterSection[]>(DEFAULT_PRINTER_SECTIONS);
+  const [routingRevision, setRoutingRevision] = useState(0);
+
+  useEffect(() => {
+    setPrinterSections(loadPrinterSections(branch?.code));
+  }, [branch?.code]);
+
+  useEffect(() => {
+    function onSectionsChanged(event: Event): void {
+      const detail = (event as CustomEvent<{ branchCode?: string }>).detail;
+      if (!branch?.code || detail?.branchCode === branch.code) {
+        setPrinterSections(loadPrinterSections(branch?.code));
+      }
+    }
+    function onRoutingChanged(event: Event): void {
+      const detail = (event as CustomEvent<{ branchCode?: string }>).detail;
+      if (!branch?.code || detail?.branchCode === branch.code) {
+        setRoutingRevision((n) => n + 1);
+      }
+    }
+    window.addEventListener(PRINTER_SECTIONS_CHANGED_EVENT, onSectionsChanged);
+    window.addEventListener(PRINTER_ROUTING_CHANGED_EVENT, onRoutingChanged);
+    return () => {
+      window.removeEventListener(PRINTER_SECTIONS_CHANGED_EVENT, onSectionsChanged);
+      window.removeEventListener(PRINTER_ROUTING_CHANGED_EVENT, onRoutingChanged);
+    };
+  }, [branch?.code]);
+
+  const enabledPrinterSections = useMemo(
+    () => printerSections.filter((s) => s.enabled),
+    [printerSections],
+  );
+
+  const routing = useMemo(() => {
+    void routingRevision;
+    return loadPrinterRouting(branch?.code);
+  }, [branch?.code, routingRevision]);
+
+  const menuQuery = useQuery({
+    queryKey: ["menu", "admin", branch?.code],
+    enabled: Boolean(branch?.code && canCreate),
+    queryFn: () => fetchBranchMenuAdmin(branch!.code),
+  });
+
+  const categories = menuQuery.data?.categories ?? [];
+  const items = menuQuery.data?.items ?? [];
+
+  const selectedCategory = useMemo(
+    () => categories.find((c) => c.id === selectedCategoryId) ?? categories[0] ?? null,
+    [categories, selectedCategoryId],
+  );
+
+  useEffect(() => {
+    if (categories.length > 0 && !selectedCategoryId) {
+      setSelectedCategoryId(categories[0].id);
+    }
+  }, [categories, selectedCategoryId]);
+
+  useEffect(() => {
+    setHappyHourDraft(loadHappyHourSettings(branch?.code));
+  }, [branch?.code]);
+
+  const bonusItemOptions = useMemo(
+    () => items.filter((i) => i.isActive),
+    [items],
+  );
+
+  const giftItemIds = useMemo(
+    () => new Set(happyHourDraft.slots.map((s) => s.bonusMenuItemId).filter(Boolean)),
+    [happyHourDraft.slots],
+  );
+
+  function updateSlot(index: number, patch: Partial<HappyHourTimeSlot>): void {
+    setHappyHourDraft((prev) => ({
+      ...prev,
+      slots: prev.slots.map((slot, i) =>
+        i === index ? normalizeHappyHourSlot({ ...slot, ...patch }) : slot,
+      ),
+    }));
+  }
+
+  function addSlot(): void {
+    setHappyHourDraft((prev) => ({
+      ...prev,
+      slots: [
+        ...prev.slots,
+        normalizeHappyHourSlot({
+          id: createHappyHourSlotId(),
+          startHour: 19,
+          endHour: 21,
+          percentOff: 10,
+        }),
+      ],
+    }));
+  }
+
+  function removeSlot(index: number): void {
+    setHappyHourDraft((prev) => ({
+      ...prev,
+      slots: prev.slots.length > 1 ? prev.slots.filter((_, i) => i !== index) : prev.slots,
+    }));
+  }
+
+  const categoryItems = useMemo(
+    () => items.filter((i) => i.categoryId === selectedCategory?.id),
+    [items, selectedCategory?.id],
+  );
+
+  const selectedCategoryIndex = useMemo(
+    () => (selectedCategory ? categories.findIndex((c) => c.id === selectedCategory.id) : -1),
+    [categories, selectedCategory],
+  );
+
+  function invalidate(): void {
+    void queryClient.invalidateQueries({ queryKey: ["menu"] });
+  }
+
+  async function moveCategory(index: number, direction: -1 | 1): Promise<void> {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= categories.length || categoryReorderBusy) return;
+    const current = categories[index];
+    const neighbor = categories[targetIndex];
+    if (!current || !neighbor) return;
+
+    setCategoryReorderBusy(true);
+    setError(null);
+    try {
+      const currentOrder = current.sortOrder;
+      const neighborOrder = neighbor.sortOrder;
+      // If both share the same sortOrder, assign contiguous ranks after the swap.
+      const nextCurrent = currentOrder === neighborOrder ? targetIndex : neighborOrder;
+      const nextNeighbor = currentOrder === neighborOrder ? index : currentOrder;
+      await Promise.all([
+        updateMenuCategory(current.id, { sortOrder: nextCurrent }),
+        updateMenuCategory(neighbor.id, { sortOrder: nextNeighbor }),
+      ]);
+      invalidate();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to move category");
+    } finally {
+      setCategoryReorderBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (categoryReorderBusy || selectedCategoryIndex < 0) return;
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) {
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        void moveCategory(selectedCategoryIndex, -1);
+      } else if (event.key === "ArrowDown") {
+        event.preventDefault();
+        void moveCategory(selectedCategoryIndex, 1);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
+  const createCategoryMutation = useMutation({
+    mutationFn: async (name: string) => {
+      let imageUrl: string | undefined;
+      if (newCategoryImage) {
+        imageUrl = await uploadMenuImage(newCategoryImage);
+      }
+      return createMenuCategory({
+        branchCode: branch!.code,
+        name,
+        sortOrder: categories.length,
+        imageUrl,
+      });
+    },
+    onSuccess: (cat) => {
+      invalidate();
+      setNewCategoryName("");
+      setNewCategoryImage(null);
+      setSelectedCategoryId(cat.id);
+      setError(null);
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: (id: string) => deleteMenuCategory(id),
+    onSuccess: () => {
+      invalidate();
+      setSelectedCategoryId(null);
+      setError(null);
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const createItemMutation = useMutation({
+    mutationFn: async () => {
+      const variants = variantsPayloadFromForm(itemForm);
+      let imageUrl: string | undefined;
+      if (newItemImage) {
+        imageUrl = await uploadMenuImage(newItemImage);
+      }
+      return createMenuItem({
+        branchCode: branch!.code,
+        categoryId: selectedCategory!.id,
+        name: itemForm.name.trim(),
+        secondaryName: itemForm.secondaryName.trim() || null,
+        sortOrder: categoryItems.length,
+        imageUrl,
+        featured: itemForm.featured,
+        discountable: itemForm.discountable && !itemForm.nonDiscountable,
+        nonDiscountable: itemForm.nonDiscountable || !itemForm.discountable,
+        nonTaxable: itemForm.nonTaxable,
+        askForPrice: itemForm.askForPrice,
+        askForQty: itemForm.askForQty,
+        allowManualDiscount: itemForm.allowManualDiscount,
+        defaultDiscountPct: itemForm.allowManualDiscount
+          ? Math.max(0, Math.min(100, Number(itemForm.defaultDiscountPct) || 0))
+          : 0,
+        simplePrice: itemForm.simplePrice,
+        price: variants[0]?.price,
+        variants,
+      });
+    },
+    onSuccess: () => {
+      invalidate();
+      setItemForm({
+        name: "",
+        secondaryName: "",
+        featured: false,
+        discountable: true,
+        nonDiscountable: false,
+        nonTaxable: false,
+        askForPrice: false,
+        askForQty: false,
+        allowManualDiscount: false,
+        defaultDiscountPct: "0",
+        simplePrice: false,
+        simplePriceValue: "",
+        variants: [emptyVariantRow()],
+      });
+      setNewItemImage(null);
+      setError(null);
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const toggleItemMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => updateMenuItem(id, { isActive }),
+    onSuccess: () => invalidate(),
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const toggleFeaturedMutation = useMutation({
+    mutationFn: ({ id, featured }: { id: string; featured: boolean }) => updateMenuItem(id, { featured }),
+    onSuccess: () => invalidate(),
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const deleteItemMutation = useMutation({
+    mutationFn: (id: string) => deleteMenuItem(id),
+    onSuccess: () => invalidate(),
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const updateItemMutation = useMutation({
+    mutationFn: async ({
+      id,
+      form,
+      imageFile,
+      clearImage,
+    }: {
+      id: string;
+      form: ItemFormState;
+      imageFile: File | null;
+      clearImage: boolean;
+    }) => {
+      const variants = variantsPayloadFromForm(form);
+      let imageUrl: string | null | undefined;
+      if (imageFile) {
+        imageUrl = await uploadMenuImage(imageFile);
+      } else if (clearImage) {
+        imageUrl = null;
+      }
+      return updateMenuItem(
+        id,
+        {
+          name: form.name.trim(),
+          secondaryName: form.secondaryName.trim() || null,
+          featured: form.featured,
+          discountable: form.discountable && !form.nonDiscountable,
+          nonDiscountable: form.nonDiscountable || !form.discountable,
+          nonTaxable: form.nonTaxable,
+          askForPrice: form.askForPrice,
+          askForQty: form.askForQty,
+          allowManualDiscount: form.allowManualDiscount,
+          defaultDiscountPct: form.allowManualDiscount
+            ? Math.max(0, Math.min(100, Number(form.defaultDiscountPct) || 0))
+            : 0,
+          simplePrice: form.simplePrice,
+          price: variants[0]?.price,
+          variants,
+          ...(imageUrl !== undefined ? { imageUrl } : {}),
+        },
+        branch?.code,
+      );
+    },
+    onSuccess: (updated) => {
+      if (branch?.code && updated) {
+        queryClient.setQueryData(["menu", "admin", branch.code], (prev: unknown) => {
+          if (!prev || typeof prev !== "object") return prev;
+          const menu = prev as { items?: MenuItem[]; branchCode?: string; categories?: unknown };
+          if (!Array.isArray(menu.items)) return prev;
+          return {
+            ...menu,
+            items: menu.items.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)),
+          };
+        });
+      }
+      invalidate();
+      setEditingItem(null);
+      setEditError(null);
+    },
+    onError: (err: Error) => setEditError(err.message),
+  });
+
+  async function updateCategoryImage(file: File | null, clearExisting = false): Promise<void> {
+    if (!selectedCategory) return;
+    setCategoryImageUploading(true);
+    setError(null);
+    try {
+      const imageUrl = file ? await uploadMenuImage(file) : clearExisting ? null : selectedCategory.imageUrl;
+      if (file || clearExisting) {
+        await updateMenuCategory(selectedCategory.id, { imageUrl: clearExisting && !file ? null : imageUrl });
+        invalidate();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update category photo");
+    } finally {
+      setCategoryImageUploading(false);
+    }
+  }
+
+  function handleExportMenuExcel(): void {
+    if (!menuQuery.data || !branch?.code) return;
+    exportMenuExcel(menuQuery.data, branch.code);
+    setMenuTransferNotice("Menu exported to Excel.");
+  }
+
+  function handleDownloadMenuImportTemplate(): void {
+    if (!branch?.code) return;
+    downloadMenuImportTemplateExcel(branch.code);
+    setMenuTransferNotice("Menu import template downloaded.");
+  }
+
+  async function handleImportMenuFile(file: File): Promise<void> {
+    if (!branch?.code) return;
+    setMenuTransferBusy(true);
+    setMenuTransferNotice(null);
+    setError(null);
+    try {
+      const buffer = await file.arrayBuffer();
+      const categoryMeta = parseMenuCategorySheet(buffer, file.name);
+      const parsed = parseMenuImportFile(buffer, file.name);
+      if (parsed.rows.length === 0 && categoryMeta.length === 0) {
+        throw new Error(
+          "No menu rows found. Use our Download template (Menu Items + Categories sheets).",
+        );
+      }
+
+      const summary = await importMenuRows(parsed.rows, {
+        branchCode: branch.code,
+        categories,
+        items,
+        allowUpdate: canEdit,
+        categoryMeta,
+        createCategory: ({ name, sortOrder }) =>
+          createMenuCategory({ branchCode: branch.code, name, sortOrder }),
+        updateCategory: canEdit
+          ? (categoryId, input) => updateMenuCategory(categoryId, input)
+          : undefined,
+        createItem: ({ categoryId, name, secondaryName, featured, sortOrder, variants }) =>
+          createMenuItem({
+            branchCode: branch.code,
+            categoryId,
+            name,
+            secondaryName: secondaryName ?? null,
+            featured,
+            sortOrder,
+            variants,
+          }),
+        updateItem: (itemId, input) =>
+          updateMenuItem(itemId, {
+            ...input,
+            secondaryName: input.secondaryName ?? null,
+          }),
+      });
+
+      const totalSkipped = summary.skipped + parsed.skipped;
+      const reasons = [...parsed.skipReasons, ...summary.skipReasons].slice(0, 5);
+
+      invalidate();
+      setMenuTransferNotice(
+        `Import complete — ${summary.itemsCreated} new item${summary.itemsCreated === 1 ? "" : "s"}, ${summary.itemsUpdated} updated, ${summary.categoriesCreated} new categor${summary.categoriesCreated === 1 ? "y" : "ies"}` +
+          (summary.categoriesUpdated ? `, ${summary.categoriesUpdated} categories updated` : "") +
+          (totalSkipped ? `, ${totalSkipped} skipped` : "") +
+          ".",
+      );
+      if (reasons.length) {
+        setError(reasons.join(" · "));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Menu import failed");
+    } finally {
+      setMenuTransferBusy(false);
+      if (importFileRef.current) importFileRef.current.value = "";
+    }
+  }
+
+  if (!canCreate) {
+    return (
+      <PageHeader
+        title="Menu"
+        subtitle="You need menu add or manage permission to edit the menu. Sign out and sign in again if you were just granted access."
+      />
+    );
+  }
+
+  if (!branch?.code) {
+    return <PageHeader title="Menu" subtitle="Select a branch to manage its menu." />;
+  }
+
+  return (
+    <div className="space-y-6">
+      <input
+        ref={importFileRef}
+        type="file"
+        accept=".xlsx,.xls,.csv"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleImportMenuFile(file);
+        }}
+      />
+
+      <PageHeader
+        title="Menu"
+        subtitle={`Categories and items for ${branch.name} (${branch.code}). Changes appear immediately on POS.${
+          !canEdit ? " Add only — edit and delete are locked for your role." : ""
+        }`}
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              className="text-xs"
+              disabled={menuTransferBusy || menuQuery.isLoading}
+              onClick={handleExportMenuExcel}
+            >
+              Export Excel
+            </Button>
+            <Button
+              variant="ghost"
+              className="text-xs"
+              disabled={menuTransferBusy || menuQuery.isLoading}
+              onClick={handleDownloadMenuImportTemplate}
+            >
+              Download template
+            </Button>
+            <Button
+              className="text-xs"
+              disabled={menuTransferBusy || menuQuery.isLoading}
+              onClick={() => importFileRef.current?.click()}
+            >
+              {menuTransferBusy ? "Importing…" : "Import Excel"}
+            </Button>
+            {!canEdit ? (
+              <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-200">
+                Add only — import creates new items
+              </span>
+            ) : null}
+          </>
+        }
+      />
+
+      {menuTransferNotice ? (
+        <p className={noticeSuccessClass}>{menuTransferNotice}</p>
+      ) : null}
+
+      {menuQuery.isLoading ? <p className="text-sm text-slate-400">Loading menu…</p> : null}
+      {menuQuery.isError ? (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {(menuQuery.error as Error).message}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p>
+      ) : null}
+
+      <div className="grid gap-6 lg:grid-cols-12">
+        <div className="lg:col-span-4">
+          <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+            <div className="text-sm font-semibold text-white">Categories</div>
+            <form
+              className="mt-3 space-y-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newCategoryName.trim()) return;
+                createCategoryMutation.mutate(newCategoryName.trim());
+              }}
+            >
+              <div className="flex gap-2">
+                <input
+                  className="min-w-0 flex-1 rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-amber-500/50"
+                  placeholder="New category"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                />
+                <Button type="submit" className="shrink-0 text-xs" disabled={createCategoryMutation.isPending}>
+                  Add
+                </Button>
+              </div>
+              <MenuImagePicker
+                label="Category photo (optional)"
+                value={null}
+                previewFile={newCategoryImage}
+                onFileSelect={setNewCategoryImage}
+                onClear={() => setNewCategoryImage(null)}
+                disabled={createCategoryMutation.isPending}
+              />
+            </form>
+            <ul className="mt-3 space-y-1">
+              {categories.map((cat) => (
+                <li key={cat.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategoryId(cat.id)}
+                    className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm ${
+                      selectedCategory?.id === cat.id
+                        ? amberPillActiveClass
+                        : `${pillInactiveClass} dark:text-slate-300 dark:hover:bg-slate-800/80`
+                    }`}
+                  >
+                    <MenuImageThumb imageUrl={cat.imageUrl} alt={cat.name} />
+                    <span className="min-w-0 flex-1 truncate">{cat.name}</span>
+                    {!cat.isActive ? <Badge tone="neutral">Off</Badge> : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {selectedCategory && categories.length > 1 && canEdit ? (
+              <div className="mt-2 flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-xs"
+                  disabled={categoryReorderBusy || selectedCategoryIndex <= 0}
+                  onClick={() => void moveCategory(selectedCategoryIndex, -1)}
+                >
+                  ↑ Up
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-xs"
+                  disabled={categoryReorderBusy || selectedCategoryIndex >= categories.length - 1}
+                  onClick={() => void moveCategory(selectedCategoryIndex, 1)}
+                >
+                  ↓ Down
+                </Button>
+                <span className="text-[10px] text-slate-500">or use ↑ ↓ keys</span>
+              </div>
+            ) : null}
+            {selectedCategory && canEdit ? (
+              <div className="mt-4 space-y-3 border-t border-slate-800 pt-3">
+                <MenuImagePicker
+                  label="Category photo"
+                  value={selectedCategory.imageUrl}
+                  onFileSelect={(file) => {
+                    if (file) void updateCategoryImage(file);
+                  }}
+                  onClear={() => void updateCategoryImage(null, true)}
+                  disabled={categoryImageUploading}
+                />
+                <div>
+                  <div className="text-xs font-medium text-slate-400">Print to</div>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    {enabledPrinterSections.map((section) => {
+                      const assigned = (routing.byCategory[selectedCategory.id] ?? []).includes(section.id);
+                      return (
+                        <button
+                          key={section.id}
+                          type="button"
+                          onClick={() => {
+                            const current = routing.byCategory[selectedCategory.id] ?? [];
+                            const next = assigned
+                              ? current.filter((id) => id !== section.id)
+                              : [...current, section.id];
+                            setCategorySections(branch!.code, selectedCategory.id, next);
+                          }}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${
+                            assigned
+                              ? "border-amber-400 bg-amber-500/15 text-amber-200"
+                              : "border-slate-700 bg-slate-950 text-slate-400 hover:border-slate-600"
+                          }`}
+                        >
+                          <span aria-hidden>{section.icon}</span>
+                          {section.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Items in this category print to the selected sections unless overridden per item.
+                  </p>
+                </div>
+                {canEdit ? (
+                <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  className="text-xs"
+                  onClick={() =>
+                    updateMenuCategory(selectedCategory.id, {
+                      isActive: !selectedCategory.isActive,
+                    }).then(invalidate)
+                  }
+                >
+                  {selectedCategory.isActive ? "Disable category" : "Enable category"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  className={`text-xs ${linkDangerClass}`}
+                  onClick={() => {
+                    if (confirm(`Delete category "${selectedCategory.name}" and all its items?`)) {
+                      deleteCategoryMutation.mutate(selectedCategory.id);
+                    }
+                  }}
+                >
+                  Delete
+                </Button>
+                </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="lg:col-span-8 space-y-4">
+          {canEdit ? (
+          <div className="rounded-lg border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-slate-900/40 p-4 ring-1 ring-amber-500/10">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-white">Happy hour promotion</div>
+                <p className="mt-1 max-w-xl text-xs text-slate-400">
+                  Configure time slots with different discounts and optional free gifts. POS applies the
+                  matching slot automatically.
+                </p>
+              </div>
+              {happyHourDraft.enabled && isHappyHourActive(happyHourDraft) ? (
+                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-semibold text-emerald-400 ring-1 ring-emerald-500/25">
+                  Active now
+                </span>
+              ) : happyHourDraft.enabled ? (
+                <span className="rounded-full bg-slate-800 px-2.5 py-1 text-[10px] font-medium text-slate-400">
+                  Scheduled · {formatHappyHourSlots(happyHourDraft)}
+                </span>
+              ) : null}
+            </div>
+
+            <label className="mt-4 flex items-center gap-2 text-xs text-slate-300">
+              <input
+                type="checkbox"
+                className="accent-amber-500"
+                checked={happyHourDraft.enabled}
+                onChange={(e) =>
+                  setHappyHourDraft((prev) => ({ ...prev, enabled: e.target.checked }))
+                }
+              />
+              Enable happy hour
+            </label>
+
+            <div className="mt-4 space-y-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-400/90">
+                Time slots & pricing
+              </div>
+
+              {happyHourDraft.slots.map((slot, index) => (
+                <div
+                  key={slot.id}
+                  className="rounded-lg border border-slate-800 bg-slate-950/40 p-3"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-slate-300">
+                      Slot {index + 1} · {formatHappyHourSlot(slot)}
+                    </span>
+                    <button
+                      type="button"
+                      className={`text-xs ${linkDangerClass} disabled:opacity-40`}
+                      onClick={() => removeSlot(index)}
+                      disabled={happyHourDraft.slots.length === 1}
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <label className="block text-xs text-slate-400">
+                      Start hour (0–23)
+                      <input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={slot.startHour}
+                        onChange={(e) =>
+                          updateSlot(index, { startHour: Number(e.target.value) || 0 })
+                        }
+                        className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="block text-xs text-slate-400">
+                      End hour (0–23)
+                      <input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={slot.endHour}
+                        onChange={(e) =>
+                          updateSlot(index, { endHour: Number(e.target.value) || 0 })
+                        }
+                        className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="block text-xs text-slate-400">
+                      Discount (% off menu prices)
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={slot.percentOff}
+                        onChange={(e) =>
+                          updateSlot(index, { percentOff: Number(e.target.value) || 0 })
+                        }
+                        className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="block text-xs text-slate-400">
+                      Free gift item (optional)
+                      <select
+                        value={slot.bonusMenuItemId ?? ""}
+                        onChange={(e) => {
+                          const id = e.target.value || null;
+                          const item = bonusItemOptions.find((i) => i.id === id);
+                          const defaultVariant = item?.variants.find((v) => v.isActive)?.id ?? null;
+                          updateSlot(index, {
+                            bonusMenuItemId: id,
+                            bonusVariantId: defaultVariant,
+                          });
+                        }}
+                        className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      >
+                        <option value="">No free gift</option>
+                        {bonusItemOptions.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  {slot.bonusMenuItemId ? (() => {
+                    const giftItem = bonusItemOptions.find((i) => i.id === slot.bonusMenuItemId);
+                    const activeVariants = giftItem?.variants.filter((v) => v.isActive) ?? [];
+                    if (activeVariants.length <= 1) return null;
+                    return (
+                      <label className="mt-3 block text-xs text-slate-400">
+                        Gift size / variant
+                        <select
+                          value={slot.bonusVariantId ?? ""}
+                          onChange={(e) =>
+                            updateSlot(index, { bonusVariantId: e.target.value || null })
+                          }
+                          className="mt-1 w-full max-w-md rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                        >
+                          {activeVariants.map((v) => (
+                            <option key={v.id} value={v.id}>
+                              {v.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    );
+                  })() : null}
+
+                  <p className="mt-2 text-[10px] text-slate-500">
+                    {slot.percentOff > 0 ? `${slot.percentOff}% off all menu prices` : "Regular menu prices"}
+                    {slot.bonusMenuItemId ? " · includes free gift" : ""}
+                  </p>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={addSlot}
+                className="inline-flex items-center rounded-md border border-dashed border-amber-500/40 px-3 py-1.5 text-xs font-medium text-amber-300 transition hover:border-amber-400 hover:bg-amber-500/10"
+              >
+                + Add time slot
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                className="text-xs"
+                onClick={() => {
+                  if (!branch?.code) return;
+                  if (happyHourDraft.enabled && happyHourDraft.slots.length === 0) {
+                    setHappyHourNotice("Add at least one time slot before enabling happy hour.");
+                    return;
+                  }
+                  const invalid = happyHourDraft.slots.find(
+                    (s) => s.percentOff <= 0 && !s.bonusMenuItemId,
+                  );
+                  if (happyHourDraft.enabled && invalid) {
+                    setHappyHourNotice("Each slot needs a discount % or a free gift item.");
+                    return;
+                  }
+                  saveHappyHourSettings(branch.code, happyHourDraft);
+                  setHappyHourNotice("Happy hour settings saved. POS will apply slot pricing automatically.");
+                }}
+              >
+                Save happy hour
+              </Button>
+              <span className="text-[10px] text-slate-500">
+                {happyHourDraft.slots.length} slot{happyHourDraft.slots.length === 1 ? "" : "s"} configured
+              </span>
+            </div>
+            {happyHourNotice ? (
+              <p className="mt-2 text-xs text-emerald-400">{happyHourNotice}</p>
+            ) : null}
+          </div>
+          ) : null}
+
+          <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+            <div className="text-sm font-semibold text-white">
+              Items {selectedCategory ? `· ${selectedCategory.name}` : ""}
+            </div>
+
+            {selectedCategory ? (
+              <>
+                <form
+                  className="mt-4 space-y-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!itemForm.name.trim()) return;
+                    createItemMutation.mutate();
+                  }}
+                >
+                  <label className="block text-xs text-slate-400">
+                    Dish name
+                    <input
+                      className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      value={itemForm.name}
+                      onChange={(e) => setItemForm((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="e.g. Chicken Karahi"
+                      required
+                    />
+                  </label>
+                  <label className="block text-xs text-slate-400">
+                    Item secondary name (Urdu)
+                    <input
+                      dir="rtl"
+                      lang="ur"
+                      className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      placeholder="اردو نام"
+                      value={itemForm.secondaryName}
+                      onChange={(e) => setItemForm((f) => ({ ...f, secondaryName: e.target.value }))}
+                    />
+                    <span className="mt-1 block text-[10px] text-slate-500">
+                      Used for kitchen printing notification and bill.
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-400">
+                    <input
+                      type="checkbox"
+                      className="accent-amber-500"
+                      checked={itemForm.featured}
+                      onChange={(e) => setItemForm((f) => ({ ...f, featured: e.target.checked }))}
+                    />
+                    <span className="inline-flex items-center gap-1">
+                      <span aria-hidden className="text-amber-700 dark:text-amber-300">★</span>
+                      Feature this dish on POS
+                    </span>
+                  </label>
+                  <MenuItemFlagFields form={itemForm} onChange={setItemForm} />
+
+                  <MenuItemVariantFields form={itemForm} onChange={setItemForm} />
+
+                  <MenuImagePicker
+                    label="Dish photo (optional)"
+                    value={null}
+                    previewFile={newItemImage}
+                    onFileSelect={setNewItemImage}
+                    onClear={() => setNewItemImage(null)}
+                    disabled={createItemMutation.isPending}
+                  />
+                  <div>
+                    <Button type="submit" className="text-xs" disabled={createItemMutation.isPending}>
+                      Add menu item
+                    </Button>
+                  </div>
+                </form>
+
+                <div className="mt-6">
+                  {categoryItems.length === 0 ? (
+                    <p className="text-sm text-slate-500">No items in this category yet.</p>
+                  ) : (
+                    <SimpleTable
+                      rowKey={(r) => r.id}
+                      columns={[
+                        {
+                          key: "image",
+                          header: "",
+                          id: "image",
+                          render: (r: MenuItem) => (
+                            <MenuImageThumb imageUrl={r.imageUrl} alt={r.name} />
+                          ),
+                        },
+                        {
+                          key: "name",
+                          header: "Item",
+                          render: (r: MenuItem) => (
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                {r.featured ? (
+                                  <span className="text-amber-700 dark:text-amber-300" title="Featured dish" aria-label="Featured">
+                                    ★
+                                  </span>
+                                ) : null}
+                                <span>{r.name}</span>
+                              </div>
+                              {r.secondaryName ? (
+                                <div dir="rtl" lang="ur" className="mt-0.5 text-xs text-slate-500">
+                                  {r.secondaryName}
+                                </div>
+                              ) : null}
+                              {r.variants.length > 0 ? (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {r.variants.map((v) => (
+                                    <Badge key={v.id} tone="neutral">
+                                      {v.label} · Rs {v.price.toLocaleString()}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="mt-0.5 text-xs text-slate-500">{formatMenuItemLabel(r)}</div>
+                              )}
+                            </div>
+                          ),
+                        },
+                        {
+                          key: "price",
+                          header: "Price",
+                          render: (r) => {
+                            if (r.variants.length > 1) {
+                              const prices = r.variants.map((v) => v.price);
+                              const min = Math.min(...prices);
+                              const max = Math.max(...prices);
+                              return min === max
+                                ? `Rs ${min.toLocaleString()}`
+                                : `Rs ${min.toLocaleString()} – ${max.toLocaleString()}`;
+                            }
+                            return `Rs ${menuItemDisplayPrice(r).toLocaleString()}`;
+                          },
+                        },
+                        {
+                          key: "tags",
+                          header: "Tags",
+                          id: "tags",
+                          render: (r: MenuItem) => (
+                            <span className="flex flex-wrap gap-1">
+                              {r.featured ? <Badge tone="warning">Featured</Badge> : null}
+                              {giftItemIds.has(r.id) ? (
+                                <Badge tone="warning">HH gift</Badge>
+                              ) : null}
+                              {!r.isActive ? <Badge tone="neutral">Off</Badge> : null}
+                            </span>
+                          ),
+                        },
+                        {
+                          key: "actions",
+                          header: "",
+                          id: "actions",
+                          render: (r: MenuItem) =>
+                            canEdit ? (
+                            <span className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                title={r.featured ? "Remove from featured" : "Mark as featured"}
+                                className={`text-sm leading-none transition ${
+                                  r.featured
+                                    ? accentValueClass
+                                    : `${mutedClass} hover:text-amber-800 dark:hover:text-amber-300`
+                                }`}
+                                onClick={() =>
+                                  toggleFeaturedMutation.mutate({ id: r.id, featured: !r.featured })
+                                }
+                              >
+                                ★
+                              </button>
+                              <button
+                                type="button"
+                                className={`text-xs ${linkActionClass}`}
+                                onClick={() => {
+                                  setEditError(null);
+                                  setEditingItem(r);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs font-medium text-slate-700 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                                onClick={() =>
+                                  toggleItemMutation.mutate({ id: r.id, isActive: !r.isActive })
+                                }
+                              >
+                                {r.isActive ? "Disable" : "Enable"}
+                              </button>
+                              <button
+                                type="button"
+                                className={`text-xs ${linkDangerClass}`}
+                                onClick={() => {
+                                  if (confirm(`Delete "${r.name}"?`)) deleteItemMutation.mutate(r.id);
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-500">View only</span>
+                            ),
+                        },
+                      ]}
+                      rows={categoryItems}
+                    />
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="mt-4 text-sm text-slate-500">Create a category to start adding menu items.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {editingItem ? (
+        <MenuItemEditModal
+          key={editingItem.id}
+          item={editingItem}
+          loading={updateItemMutation.isPending}
+          error={editError}
+          branchCode={branch?.code}
+          sections={printerSections}
+          onClose={() => {
+            setEditingItem(null);
+            setEditError(null);
+          }}
+          onSave={(form, imageFile, clearImage) => {
+            updateItemMutation.mutate({
+              id: editingItem.id,
+              form,
+              imageFile,
+              clearImage,
+            });
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}

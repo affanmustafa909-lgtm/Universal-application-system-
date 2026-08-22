@@ -1,0 +1,21 @@
+@echo off
+setlocal EnableExtensions
+cd /d "%~dp0\.."
+
+echo ============================================
+echo  POPS Web (browser)
+echo  URL: http://127.0.0.1:1420/
+echo ============================================
+echo.
+echo Keep this window OPEN while using the browser.
+echo.
+
+where pnpm >nul 2>&1
+if errorlevel 1 (
+  set "PNPM=corepack pnpm"
+) else (
+  set "PNPM=pnpm"
+)
+
+call %PNPM% --filter @platform/launcher dev:web
+pause

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "POPS Launcher",
+  "version": "0.3.39",
+  "identifier": "com.platform.launcher",
+  "build": {
+    "beforeDevCommand": "pnpm run dev:web",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "pnpm run build:web",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "POPS Launcher",
+        "width": 1280,
+        "height": 800
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxMkEzQ0U3QjBFNjkwNzUKUldSMWtPYXc1endxUVhKUUhpRmVZQ2UwTytweWtXNkhUS05KVjdBeEdpVW9NMzhrZEhGR0xCY1AK",
+      "endpoints": [
+        "https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-suite.json",
+        "https://github.com/basir2353/Desktop-application-Multiple-System/releases/latest/download/latest-suite.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

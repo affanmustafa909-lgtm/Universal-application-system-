@@ -1,0 +1,688 @@
+import { useQuery } from "@tanstack/react-query";
+import { Redirect, useRouter } from "expo-router";
+import { useMemo } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { fetchOrders } from "../src/api/billing";
+import { fetchKitchenTickets } from "../src/api/kitchen";
+import { fetchBranchMenu } from "../src/api/menu";
+import { fetchBranchFloor } from "../src/api/tables";
+import {
+  Card,
+  Screen,
+  SectionHeader,
+  StatCard,
+  StatusBadge,
+  colors,
+} from "../src/components/ui";
+import { ThemeToggle } from "../src/components/ThemeToggle";
+import { useThemedStyleSheet } from "../src/theme/useThemedStyleSheet";
+import { useLiveRefetchInterval } from "../src/hooks/useLiveRefetchInterval";
+import {
+  formatPkr,
+  formatTimeAgo,
+  greetingForHour,
+  isToday,
+  kitchenStatusAccent,
+  kitchenStatusLabel,
+  orderRefFromTicket,
+  waiterDisplayName,
+} from "../src/lib/orderDisplay";
+import { buildUnifiedOrders, filterActiveKitchenTickets, kitchenTicketTotal } from "../src/lib/orderHistory";
+import { resolveStaffRole } from "../src/lib/roles";
+import { useBranchStore } from "../src/stores/branchStore";
+import { useSessionStore } from "../src/stores/sessionStore";
+
+type QuickAction = {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  route: "/order" | "/orders" | "/history" | "/table-transfer";
+  primary?: boolean;
+};
+
+export default function HomeScreen() {
+  const styles = useScreenStyles();
+  const router = useRouter();
+  const accessToken = useSessionStore((s) => s.accessToken);
+  const claims = useSessionStore((s) => s.claims);
+  const waiterEmail = useSessionStore((s) => s.waiterEmail);
+  const clearSession = useSessionStore((s) => s.clear);
+  const branch = useBranchStore((s) => s.branch);
+  const clearBranch = useBranchStore((s) => s.clear);
+
+  const branchCode = branch?.code ?? "";
+  const kitchenPoll = useLiveRefetchInterval(15_000);
+  const ordersPoll = useLiveRefetchInterval(20_000);
+  const floorPoll = useLiveRefetchInterval(30_000);
+
+  const kitchenQuery = useQuery({
+    queryKey: ["kitchen", branchCode],
+    enabled: Boolean(branchCode),
+    queryFn: () => fetchKitchenTickets(branchCode),
+    refetchInterval: kitchenPoll,
+    staleTime: 10_000,
+  });
+
+  const ordersQuery = useQuery({
+    queryKey: ["orders", branchCode],
+    enabled: Boolean(branchCode),
+    queryFn: () => fetchOrders(branchCode),
+    refetchInterval: ordersPoll,
+    staleTime: 15_000,
+  });
+
+  const floorQuery = useQuery({
+    queryKey: ["tables", branchCode],
+    enabled: Boolean(branchCode),
+    queryFn: () => fetchBranchFloor(branchCode),
+    refetchInterval: floorPoll,
+    staleTime: 20_000,
+  });
+
+  const menuQuery = useQuery({
+    queryKey: ["menu", branchCode],
+    enabled: Boolean(branchCode),
+    queryFn: () => fetchBranchMenu(branchCode),
+    staleTime: 5 * 60_000,
+  });
+
+  if (!accessToken) {
+    return <Redirect href="/" />;
+  }
+
+  if (resolveStaffRole(claims) === "rider") {
+    return <Redirect href="/rider-home" />;
+  }
+
+  if (!branch) {
+    return <Redirect href="/branch" />;
+  }
+
+  const tickets = kitchenQuery.data ?? [];
+  const bills = ordersQuery.data ?? [];
+  const menuItems = menuQuery.data?.items ?? [];
+  const unified = useMemo(() => buildUnifiedOrders(bills, tickets), [bills, tickets]);
+  const activeTickets = useMemo(
+    () => filterActiveKitchenTickets(tickets, bills),
+    [tickets, bills],
+  );
+  const readyCount = useMemo(
+    () => activeTickets.filter((t) => t.status === "ready").length,
+    [activeTickets],
+  );
+  const cookingCount = useMemo(
+    () => activeTickets.filter((t) => t.status === "cooking").length,
+    [activeTickets],
+  );
+  const todayOrders = useMemo(
+    () => unified.filter((order) => isToday(order.createdAt)),
+    [unified],
+  );
+  const tableCount = useMemo(
+    () => (floorQuery.data?.tables ?? []).filter((t) => t.isActive).length,
+    [floorQuery.data?.tables],
+  );
+  const bookedTableCount = useMemo(
+    () =>
+      (floorQuery.data?.tables ?? []).filter((t) => t.isActive && t.bookingStatus === "booked")
+        .length,
+    [floorQuery.data?.tables],
+  );
+  const recentTickets = useMemo(
+    () =>
+      [...activeTickets]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 4),
+    [activeTickets],
+  );
+
+  const refreshing = kitchenQuery.isFetching || ordersQuery.isFetching;
+  const displayName = waiterDisplayName(waiterEmail);
+
+  function refreshAll(): void {
+    void kitchenQuery.refetch();
+    void ordersQuery.refetch();
+    void floorQuery.refetch();
+  }
+
+  const quickActions: QuickAction[] = [
+    {
+      id: "take",
+      title: "Take order",
+      subtitle: "Table · menu · send to kitchen",
+      icon: "＋",
+      route: "/order",
+      primary: true,
+    },
+    {
+      id: "view",
+      title: "View orders",
+      subtitle: `${activeTickets.length} active · ${cookingCount} cooking`,
+      icon: "◎",
+      route: "/orders",
+    },
+    {
+      id: "transfer",
+      title: "Table transfer",
+      subtitle: "Move dine-in order to another table",
+      icon: "⇄",
+      route: "/table-transfer",
+    },
+    {
+      id: "history",
+      title: "Order history",
+      subtitle: `${todayOrders.length} today · search & filter`,
+      icon: "◷",
+      route: "/history",
+    },
+    {
+      id: "tables",
+      title: "Floor tables",
+      subtitle: `${tableCount} tables · ${bookedTableCount} booked`,
+      icon: "▦",
+      route: "/order",
+    },
+  ];
+
+  return (
+    <Screen style={styles.screen} safeTop>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={refreshAll} tintColor={colors.accent} />
+        }
+      >
+        <View style={styles.hero}>
+          <View style={styles.heroCopy}>
+            <Text style={styles.greeting}>{greetingForHour()}</Text>
+            <Text style={styles.waiterName}>{displayName}</Text>
+            <View style={styles.branchRow}>
+              <View style={styles.branchBadge}>
+                <Text style={styles.branchBadgeText}>{branch.code}</Text>
+              </View>
+              <Text style={styles.branchName} numberOfLines={1}>
+                {branch.name}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.liveDotWrap}>
+            <ThemeToggle size="sm" />
+            <View style={styles.liveDot} />
+            <Text style={styles.liveLabel}>Live</Text>
+          </View>
+        </View>
+
+        <View style={styles.statsRow}>
+          <StatCard
+            label="Active"
+            value={activeTickets.length}
+            hint="In kitchen"
+            accent={colors.accent}
+          />
+          <StatCard
+            label="Ready"
+            value={readyCount}
+            hint="To serve"
+            accent={colors.success}
+          />
+          <StatCard
+            label="Today"
+            value={todayOrders.length}
+            hint="Orders"
+          />
+        </View>
+
+        <Card style={styles.actionsCard}>
+          <SectionHeader title="Quick actions" />
+          <View style={styles.actionsGrid}>
+            {quickActions.map((action) => (
+              <Pressable
+                key={action.id}
+                onPress={() => router.push(action.route)}
+                style={({ pressed }) => [
+                  styles.actionTile,
+                  action.primary && styles.actionTilePrimary,
+                  pressed && styles.actionTilePressed,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.actionIconWrap,
+                    action.primary && styles.actionIconWrapPrimary,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.actionIcon,
+                      action.primary && styles.actionIconPrimary,
+                    ]}
+                  >
+                    {action.icon}
+                  </Text>
+                </View>
+                <View style={styles.actionCopy}>
+                  <Text
+                    style={[
+                      styles.actionTitle,
+                      action.primary && styles.actionTitlePrimary,
+                    ]}
+                  >
+                    {action.title}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.actionSubtitle,
+                      action.primary && styles.actionSubtitlePrimary,
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {action.subtitle}
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.actionChevron,
+                    action.primary && styles.actionChevronPrimary,
+                  ]}
+                >
+                  ›
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </Card>
+
+        <Card style={styles.pulseCard}>
+          <SectionHeader
+            title="Live pulse"
+            actionLabel={recentTickets.length > 0 ? "View all" : undefined}
+            onAction={recentTickets.length > 0 ? () => router.push("/orders") : undefined}
+          />
+          {kitchenQuery.isLoading ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator color={colors.accent} />
+              <Text style={styles.loadingText}>Syncing kitchen…</Text>
+            </View>
+          ) : recentTickets.length === 0 ? (
+            <View style={styles.emptyPulse}>
+              <Text style={styles.emptyPulseIcon}>✦</Text>
+              <Text style={styles.emptyPulseTitle}>All quiet for now</Text>
+              <Text style={styles.emptyPulseText}>
+                Start a new order from Take order — tickets appear here in real time.
+              </Text>
+              <Pressable onPress={() => router.push("/order")} style={styles.emptyPulseBtn}>
+                <Text style={styles.emptyPulseBtnText}>Take order</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.pulseList}>
+              {recentTickets.map((ticket) => {
+                const status = kitchenStatusLabel(ticket.status);
+                const accent = kitchenStatusAccent(ticket.status);
+                const total = kitchenTicketTotal(ticket, menuItems);
+                return (
+                  <Pressable
+                    key={ticket.id}
+                    onPress={() => router.push("/orders")}
+                    style={({ pressed }) => [
+                      styles.pulseItem,
+                      { borderLeftColor: accent },
+                      pressed && styles.pulseItemPressed,
+                    ]}
+                  >
+                    <View style={styles.pulseTop}>
+                      <Text style={styles.pulseRef}>{orderRefFromTicket(ticket)}</Text>
+                      <View style={styles.pulseTopRight}>
+                        <Text style={styles.pulseTotal}>
+                          {total != null ? formatPkr(total) : "—"}
+                        </Text>
+                        <StatusBadge status={status} />
+                      </View>
+                    </View>
+                    <View style={styles.pulseMetaRow}>
+                      <View style={styles.tablePill}>
+                        <Text style={styles.tablePillText}>{ticket.stationLabel}</Text>
+                      </View>
+                      <Text style={styles.pulseTime}>{formatTimeAgo(ticket.createdAt)}</Text>
+                    </View>
+                    <Text style={styles.pulseItems} numberOfLines={2}>
+                      {ticket.itemsSummary}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </Card>
+
+        <View style={styles.footer}>
+          <Pressable onPress={() => router.push("/printers")} style={styles.footerBtn}>
+            <Text style={styles.footerText}>Printers</Text>
+          </Pressable>
+          <Pressable onPress={() => router.push("/manage-pin")} style={styles.footerBtn}>
+            <Text style={styles.footerText}>Manage PIN</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              clearBranch();
+              router.replace("/branch");
+            }}
+            style={styles.footerBtn}
+          >
+            <Text style={styles.footerText}>Change branch</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              clearSession();
+              clearBranch();
+              router.replace("/");
+            }}
+            style={styles.footerBtn}
+          >
+            <Text style={styles.footerTextDanger}>Sign out</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </Screen>
+  );
+}
+
+
+function useScreenStyles() {
+  return useThemedStyleSheet((c) => ({
+
+  screen: {
+    paddingBottom: 0,
+  },
+  scrollContent: {
+    gap: 14,
+    paddingBottom: 36,
+  },
+  hero: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  heroCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  greeting: {
+    color: c.muted,
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  waiterName: {
+    color: c.text,
+    fontSize: 26,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+  },
+  branchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 6,
+  },
+  branchBadge: {
+    backgroundColor: "rgba(15, 118, 110, 0.15)",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(15, 118, 110, 0.35)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  branchBadgeText: {
+    color: c.accent,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  branchName: {
+    color: c.muted,
+    fontSize: 13,
+    flex: 1,
+  },
+  liveDotWrap: {
+    alignItems: "center",
+    gap: 4,
+    paddingTop: 4,
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: c.success,
+  },
+  liveLabel: {
+    color: c.muted,
+    fontSize: 10,
+    fontWeight: "600",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  actionsCard: {
+    gap: 12,
+  },
+  actionsGrid: {
+    gap: 10,
+  },
+  actionTile: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: c.bg,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.border,
+    padding: 14,
+  },
+  actionTilePrimary: {
+    backgroundColor: c.accent,
+    borderColor: "#14B8A6",
+  },
+  actionTilePressed: {
+    opacity: 0.9,
+  },
+  actionIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: c.card,
+    borderWidth: 1,
+    borderColor: c.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionIconWrapPrimary: {
+    backgroundColor: "rgba(15, 23, 42, 0.2)",
+    borderColor: "rgba(15, 23, 42, 0.15)",
+  },
+  actionIcon: {
+    color: c.accent,
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  actionIconPrimary: {
+    color: c.accentText,
+  },
+  actionCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  actionTitle: {
+    color: c.text,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  actionTitlePrimary: {
+    color: c.accentText,
+  },
+  actionSubtitle: {
+    color: c.muted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  actionSubtitlePrimary: {
+    color: "rgba(15, 23, 42, 0.72)",
+  },
+  actionChevron: {
+    color: c.muted,
+    fontSize: 22,
+    fontWeight: "300",
+  },
+  actionChevronPrimary: {
+    color: c.accentText,
+  },
+  pulseCard: {
+    gap: 12,
+  },
+  loadingWrap: {
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 24,
+  },
+  loadingText: {
+    color: c.muted,
+    fontSize: 13,
+  },
+  emptyPulse: {
+    alignItems: "center",
+    backgroundColor: c.bg,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderStyle: "dashed",
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  emptyPulseIcon: {
+    color: c.accent,
+    fontSize: 22,
+  },
+  emptyPulseTitle: {
+    color: c.text,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  emptyPulseText: {
+    color: c.muted,
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  emptyPulseBtn: {
+    marginTop: 6,
+    backgroundColor: c.accent,
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  emptyPulseBtnText: {
+    color: c.accentText,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  pulseList: {
+    gap: 10,
+  },
+  pulseItem: {
+    backgroundColor: c.bg,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderLeftWidth: 3,
+    padding: 14,
+    gap: 8,
+  },
+  pulseItemPressed: {
+    opacity: 0.88,
+  },
+  pulseTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  pulseRef: {
+    color: c.text,
+    fontFamily: "monospace",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  pulseMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  tablePill: {
+    backgroundColor: c.card,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: c.border,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  tablePillText: {
+    color: c.text,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  pulseTime: {
+    color: c.muted,
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  pulseItems: {
+    color: c.muted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  pulseTopRight: {
+    alignItems: "flex-end",
+    gap: 6,
+  },
+  pulseTotal: {
+    color: c.accent,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingTop: 4,
+  },
+  footerBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  footerText: {
+    color: c.muted,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  footerTextDanger: {
+    color: "#f87171",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  }));
+}
+

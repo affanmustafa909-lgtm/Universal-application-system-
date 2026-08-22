@@ -1,0 +1,135 @@
+import { useQuery } from "@tanstack/react-query";
+import { Redirect, useRouter } from "expo-router";
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { DELIVERY_STATUS_LABELS, type DeliveryStatus } from "@platform/contracts";
+import { fetchMyDeliveries } from "../src/api/delivery";
+import { fetchBranchMenu } from "../src/api/menu";
+import { EmptyState, Notice, Screen, StatusBadge, colors } from "../src/components/ui";
+import { useThemedStyleSheet } from "../src/theme/useThemedStyleSheet";
+import { formatPkr, formatTimeAgo, orderRefFromTicket } from "../src/lib/orderDisplay";
+import { deliveryOrderTotal } from "../src/lib/orderHistory";
+import { isRiderRole, resolveStaffRole } from "../src/lib/roles";
+import { useBranchStore } from "../src/stores/branchStore";
+import { useSessionStore } from "../src/stores/sessionStore";
+
+export default function RiderDeliveriesScreen() {
+  const styles = useScreenStyles();
+  const router = useRouter();
+  const accessToken = useSessionStore((s) => s.accessToken);
+  const claims = useSessionStore((s) => s.claims);
+  const branch = useBranchStore((s) => s.branch);
+  const branchCode = branch?.code ?? "";
+  const role = resolveStaffRole(claims);
+
+  const deliveriesQuery = useQuery({
+    queryKey: ["my-deliveries", branchCode],
+    enabled: Boolean(branchCode) && isRiderRole(claims),
+    queryFn: () => fetchMyDeliveries(branchCode),
+    refetchInterval: 8_000,
+  });
+
+  const menuQuery = useQuery({
+    queryKey: ["menu", branchCode],
+    enabled: Boolean(branchCode),
+    queryFn: () => fetchBranchMenu(branchCode),
+    staleTime: 5 * 60_000,
+  });
+
+  if (!accessToken) return <Redirect href="/" />;
+  if (role === "waiter") return <Redirect href="/home" />;
+  if (!branch) return <Redirect href="/branch" />;
+
+  const orders = deliveriesQuery.data ?? [];
+  const menuItems = menuQuery.data?.items ?? [];
+
+  return (
+    <Screen>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={deliveriesQuery.isFetching && !deliveriesQuery.isLoading}
+            onRefresh={() => void deliveriesQuery.refetch()}
+            tintColor={colors.accent}
+          />
+        }
+      >
+        {deliveriesQuery.isLoading ? (
+          <ActivityIndicator color={colors.accent} />
+        ) : deliveriesQuery.isError ? (
+          <Notice>{(deliveriesQuery.error as Error).message}</Notice>
+        ) : orders.length === 0 ? (
+          <EmptyState
+            title="No deliveries assigned"
+            message="When the restaurant assigns delivery orders to you, they will show up here."
+          />
+        ) : (
+          orders.map((order) => {
+            const total = deliveryOrderTotal(order, menuItems);
+            return (
+              <Pressable
+                key={order.id}
+                onPress={() => router.push({ pathname: "/rider-delivery", params: { id: order.id } })}
+                style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}
+              >
+                <View style={styles.header}>
+                  <Text style={styles.ref}>{orderRefFromTicket(order)}</Text>
+                  <View style={styles.headerRight}>
+                    <Text style={styles.total}>{total != null ? formatPkr(total) : "—"}</Text>
+                    <StatusBadge
+                      status={
+                        order.deliveryStatus
+                          ? DELIVERY_STATUS_LABELS[order.deliveryStatus as DeliveryStatus]
+                          : order.status === "done"
+                            ? "Completed"
+                            : "In kitchen"
+                      }
+                    />
+                  </View>
+                </View>
+                <Text style={styles.customer}>{order.customerName}</Text>
+                <Text style={styles.address}>
+                  {order.customerAddress && !/^\+?\d[\d\s()-]{5,}$/.test(order.customerAddress.trim())
+                    ? order.customerAddress
+                    : order.notes?.trim() || order.customerAddress}
+                </Text>
+                <Text style={styles.items} numberOfLines={2}>
+                  {order.itemsSummary.split(" · Delivery")[0]}
+                </Text>
+                <Text style={styles.meta}>
+                  {formatTimeAgo(order.createdAt)} · {formatPkr(order.deliveryChargePkr)} delivery fee
+                </Text>
+              </Pressable>
+            );
+          })
+        )}
+      </ScrollView>
+    </Screen>
+  );
+}
+
+
+function useScreenStyles() {
+  return useThemedStyleSheet((c) => ({
+
+  scroll: { gap: 12, paddingBottom: 24 },
+  card: {
+    backgroundColor: c.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    padding: 14,
+    gap: 6,
+  },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  headerRight: { alignItems: "flex-end", gap: 6 },
+  ref: { color: c.text, fontWeight: "700", fontSize: 15 },
+  customer: { color: c.text, fontSize: 16, fontWeight: "600" },
+  address: { color: c.muted, fontSize: 13 },
+  items: { color: c.muted, fontSize: 12, marginTop: 2 },
+  total: { color: c.accent, fontSize: 15, fontWeight: "800" },
+  meta: { color: c.muted, fontSize: 12, marginTop: 4 },
+
+  }));
+}
+

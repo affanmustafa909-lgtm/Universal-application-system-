@@ -1,0 +1,240 @@
+import {
+  popsNavItems,
+  type PopsNavGroup,
+  type PopsNavItem,
+  type PopsNavLink,
+} from "../pops/spec/modules";
+import { pharmacyNavItems } from "../pharmacy/spec/nav";
+import { storeNavItems } from "../store/spec/nav";
+import { frontendIdToSystemType, systemTypeToFrontendId, type SystemType } from "@platform/contracts";
+
+export type BusinessSystemId = "restaurant" | "ice-cream-bar" | "pharmacy" | "general-store";
+
+export type BusinessSystem = {
+  id: BusinessSystemId;
+  name: string;
+  shortName: string;
+  tagline: string;
+  description: string;
+  accentClass: string;
+  iconLetter: string;
+  gradientClass: string;
+  /** Route prefix for the ERP shell (shared across systems for now). */
+  routePrefix: string;
+  hiddenNavPaths: Set<string>;
+};
+
+const restaurantHidden = new Set<string>();
+const pharmacyHidden = new Set([
+  "menu",
+  "tables",
+  "kitchen",
+  "waiter",
+  "delivery",
+  "inventory/recipes",
+  "manufacturing",
+  "content",
+]);
+const generalStoreHidden = new Set([
+  "menu",
+  "tables",
+  "kitchen",
+  "waiter",
+  "delivery",
+  "inventory/recipes",
+  "inventory/ingredients",
+  "manufacturing",
+  "content",
+]);
+
+export const businessSystems: Record<BusinessSystemId, BusinessSystem> = {
+  restaurant: {
+    id: "restaurant",
+    name: "Restaurant ERP",
+    shortName: "POPS",
+    tagline: "Full-service restaurant operations",
+    description: "POS, kitchen, tables, menu, inventory, HR, and compliance for restaurants.",
+    accentClass: "text-amber-400",
+    iconLetter: "P",
+    gradientClass: "from-amber-400 to-amber-600",
+    routePrefix: "/pops",
+    hiddenNavPaths: restaurantHidden,
+  },
+  "ice-cream-bar": {
+    id: "ice-cream-bar",
+    name: "Ice Cream Bar",
+    shortName: "Scoops",
+    tagline: "Gelato parlour operations",
+    description: "POS, kitchen, and parlour workflows for scoop shops and dessert bars.",
+    accentClass: "text-[#2563EB]",
+    iconLetter: "S",
+    gradientClass: "from-[#1E4A7A] to-[#38BDF8]",
+    routePrefix: "/pops",
+    hiddenNavPaths: restaurantHidden,
+  },
+  pharmacy: {
+    id: "pharmacy",
+    name: "Pharmacy ERP",
+    shortName: "Pharmacy",
+    tagline: "Dispensing, stock, and retail billing",
+    description: "Counter POS, drug inventory, purchases, accounting, and regulatory workflows.",
+    accentClass: "text-emerald-400",
+    iconLetter: "Rx",
+    gradientClass: "from-emerald-400 to-teal-600",
+    routePrefix: "/pops",
+    hiddenNavPaths: pharmacyHidden,
+  },
+  "general-store": {
+    id: "general-store",
+    name: "General Store ERP",
+    shortName: "Store",
+    tagline: "Retail POS and stock management",
+    description: "Checkout, categories, suppliers, purchases, and store accounting.",
+    accentClass: "text-sky-400",
+    iconLetter: "G",
+    gradientClass: "from-sky-400 to-indigo-600",
+    routePrefix: "/pops",
+    hiddenNavPaths: generalStoreHidden,
+  },
+};
+
+export const businessSystemList: BusinessSystem[] = [
+  businessSystems.restaurant,
+  businessSystems["ice-cream-bar"],
+  businessSystems.pharmacy,
+  businessSystems["general-store"],
+];
+
+/** Backend-provisioned ERP types Super Admin can create (not frontend skins). */
+export const provisionableBusinessSystems: BusinessSystem[] = businessSystemList.filter(
+  (s) => s.id !== "ice-cream-bar",
+);
+
+export function isBusinessSystemId(value: string): value is BusinessSystemId {
+  return (
+    value === "restaurant" ||
+    value === "ice-cream-bar" ||
+    value === "pharmacy" ||
+    value === "general-store"
+  );
+}
+
+/** Restaurant POS APIs and JWT `restaurant` also cover Ice Cream Bar. */
+export function isRestaurantFamilySystem(id: BusinessSystemId): boolean {
+  return id === "restaurant" || id === "ice-cream-bar";
+}
+
+/** True when a JWT-assigned system may open the selected launcher system. */
+export function assignedSystemAllows(
+  assigned: BusinessSystemId | null | undefined,
+  selected: BusinessSystemId,
+): boolean {
+  if (!assigned) return true;
+  if (assigned === selected) return true;
+  return assigned === "restaurant" && selected === "ice-cream-bar";
+}
+
+export function getBusinessSystem(id: BusinessSystemId): BusinessSystem {
+  return businessSystems[id];
+}
+
+export function getSystemHomePath(_id: BusinessSystemId): string {
+  return "/pops";
+}
+
+/** Map JWT / DB system type onto the frontend ERP shell id. */
+export function businessSystemIdFromSystemType(
+  systemType: string | null | undefined,
+): BusinessSystemId | null {
+  if (!systemType) return null;
+  if (systemType === "grocery" || systemType === "retail") return "general-store";
+  const frontend = systemTypeToFrontendId(systemType as SystemType);
+  return isBusinessSystemId(frontend) ? frontend : null;
+}
+
+export function systemTypeForBusinessSystemId(id: BusinessSystemId): SystemType {
+  if (id === "ice-cream-bar") return "restaurant";
+  return frontendIdToSystemType(id) ?? "restaurant";
+}
+
+/** First ERP screen after auth — skips redirect-only `/pops` hop. */
+export function getErpEntryPath(systemId: BusinessSystemId, hasBranch: boolean): string {
+  if (!hasBranch) return "/pops/branches";
+  if (systemId === "pharmacy") {
+    return "/pops/pharmacy/pos";
+  }
+  if (systemId === "general-store") {
+    return "/pops/store/pos";
+  }
+  // Restaurant dashboard is admin-only; callers with a role should use erpEntryPathForRole.
+  return "/pops/pos";
+}
+
+/** Shared across restaurant / pharmacy / general-store (must not be treated as restaurant-only). */
+const SHARED_ERP_PATH_PREFIXES = [
+  "auth",
+  "notifications",
+  "settings",
+  "tax",
+  "printer",
+  "closing",
+  "security",
+  "sync",
+  "multi-branch",
+] as const;
+
+function isSharedErpSubpath(sub: string): boolean {
+  if (!sub || sub === "branches") return true;
+  return SHARED_ERP_PATH_PREFIXES.some((p) => sub === p || sub.startsWith(`${p}/`));
+}
+
+/** Infer business system from the current `/pops` route, when unambiguous. */
+export function resolveBusinessSystemFromPath(pathname: string): BusinessSystemId | null {
+  if (pathname.startsWith("/pops/pharmacy/") || pathname === "/pops/pharmacy") {
+    return "pharmacy";
+  }
+  if (pathname.startsWith("/pops/store/") || pathname === "/pops/store") {
+    return "general-store";
+  }
+  return null;
+}
+
+/** True for restaurant-only screens (not pharmacy, store, or shared ERP modules). */
+export function isRestaurantExclusivePath(pathname: string): boolean {
+  const sub = pathname.replace(/^\/pops\/?/, "").replace(/\/$/, "");
+  if (sub.startsWith("pharmacy/") || sub === "pharmacy") return false;
+  if (sub.startsWith("store/") || sub === "store") return false;
+  if (isSharedErpSubpath(sub)) return false;
+  return true;
+}
+
+function filterNavItem(item: PopsNavItem, hidden: Set<string>): PopsNavItem | null {
+  if (item.type === "link") {
+    return hidden.has(item.path) ? null : item;
+  }
+  const children = item.children.filter((c) => !hidden.has(c.path));
+  if (children.length === 0) return null;
+  if (children.length === 1) {
+    const only = children[0]!;
+    const link: PopsNavLink = { type: "link", path: only.path, label: only.label };
+    return link;
+  }
+  const group: PopsNavGroup = { type: "group", label: item.label, children };
+  return group;
+}
+
+export function getNavItemsForSystem(id: BusinessSystemId): PopsNavItem[] {
+  if (id === "pharmacy") {
+    return pharmacyNavItems;
+  }
+  if (id === "general-store") {
+    return storeNavItems;
+  }
+  const hidden = businessSystems[id].hiddenNavPaths;
+  const out: PopsNavItem[] = [];
+  for (const item of popsNavItems) {
+    const filtered = filterNavItem(item, hidden);
+    if (filtered) out.push(filtered);
+  }
+  return out;
+}

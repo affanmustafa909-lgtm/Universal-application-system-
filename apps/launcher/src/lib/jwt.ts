@@ -1,0 +1,48 @@
+export type AccessTokenClaims = {
+  sub: string;
+  organizationId: string;
+  permissions: string[];
+  /** Membership role from the control plane (admin, cashier, …) or `super_admin`. */
+  role?: string;
+  /** Platform control-plane role. */
+  platformRole?: "super_admin" | null;
+  /** Permanently assigned business system for tenant users. */
+  systemType?: string | null;
+  /** `all` or a branch code. */
+  branchScope?: string;
+  /** null/undefined = all permission-gated paths; otherwise only listed paths. */
+  navAllowlist?: string[] | null;
+  exp?: number;
+};
+
+export function isSuperAdminClaims(claims: AccessTokenClaims | null | undefined): boolean {
+  return claims?.platformRole === "super_admin" || claims?.role === "super_admin";
+}
+
+export function decodeJwtPayload<T = unknown>(token: string): T {
+  const parts = token.split(".");
+  if (parts.length < 2) throw new Error("Invalid JWT");
+  const payload = parts[1];
+  const json = base64UrlToString(payload);
+  return JSON.parse(json) as T;
+}
+
+function base64UrlToString(value: string): string {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((value.length + 3) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+export function decodeAccessToken(token: string): AccessTokenClaims {
+  return decodeJwtPayload<AccessTokenClaims>(token);
+}
+
+export function isAccessTokenExpired(token: string, skewSeconds = 30): boolean {
+  const { exp } = decodeAccessToken(token);
+  if (typeof exp === "number") {
+    return Date.now() >= exp * 1000 - skewSeconds * 1000;
+  }
+  return false;
+}

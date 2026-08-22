@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Platform Launcher</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      try {
+        var t = localStorage.getItem("pops-theme");
+        var mode = t === "dark" ? "dark" : "light";
+        document.documentElement.dataset.theme = mode;
+        document.documentElement.classList.toggle("dark", mode === "dark");
+        var scoop = localStorage.getItem("pops-ice-scheme");
+        if (scoop === "yellow-black" || scoop === "blue-sky" || scoop === "blue") {
+          document.documentElement.dataset.scoop = scoop;
+        }
+      } catch (e) {
+        document.documentElement.dataset.theme = "light";
+        document.documentElement.classList.remove("dark");
+      }
+    </script>
+  </head>
+  <body class="min-h-screen bg-[#F8FAFC] text-[#172033] dark:bg-slate-950 dark:text-slate-100">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

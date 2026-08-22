@@ -1,0 +1,19 @@
+# Prefer the standalone backend-system service config.
+# If this file is used from the monorepo root (Root Directory empty),
+# Railway must still build backend-system/Dockerfile and start /app/api/...
+#
+# Recommended Railway UI settings (avoids relying on this root file):
+#   Root Directory: backend-system
+#   Dockerfile path: Dockerfile
+#   See backend-system/railway.toml
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "backend-system/Dockerfile"
+
+[deploy]
+startCommand = "node /app/api/scripts/start-railway.mjs"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

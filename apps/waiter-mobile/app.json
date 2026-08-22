@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "POPS Waiter",
+    "slug": "pops-waiter",
+    "version": "1.1.37",
+    "orientation": "portrait",
+    "scheme": "pops-waiter",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": false,
+    "splash": {
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.platform.pops.waiter"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      },
+      "package": "com.platform.pops.waiter",
+      "versionCode": 1137,
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "REQUEST_INSTALL_PACKAGES"
+      ],
+      "usesCleartextTraffic": true
+    },
+    "plugins": ["expo-router", "expo-secure-store"]
+  }
+}
