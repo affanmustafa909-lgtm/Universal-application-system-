@@ -17,7 +17,8 @@
         document.documentElement.dataset.theme = mode;
         document.documentElement.classList.toggle("dark", mode === "dark");
         var scoop = localStorage.getItem("pops-ice-scheme");
-        if (scoop === "yellow-black" || scoop === "blue-sky" || scoop === "blue") {
+        if (scoop === "blue") scoop = "mint";
+        if (scoop === "yellow-black" || scoop === "blue-sky" || scoop === "mint") {
           document.documentElement.dataset.scoop = scoop;
         }
       } catch (e) {

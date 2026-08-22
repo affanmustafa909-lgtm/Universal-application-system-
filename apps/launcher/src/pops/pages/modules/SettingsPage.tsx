@@ -522,7 +522,7 @@ export function SettingsPage(): JSX.Element {
         <div className="text-sm font-semibold text-slate-900 dark:text-white">Appearance</div>
         <p className="mt-1 text-xs text-slate-500">
           {systemId === "ice-cream-bar"
-            ? `Choose light or dark, plus Yellow Black, Blue Black Sky, or Blue. Current: ${themeMode}.`
+            ? `Choose light or dark, plus Yellow Black, Blue Black Sky, or Mint. Current: ${themeMode}.`
             : `Choose light or dark mode for the restaurant ERP interface. Current: ${themeMode}.`}
         </p>
         <div className="mt-3">

@@ -2836,7 +2836,7 @@ export function PosPage(): JSX.Element {
         <div className={`col-span-12 flex min-h-0 flex-col lg:sticky lg:top-0 lg:h-[calc(100vh-9rem)] lg:max-h-[calc(100vh-9rem)] ${isIceCream ? "lg:col-span-5" : "lg:col-span-4"}`}>
           {/* Category pills — list or icon tiles */}
           {categories.length > 0 ? (
-            <div className="mb-2.5 shrink-0 rounded-2xl bg-[var(--brand-cream)] p-2.5 ring-1 ring-[var(--line)] dark:bg-slate-900/80 dark:ring-amber-500/20">
+            <div className="mb-2.5 shrink-0 rounded-lg bg-[var(--brand-cream)] p-2.5 ring-1 ring-[var(--line)] dark:bg-slate-900/80 dark:ring-[color:var(--line)]">
               <div className="mb-1.5 flex items-center justify-between gap-2 px-0.5">
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--brand-dark)] dark:text-amber-200/60">
                   Categories
@@ -2971,7 +2971,7 @@ export function PosPage(): JSX.Element {
                       setMenuView("all");
                       setCategoryId(null);
                     }}
-                    className={`flex w-[4.5rem] shrink-0 flex-col items-center gap-1 rounded-2xl px-1.5 py-2 text-center transition ${
+                    className={`flex w-[4.5rem] shrink-0 flex-col items-center gap-1 rounded-lg px-1.5 py-2 text-center transition ${
                       showAllItems
                         ? "bg-[var(--pos-accent,var(--brand))] text-[color:var(--pos-accent-fg,var(--brand-fg,var(--ink)))] shadow-sm"
                         : "bg-white text-[var(--ink)] ring-1 ring-[var(--line)] hover:bg-white dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
@@ -2989,7 +2989,7 @@ export function PosPage(): JSX.Element {
                   <button
                     type="button"
                     onClick={() => setMenuView("featured")}
-                    className={`flex w-[4.5rem] shrink-0 flex-col items-center gap-1 rounded-2xl px-1.5 py-2 text-center transition ${
+                    className={`flex w-[4.5rem] shrink-0 flex-col items-center gap-1 rounded-lg px-1.5 py-2 text-center transition ${
                       showFeaturedOnly
                         ? "bg-[var(--pos-accent,var(--brand))] text-[color:var(--pos-accent-fg,var(--brand-fg,var(--ink)))] shadow-sm"
                         : "bg-white text-[var(--ink)] ring-1 ring-[var(--line)] hover:bg-white dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
@@ -3020,7 +3020,7 @@ export function PosPage(): JSX.Element {
                           setMenuView("category");
                           setCategoryId(c.id);
                         }}
-                        className={`flex w-[4.5rem] shrink-0 flex-col items-center gap-1 rounded-2xl px-1.5 py-2 text-center transition ${
+                        className={`flex w-[4.5rem] shrink-0 flex-col items-center gap-1 rounded-lg px-1.5 py-2 text-center transition ${
                           active
                             ? "bg-[var(--pos-accent,var(--brand))] text-[color:var(--pos-accent-fg,var(--brand-fg,var(--ink)))] shadow-sm"
                             : "bg-white text-[var(--ink)] ring-1 ring-[var(--line)] hover:bg-white dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
@@ -3107,7 +3107,7 @@ export function PosPage(): JSX.Element {
                       onClick={() => onDishClick(item)}
                       className={`group relative flex flex-col border bg-white text-left shadow-card transition hover:border-[color:var(--brand)] hover:shadow-panel dark:border-slate-800/80 dark:bg-slate-900/40 dark:hover:border-amber-500/30 dark:hover:bg-slate-900 ${
                         isIceCream
-                          ? "rounded-2xl border-[color:var(--line)] p-2"
+                          ? "rounded-xl border-[color:var(--line)] p-2"
                           : "rounded-xl border-[color:var(--line)] p-1.5"
                       }`}
                     >
@@ -3151,7 +3151,7 @@ export function PosPage(): JSX.Element {
                           ) : null}
                         </span>
                         {isIceCream ? (
-                          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--pos-accent,var(--brand))] text-[14px] font-bold text-[color:var(--pos-accent-fg,#fff)]">
+                          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--pos-accent,var(--brand))] text-[14px] font-bold text-[color:var(--pos-accent-fg,#fff)]">
                             +
                           </span>
                         ) : null}
@@ -3159,7 +3159,7 @@ export function PosPage(): JSX.Element {
                       {item.featured || item.barcode || happyHourGiftItemIds.has(item.id) ? (
                         <div className="mt-0.5 flex flex-wrap items-center gap-0.5">
                           {item.featured ? (
-                            <span className="rounded bg-[var(--brand-yellow)] px-1 text-[8px] font-semibold text-[var(--ink)]">Featured</span>
+                            <span className="rounded bg-[var(--brand-yellow)] px-1 text-[8px] font-semibold text-[color:var(--brand-yellow-fg,var(--ink))]">Featured</span>
                           ) : null}
                           {happyHourGiftItemIds.has(item.id) ? (
                             <span className="rounded bg-[var(--brand-peach,#c4a574)] px-1 text-[8px] font-semibold text-[color:var(--ink)]">Offer</span>
