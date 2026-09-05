@@ -139,7 +139,7 @@ export function SystemSelectPage(): JSX.Element {
         <ThemeToggle compact />
       </header>
 
-      <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2">
+      <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-2">
         {availableSystems.map((system) => (
           <SystemCard key={system.id} system={system} onSelect={onSelect} />
         ))}

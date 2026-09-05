@@ -19,35 +19,30 @@ import {
  */
 export type PlatformEdition = BusinessSystemId | "suite";
 
-// Vite `define` replaces `__PLATFORM_EDITION__` with a string literal at build
-// time (see vite.config.ts). Referencing it directly in the comparisons below
-// lets Rollup fold each `HAS_*` to a literal boolean and tree-shake the route
-// chunks of systems not shipped in this edition.
 declare const __PLATFORM_EDITION__: string;
-
-/**
- * Compile-time edition flags. In a locked build only one of the three system
- * flags is `true`; the rest fold to `false` so their code is dropped from the
- * bundle. `suite` builds keep everything.
- */
-export const IS_SUITE = __PLATFORM_EDITION__ === "suite";
-export const HAS_RESTAURANT =
-  __PLATFORM_EDITION__ === "suite" ||
-  __PLATFORM_EDITION__ === "restaurant" ||
-  __PLATFORM_EDITION__ === "ice-cream-bar";
-export const HAS_ICE_CREAM_BAR =
-  __PLATFORM_EDITION__ === "suite" || __PLATFORM_EDITION__ === "ice-cream-bar";
-export const HAS_PHARMACY =
-  __PLATFORM_EDITION__ === "suite" || __PLATFORM_EDITION__ === "pharmacy";
-export const HAS_GENERAL_STORE =
-  __PLATFORM_EDITION__ === "suite" || __PLATFORM_EDITION__ === "general-store";
 
 function normalizeEdition(raw: string): PlatformEdition {
   if (!raw || raw === "suite" || raw === "all") return "suite";
   return isBusinessSystemId(raw) ? raw : "suite";
 }
 
-export const PLATFORM_EDITION: PlatformEdition = normalizeEdition(__PLATFORM_EDITION__);
+export const PLATFORM_EDITION: PlatformEdition = normalizeEdition(
+  typeof __PLATFORM_EDITION__ === "string" ? __PLATFORM_EDITION__ : "suite",
+);
+
+export const IS_SUITE = PLATFORM_EDITION === "suite";
+export const HAS_RESTAURANT =
+  PLATFORM_EDITION === "suite" ||
+  PLATFORM_EDITION === "restaurant" ||
+  PLATFORM_EDITION === "ice-cream-bar";
+export const HAS_ICE_CREAM_BAR =
+  PLATFORM_EDITION === "suite" ||
+  PLATFORM_EDITION === "ice-cream-bar" ||
+  PLATFORM_EDITION === "restaurant";
+export const HAS_PHARMACY =
+  PLATFORM_EDITION === "suite" || PLATFORM_EDITION === "pharmacy";
+export const HAS_GENERAL_STORE =
+  PLATFORM_EDITION === "suite" || PLATFORM_EDITION === "general-store";
 
 /** True when this build ships a single locked business system. */
 export function isSingleSystemEdition(): boolean {
@@ -63,13 +58,17 @@ export function getLockedSystemId(): BusinessSystemId | null {
 /** Business systems visible in this edition (one for locked builds, all for suite). */
 export function getAvailableSystems(): BusinessSystem[] {
   const locked = getLockedSystemId();
+  if (locked === "ice-cream-bar") return [businessSystems["ice-cream-bar"]];
+  if (locked === "restaurant") {
+    return [businessSystems.restaurant, businessSystems["ice-cream-bar"]];
+  }
   if (locked) return [businessSystems[locked]];
   return businessSystemList.filter((s) => isSystemAvailable(s.id));
 }
 
 /** True when `id` is installed/available in this edition. */
 export function isSystemAvailable(id: BusinessSystemId): boolean {
-  if (id === "restaurant") return HAS_RESTAURANT && __PLATFORM_EDITION__ !== "ice-cream-bar";
+  if (id === "restaurant") return HAS_RESTAURANT && PLATFORM_EDITION !== "ice-cream-bar";
   if (id === "ice-cream-bar") return HAS_ICE_CREAM_BAR;
   if (id === "pharmacy") return HAS_PHARMACY;
   if (id === "general-store") return HAS_GENERAL_STORE;

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isSafeDesktopUpdate } from "../lib/desktopUpdateGuard";
 
 type BannerState =
   | { kind: "hidden" }
@@ -43,10 +44,15 @@ export function DesktopUpdateBanner(): JSX.Element | null {
           setState((prev) => (prev.kind === "error" ? { kind: "hidden" } : prev.kind === "available" || prev.kind === "downloading" ? prev : { kind: "hidden" }));
           return;
         }
+        const notes = (update.body ?? "").trim();
+        if (!isSafeDesktopUpdate(update.version, notes)) {
+          setState({ kind: "hidden" });
+          return;
+        }
         setState({
           kind: "available",
           version: update.version,
-          notes: (update.body ?? "").trim(),
+          notes,
         });
       } catch (err) {
         if (cancelled) return;
@@ -79,6 +85,13 @@ export function DesktopUpdateBanner(): JSX.Element | null {
       const update = await check();
       if (!update) {
         setState({ kind: "error", message: "Update no longer available. Try again later." });
+        return;
+      }
+      if (!isSafeDesktopUpdate(update.version, update.body ?? "")) {
+        setState({
+          kind: "error",
+          message: "This update is an older suite and would remove Ice Cream Bar. Skipped.",
+        });
         return;
       }
       let downloaded = 0;

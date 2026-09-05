@@ -44,8 +44,9 @@ export function SuperAdminAutoUpdates(): JSX.Element {
           <p className="text-sm font-semibold">Auto-update (EXE + APK)</p>
           <p className={`mt-1 text-sm ${saMutedClass}`}>
             Builds bake Active server{" "}
-            <span className="font-mono text-[11px]">{getApiBaseUrl()}</span> — restaurant EXE checks
-            restaurant feed; universal checks suite feed.
+            <span className="font-mono text-[11px]">{getApiBaseUrl()}</span> — restaurant/suite use
+            the shared desktop feed; Ice Cream Bar EXE updates from{" "}
+            <span className="font-mono text-[11px]">affanmustafa909-lgtm</span> only.
           </p>
         </div>
         {feeds.isLoading ? (

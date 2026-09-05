@@ -1,6 +1,6 @@
 {
   "name": "@platform/launcher",
-  "version": "0.3.39",
+  "version": "0.3.59",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
     "build": "pnpm exec tauri build",
     "build:web": "vite build",
     "build:restaurant": "node ./scripts/build-edition.mjs restaurant",
+    "build:ice-cream-bar": "node ./scripts/build-edition.mjs ice-cream-bar",
     "build:general-store": "node ./scripts/build-edition.mjs general-store",
     "build:pharmacy": "node ./scripts/build-edition.mjs pharmacy",
     "build:suite": "node ./scripts/build-edition.mjs suite",

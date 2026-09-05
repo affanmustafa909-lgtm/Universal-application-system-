@@ -7,9 +7,13 @@ import { fileURLToPath } from "node:url";
 function withSigningEnv(baseEnv) {
   const env = { ...baseEnv };
   if (!(env.TAURI_SIGNING_PRIVATE_KEY ?? "").trim()) {
-    const keyPath = (env.TAURI_SIGNING_PRIVATE_KEY_PATH ?? "").trim();
+    const iceCreamKey = join(dirname(fileURLToPath(import.meta.url)), "..", "src-tauri", "keys", "ice-cream-update.key");
+    const keyPath =
+      (env.TAURI_SIGNING_PRIVATE_KEY_PATH ?? "").trim() ||
+      (existsSync(iceCreamKey) ? iceCreamKey : "");
     if (keyPath && existsSync(keyPath)) {
       env.TAURI_SIGNING_PRIVATE_KEY = readFileSync(keyPath, "utf8");
+      env.TAURI_SIGNING_PRIVATE_KEY_PATH = keyPath;
     }
   }
   // Empty password keys still prompt unless this is set explicitly.
@@ -23,7 +27,7 @@ function withSigningEnv(baseEnv) {
  * Builds a single-system desktop installer.
  *
  * Usage:
- *   node scripts/build-edition.mjs <restaurant|general-store|pharmacy|suite>
+ *   node scripts/build-edition.mjs <restaurant|ice-cream-bar|general-store|pharmacy|suite>
  *
  * Each edition:
  *   - bakes PLATFORM_EDITION into the web bundle (only that system's UI ships)
@@ -35,14 +39,22 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const tauriDir = join(__dirname, "..", "src-tauri");
 
 const LIVE = "https://backend-desktop-production-600b.up.railway.app";
+const ICE_CREAM_LIVE = "https://backend-system-production-28a3.up.railway.app";
 
 function resolveApiUrl() {
+  if (edition === "ice-cream-bar") {
+    const fromEnv = (process.env.VITE_API_BASE_URL ?? "").trim().replace(/\/$/, "");
+    if (fromEnv && !/localhost|127\.0\.0\.1/i.test(fromEnv) && !fromEnv.includes("backend-desktop-production-600b")) {
+      return fromEnv;
+    }
+    return ICE_CREAM_LIVE;
+  }
   const fromEnv = (process.env.VITE_API_BASE_URL ?? "").trim();
   if (fromEnv) return fromEnv;
   return LIVE;
 }
 
-const VALID = new Set(["restaurant", "general-store", "pharmacy", "suite"]);
+const VALID = new Set(["restaurant", "ice-cream-bar", "general-store", "pharmacy", "suite"]);
 
 const edition = (process.argv[2] ?? "").trim();
 if (!VALID.has(edition)) {

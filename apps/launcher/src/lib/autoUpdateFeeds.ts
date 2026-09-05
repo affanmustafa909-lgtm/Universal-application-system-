@@ -9,6 +9,7 @@ export type UpdateFeedInfo = {
 };
 
 const DESKTOP_REPO = "basir2353/pops-desktop-updates";
+const ICE_CREAM_REPO = "affanmustafa909-lgtm/ice-cream-bar-updates";
 const MOBILE_REPO = "basir2353/pops-mobile-updates";
 
 const DESKTOP_FEEDS = {
@@ -24,6 +25,13 @@ const DESKTOP_FEEDS = {
     downloadTag: (v: string) =>
       `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/Restaurant-Management-System_${v}_x64-setup.exe`,
   },
+} as const;
+
+const ICE_CREAM_FEED = {
+  manifest: "latest-ice-cream-bar.json",
+  label: "Desktop · Ice Cream Bar",
+  downloadTag: (v: string) =>
+    `https://github.com/${ICE_CREAM_REPO}/releases/download/ice-cream-v${v}/Scoops-Ice-Cream-Bar_${v}_x64-setup.exe`,
 } as const;
 
 const MOBILE_FEEDS = {
@@ -75,6 +83,26 @@ export async function fetchAutoUpdateStatus(input: {
     ? versionFromTag(desktop.release.tag_name, "desktop")
     : null;
 
+  const iceCream = await fetchGitHubRelease(ICE_CREAM_REPO);
+  const iceCreamVersion = iceCream.release?.tag_name
+    ? versionFromTag(iceCream.release.tag_name, "ice-cream") ??
+      versionFromTag(iceCream.release.tag_name, "desktop")
+    : null;
+  const iceAsset = iceCream.release?.assets?.find((a) => a.name === ICE_CREAM_FEED.manifest);
+  rows.push({
+    id: "desktop-ice-cream-bar",
+    label: ICE_CREAM_FEED.label,
+    localVersion: input.desktopVersion,
+    publishedVersion: iceCreamVersion,
+    publishedUrl:
+      iceAsset?.browser_download_url ??
+      (iceCreamVersion ? ICE_CREAM_FEED.downloadTag(iceCreamVersion) : null),
+    ok: iceCreamVersion === input.desktopVersion && Boolean(iceAsset),
+    error:
+      iceCream.error ??
+      (!iceAsset && iceCreamVersion ? `Missing ${ICE_CREAM_FEED.manifest} on release` : undefined),
+  });
+
   for (const [id, feed] of Object.entries(DESKTOP_FEEDS)) {
     const asset = desktop.release?.assets?.find((a) => a.name === feed.manifest);
     rows.push({
@@ -109,4 +137,4 @@ export async function fetchAutoUpdateStatus(input: {
   return rows;
 }
 
-export { DESKTOP_FEEDS, MOBILE_FEEDS, DESKTOP_REPO, MOBILE_REPO };
+export { DESKTOP_FEEDS, ICE_CREAM_FEED, MOBILE_FEEDS, DESKTOP_REPO, ICE_CREAM_REPO, MOBILE_REPO };

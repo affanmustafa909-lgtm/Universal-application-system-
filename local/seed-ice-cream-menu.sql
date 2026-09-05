@@ -1,9 +1,11 @@
 -- Ice cream categories + items for restaurant org branches. Idempotent.
 
 WITH restaurant_branches AS (
-  SELECT id AS branch_id, organization_id
-  FROM pops_branches
-  WHERE organization_id = '36ff83ff-af8d-4411-aeb6-9ec1d1b6dd3c'
+  SELECT b.id AS branch_id, b.organization_id
+  FROM pops_branches b
+  JOIN organizations o ON o.id = b.organization_id
+  WHERE o.system_type = 'restaurant'
+    AND o.status = 'active'
 ),
 wanted_cats AS (
   SELECT * FROM (VALUES

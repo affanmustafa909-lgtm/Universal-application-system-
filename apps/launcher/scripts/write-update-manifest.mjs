@@ -22,15 +22,22 @@ import { join } from "node:path";
 
 const edition = (process.argv[2] ?? "").trim();
 const versionArg = (process.argv[3] ?? "").trim();
-const VALID = new Set(["suite", "restaurant", "general-store", "pharmacy"]);
+const VALID = new Set(["suite", "restaurant", "ice-cream-bar", "general-store", "pharmacy"]);
 if (!VALID.has(edition)) {
   console.error(`Usage: node scripts/write-update-manifest.mjs <${[...VALID].join("|")}> [version]`);
   process.exit(1);
 }
 
+const ICE_CREAM_REPO = "affanmustafa909-lgtm/ice-cream-bar-updates";
+const DEFAULT_REPO = "basir2353/pops-desktop-updates";
+
+const launcherRoot = process.cwd();
+const localTarget = join(launcherRoot, "src-tauri", "target");
 const cargoTarget =
   process.env.CARGO_TARGET_DIR?.trim() ||
-  join(process.env.TEMP || process.env.TMP || "/tmp", "pops-launcher-cargo-target");
+  (existsSync(join(localTarget, "release", "bundle", "nsis"))
+    ? localTarget
+    : join(process.env.TEMP || process.env.TMP || "/tmp", "pops-launcher-cargo-target"));
 const nsisDir = join(cargoTarget, "release", "bundle", "nsis");
 if (!existsSync(nsisDir)) {
   console.error(`[write-update-manifest] Missing NSIS dir: ${nsisDir}`);
@@ -47,6 +54,7 @@ if (setupFiles.length === 0) {
 const productHints = {
   suite: /universal/i,
   restaurant: /restaurant/i,
+  "ice-cream-bar": /scoops|ice\s*cream/i,
   "general-store": /general\s*store|retail/i,
   pharmacy: /pharmacy/i,
 };
@@ -89,15 +97,19 @@ const version =
   "0.0.0";
 
 const safeAsset = setupName.replace(/\s+/g, "-");
-const repo = "basir2353/pops-desktop-updates";
+const repo = edition === "ice-cream-bar" ? ICE_CREAM_REPO : DEFAULT_REPO;
+const tagPrefix = edition === "ice-cream-bar" ? "ice-cream" : "desktop";
 const base =
   (process.env.UPDATE_DOWNLOAD_BASE ?? "").trim().replace(/\/$/, "") ||
-  `https://github.com/${repo}/releases/download/desktop-v${version}`;
+  `https://github.com/${repo}/releases/download/${tagPrefix}-v${version}`;
 
 const signature = readFileSync(sigPath, "utf8").trim();
 const manifest = {
   version,
-  notes: `Desktop ${edition} update ${version}`,
+  notes:
+    edition === "ice-cream-bar"
+      ? `Scoops Ice Cream Bar update ${version}`
+      : `Desktop ${edition} update ${version}`,
   pub_date: new Date().toISOString(),
   platforms: {
     "windows-x86_64": {
@@ -120,7 +132,7 @@ const manifestName = `latest-${edition}.json`;
 const manifestPath = join(outDir, manifestName);
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
-const releaseDir = join(outDir, `desktop-v${version}`);
+const releaseDir = join(outDir, `${tagPrefix}-v${version}`);
 mkdirSync(releaseDir, { recursive: true });
 copyFileSync(setupPath, join(releaseDir, safeAsset));
 copyFileSync(sigPath, join(releaseDir, `${safeAsset}.sig`));

@@ -1,10 +1,29 @@
-/** Local API only — hosted/Railway backends are disabled. */
 export const LOCAL_API_URL = "http://127.0.0.1:3000";
+export const LIVE_API_URL = "https://backend-desktop-production-600b.up.railway.app";
+export const ICE_CREAM_LIVE_API_URL = "https://backend-system-production-28a3.up.railway.app";
+export const RAILWAY_API_URL = LIVE_API_URL;
 
-type ApiPreset = "local";
+function defaultLiveUrl(): string {
+  const edition = typeof __PLATFORM_EDITION__ === "string" ? __PLATFORM_EDITION__ : "";
+  if (edition === "ice-cream-bar") return ICE_CREAM_LIVE_API_URL;
+  return LIVE_API_URL;
+}
 
+type ApiPreset = "local" | "live";
+
+function normalizeUrl(url: string): string {
+  return url.trim().replace(/\/$/, "");
+}
+
+function isLocalUrl(url: string): boolean {
+  return /localhost|127\.0\.0\.1/i.test(url);
+}
+
+/** Hosted API baked in at build time via VITE_API_BASE_URL. */
 export function getLiveApiUrl(): string {
-  return LOCAL_API_URL;
+  const fromEnv = normalizeUrl(import.meta.env.VITE_API_BASE_URL ?? "");
+  if (fromEnv && !isLocalUrl(fromEnv)) return fromEnv;
+  return defaultLiveUrl();
 }
 
 export function describeLiveServer(): {
@@ -12,9 +31,15 @@ export function describeLiveServer(): {
   dbLabel: string;
 } {
   return {
-    url: LOCAL_API_URL,
-    dbLabel: "Local Postgres",
+    url: getLiveApiUrl(),
+    dbLabel: "Live Railway",
   };
+}
+
+export function getApiBaseUrl(): string {
+  const fromEnv = normalizeUrl(import.meta.env.VITE_API_BASE_URL ?? "");
+  if (fromEnv) return fromEnv;
+  return defaultLiveUrl();
 }
 
 export function describeApiServer(): {
@@ -23,22 +48,16 @@ export function describeApiServer(): {
   url: string;
   dbLabel: string | null;
 } {
+  const url = getApiBaseUrl();
+  const local = isLocalUrl(url);
   return {
-    preset: "local",
-    liveLabel: null,
-    url: LOCAL_API_URL,
-    dbLabel: "Local Postgres",
+    preset: local ? "local" : "live",
+    liveLabel: local ? null : "Live",
+    url,
+    dbLabel: local ? "Local Postgres" : "Live Railway",
   };
 }
 
-/** Resolves the API host for the whole app. Always local. */
-export function getApiBaseUrl(): string {
-  return LOCAL_API_URL;
-}
-
-export const LIVE_API_URL = LOCAL_API_URL;
-export const RAILWAY_API_URL = LOCAL_API_URL;
-
 export function describeApiPreset(_preset?: string): string {
-  return LOCAL_API_URL;
+  return getApiBaseUrl();
 }

@@ -118,8 +118,14 @@ Windows `.exe` files must be built on Windows. Use the included workflow:
 | --- | --- | --- |
 | **Suite** (all systems) | `pnpm installer:suite` | Platform Launcher |
 | **Restaurant** | `pnpm installer:restaurant` | Restaurant Management System |
+| **Ice Cream Bar** | `pnpm --filter @platform/launcher build:ice-cream-bar` | Scoops Ice Cream Bar |
 | **Pharmacy** | `pnpm installer:pharmacy` | Pharmacy Management System |
 | **General Store** | `pnpm installer:general-store` | General Store Management System |
+
+Ice Cream Bar auto-update is a **separate GitHub repo** (not this app repo):
+
+- Updates: https://github.com/affanmustafa909-lgtm/ice-cream-bar-updates
+- API: https://github.com/affanmustafa909-lgtm/backend-system · https://backend-system-production-28a3.up.railway.app
 
 Details: [apps/launcher/INSTALLER.md](./apps/launcher/INSTALLER.md)
 
