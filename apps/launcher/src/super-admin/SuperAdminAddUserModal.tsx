@@ -1,4 +1,4 @@
-import { SYSTEM_TYPE_LABELS, type Business, type CreatePlatformUser } from "@platform/contracts";
+import { systemTypeLabel, type Business, type CreatePlatformUser } from "@platform/contracts";
 import { useState } from "react";
 import { fieldInputClass, headingClass, mutedClass } from "../pops/lib/themeClasses";
 import { saBtnPrimaryClass } from "./superAdminTheme";
@@ -87,7 +87,7 @@ export function SuperAdminAddUserModal({
             >
               {businesses.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.name} · {SYSTEM_TYPE_LABELS[b.systemType]}
+                  {b.name} · {systemTypeLabel(b.systemType)}
                 </option>
               ))}
             </select>

@@ -178,7 +178,8 @@ export function LoginPage(): JSX.Element {
     }
 
     const lockedId =
-      systemId === "ice-cream-bar" && assignedSystemId === "restaurant"
+      systemId === "ice-cream-bar" &&
+      (assignedSystemId === "restaurant" || assignedSystemId === "ice-cream-bar")
         ? "ice-cream-bar"
         : (assignedSystemId ?? systemId!);
     // Provision this device for the account's system: after logout the app

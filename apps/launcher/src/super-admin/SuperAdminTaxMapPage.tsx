@@ -1,5 +1,5 @@
 import { Button } from "@platform/ui";
-import { SYSTEM_TYPE_LABELS } from "@platform/contracts";
+import { systemTypeLabel } from "@platform/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -139,7 +139,7 @@ function TaxRow({
 }: {
   id: string;
   name: string;
-  systemType: keyof typeof SYSTEM_TYPE_LABELS;
+  systemType: string;
   fbr: boolean;
   praFake: boolean;
   praReal: boolean;
@@ -168,7 +168,7 @@ function TaxRow({
         >
           {name}
         </Link>
-        <p className={`text-xs ${mutedClass}`}>{SYSTEM_TYPE_LABELS[systemType]}</p>
+        <p className={`text-xs ${mutedClass}`}>{systemTypeLabel(systemType)}</p>
       </td>
       <td className="px-4 py-3">
         <input

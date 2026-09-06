@@ -1,5 +1,5 @@
 import { Button } from "@platform/ui";
-import { SYSTEM_TYPE_LABELS, type Business } from "@platform/contracts";
+import { systemTypeLabel, type Business } from "@platform/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -240,7 +240,7 @@ export function SuperAdminOverviewPage(): JSX.Element {
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.bySystemType.map((row) => (
             <div key={row.systemType} className={saStatClass}>
-              <p className={`text-sm ${saMutedClass}`}>{SYSTEM_TYPE_LABELS[row.systemType]}</p>
+              <p className={`text-sm ${saMutedClass}`}>{systemTypeLabel(row.systemType)}</p>
               <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{row.count}</p>
             </div>
           ))}
@@ -262,7 +262,7 @@ export function SuperAdminOverviewPage(): JSX.Element {
                       {b.name}
                     </Link>
                     <p className={`text-sm ${saMutedClass}`}>
-                      {SYSTEM_TYPE_LABELS[b.systemType]} · {b.licencePlan ?? "—"} ·{" "}
+                      {systemTypeLabel(b.systemType)} · {b.licencePlan ?? "—"} ·{" "}
                       {expired ? "Expired" : "Expiring"}{" "}
                       {b.licenceExpiresAt ? new Date(b.licenceExpiresAt).toLocaleDateString() : ""}
                     </p>
@@ -295,7 +295,7 @@ export function SuperAdminOverviewPage(): JSX.Element {
                     {b.name}
                   </Link>
                   <p className={`text-sm ${saMutedClass}`}>
-                    {SYSTEM_TYPE_LABELS[b.systemType]} · {b.status}
+                    {systemTypeLabel(b.systemType)} · {b.status}
                   </p>
                 </div>
                 <p className={`text-xs ${saMutedClass}`}>{new Date(b.createdAt).toLocaleDateString()}</p>

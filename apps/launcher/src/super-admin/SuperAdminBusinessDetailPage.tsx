@@ -1,7 +1,7 @@
 import { Button } from "@platform/ui";
 import {
   LICENCE_PLANS,
-  SYSTEM_TYPE_LABELS,
+  systemTypeLabel,
   type BusinessStatus,
 } from "@platform/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -243,7 +243,7 @@ export function SuperAdminBusinessDetailPage(): JSX.Element {
           </Link>
           <h2 className={`mt-2 text-xl font-semibold ${headingClass}`}>{b.name}</h2>
           <p className={`mt-1 text-sm ${mutedClass}`}>
-            {SYSTEM_TYPE_LABELS[b.systemType]} · <span className="capitalize">{b.status}</span> ·{" "}
+            {systemTypeLabel(b.systemType)} · <span className="capitalize">{b.status}</span> ·{" "}
             {b.userCount ?? 0} users · Admin {b.adminEmail ?? "—"}
           </p>
         </div>

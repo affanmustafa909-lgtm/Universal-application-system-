@@ -52,6 +52,7 @@ import {
 } from "./thermalPrintSettings";
 import { sampleBillPrintInput } from "./billSampleReceipt";
 import { useSessionStore } from "../../stores/sessionStore";
+import { printBusinessDisplayName } from "./printBusinessName";
 
 export type PrintLine = {
   label: string;
@@ -452,7 +453,7 @@ function buildKotThermalPlainText(
     }
   };
 
-  const business = kot.headerBusinessName.trim() || input.branchName;
+  const business = printBusinessDisplayName(input.branchName, kot.headerBusinessName);
   if (fields.branchName) pushAligned(business.toUpperCase());
   if (fields.headerSubtitle && kot.headerSubtitle.trim()) {
     pushAligned(kot.headerSubtitle.trim());
@@ -611,9 +612,7 @@ export function buildThermalPlainText(
     out.push(kind === "equals" ? equals : dash);
   };
 
-  const business = billSettings.headerBusinessName.trim()
-    ? billSettings.headerBusinessName.trim()
-    : input.branchName;
+  const business = printBusinessDisplayName(input.branchName, billSettings.headerBusinessName);
   pushRule();
   if (fields.branchName !== false) {
     for (const w of wrapWords(business, width)) {
@@ -1189,12 +1188,10 @@ export function buildTicketHtml(input: PrintTicketInput): string {
     if (showQtyCol) return "12% minmax(0,1fr)";
     return "minmax(0,1fr)";
   })();
-  const displayBusinessName =
-    isReceipt && billSettings.headerBusinessName.trim()
-      ? billSettings.headerBusinessName.trim()
-      : !isReceipt && kotSettings.headerBusinessName.trim()
-        ? kotSettings.headerBusinessName.trim()
-        : input.branchName;
+  const displayBusinessName = printBusinessDisplayName(
+    input.branchName,
+    isReceipt ? billSettings.headerBusinessName : kotSettings.headerBusinessName,
+  );
   const businessLogoSrc = isReceipt
     ? input.businessLogoSrc !== undefined
       ? input.businessLogoSrc

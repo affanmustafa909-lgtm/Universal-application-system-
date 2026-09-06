@@ -1,11 +1,9 @@
 export const LOCAL_API_URL = "http://127.0.0.1:3000";
-export const LIVE_API_URL = "https://backend-desktop-production-600b.up.railway.app";
+export const LIVE_API_URL = "https://backend-system-production-28a3.up.railway.app";
 export const ICE_CREAM_LIVE_API_URL = "https://backend-system-production-28a3.up.railway.app";
 export const RAILWAY_API_URL = LIVE_API_URL;
 
 function defaultLiveUrl(): string {
-  const edition = typeof __PLATFORM_EDITION__ === "string" ? __PLATFORM_EDITION__ : "";
-  if (edition === "ice-cream-bar") return ICE_CREAM_LIVE_API_URL;
   return LIVE_API_URL;
 }
 

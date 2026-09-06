@@ -1,5 +1,5 @@
 import { Button } from "@platform/ui";
-import { SYSTEM_TYPE_LABELS, type PlatformUser } from "@platform/contracts";
+import { systemTypeLabel, type PlatformUser } from "@platform/contracts";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { fieldInputClass, headingClass, mutedClass } from "../pops/lib/themeClasses";
@@ -86,7 +86,7 @@ export function SuperAdminUserViewModal({
                 onClick={onClose}
               >
                 {user.businessName ?? "—"}
-                {user.systemType ? ` · ${SYSTEM_TYPE_LABELS[user.systemType]}` : ""}
+                {user.systemType ? ` · ${systemTypeLabel(user.systemType)}` : ""}
               </Link>
             ) : (
               "—"

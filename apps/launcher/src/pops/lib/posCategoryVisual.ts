@@ -16,6 +16,8 @@ export function scopeMenuForBusinessSystem<
   const wantIceCream = systemId === "ice-cream-bar";
   const scopedCats = categories.filter((c) => isIceCreamMenuCategory(c.name) === wantIceCream);
   if (scopedCats.length === 0) {
+    // Ice Cream Bar must never fall back to restaurant dishes (biryani, karahi).
+    if (wantIceCream) return { categories: [], items: [] };
     return { categories: [...categories], items: [...items] };
   }
   const ids = new Set(scopedCats.map((c) => c.id));

@@ -2,6 +2,7 @@ import { Button } from "@platform/ui";
 import {
   LICENCE_PLANS,
   SYSTEM_TYPE_LABELS,
+  systemTypeLabel,
   defaultExpiryDateForPlan,
   licencePlanLabel,
   resolveLicencePlanMeta,
@@ -19,7 +20,6 @@ import {
   deletePlatformBusiness,
   fetchPlatformBusinesses,
   fetchPlatformSettings,
-  fetchPlatformSystemTypes,
   fetchPlatformUsers,
   resetPlatformUserPassword,
   updatePlatformBusiness,
@@ -90,7 +90,6 @@ export function SuperAdminBusinessesPage(): JSX.Element {
   const qc = useQueryClient();
   const businesses = useQuery({ queryKey: ["platform", "businesses"], queryFn: fetchPlatformBusinesses });
   const users = useQuery({ queryKey: ["platform", "users"], queryFn: fetchPlatformUsers });
-  const systemTypes = useQuery({ queryKey: ["platform", "system-types"], queryFn: fetchPlatformSystemTypes });
   const settings = useQuery({ queryKey: ["platform", "settings"], queryFn: fetchPlatformSettings });
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,16 +108,15 @@ export function SuperAdminBusinessesPage(): JSX.Element {
     [settings.data?.entries],
   );
 
-  /** Only ERP shells we actually ship (Restaurant / Pharmacy / General Store). */
-  const shippedSystemOptions = useMemo(() => {
-    const fromApp = provisionableBusinessSystems.map((s) => {
-      const id = systemTypeForBusinessSystemId(s.id);
-      return { id, label: SYSTEM_TYPE_LABELS[id] };
-    });
-    if (!systemTypes.data?.length) return fromApp;
-    const allowed = new Set(fromApp.map((o) => o.id));
-    return systemTypes.data.filter((o) => allowed.has(o.id));
-  }, [systemTypes.data]);
+  /** Shipped ERP shells Super Admin can licence (Restaurant, Ice Cream, Pharmacy, Store). */
+  const shippedSystemOptions = useMemo(
+    () =>
+      provisionableBusinessSystems.map((s) => {
+        const id = systemTypeForBusinessSystemId(s.id);
+        return { id, label: SYSTEM_TYPE_LABELS[id] };
+      }),
+    [],
+  );
 
   const [form, setForm] = useState<CreateFormState>(() => emptyForm(defaultPlan, planMeta));
 
@@ -164,7 +162,7 @@ export function SuperAdminBusinessesPage(): JSX.Element {
       return (
         b.name.toLowerCase().includes(q) ||
         (b.adminEmail ?? "").toLowerCase().includes(q) ||
-        SYSTEM_TYPE_LABELS[b.systemType].toLowerCase().includes(q) ||
+        systemTypeLabel(b.systemType).toLowerCase().includes(q) ||
         (b.licenceKey ?? "").toLowerCase().includes(q) ||
         licencePlanLabel(b.licencePlan, planMeta).toLowerCase().includes(q)
       );
@@ -596,7 +594,7 @@ export function SuperAdminBusinessesPage(): JSX.Element {
                         </Link>
                         <p className={`text-xs ${mutedClass}`}>{b.userCount ?? 0} users</p>
                       </td>
-                      <td className="px-4 py-3">{SYSTEM_TYPE_LABELS[b.systemType]}</td>
+                      <td className="px-4 py-3">{systemTypeLabel(b.systemType)}</td>
                       <td className="px-4 py-3 capitalize">{b.status}</td>
                       <td className="px-4 py-3">
                         <p className="font-medium">{licencePlanLabel(b.licencePlan, planMeta)}</p>

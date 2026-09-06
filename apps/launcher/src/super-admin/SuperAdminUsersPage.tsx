@@ -1,5 +1,5 @@
 import { Button } from "@platform/ui";
-import { SYSTEM_TYPE_LABELS } from "@platform/contracts";
+import { systemTypeLabel } from "@platform/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -223,7 +223,7 @@ export function SuperAdminUsersPage(): JSX.Element {
                           className={saLinkClass}
                         >
                           {u.businessName ?? "—"}
-                          {u.systemType ? ` · ${SYSTEM_TYPE_LABELS[u.systemType]}` : ""}
+                          {u.systemType ? ` · ${systemTypeLabel(u.systemType)}` : ""}
                         </Link>
                       ) : (
                         <span>—</span>

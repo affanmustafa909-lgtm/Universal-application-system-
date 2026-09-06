@@ -98,10 +98,14 @@ export function SystemSelectPage(): JSX.Element {
     return <Navigate to="/super-admin" replace />;
   }
 
-  // Pharmacy / store admins stay locked to their assigned system.
+  // Pharmacy / store / ice-cream admins stay locked to their assigned system.
   // Restaurant JWT also covers Ice Cream Bar — keep the picker so they can choose.
   const assignedSystemId = businessSystemIdFromSystemType(claims?.systemType);
-  if (accessToken && assignedSystemId && !isRestaurantFamilySystem(assignedSystemId)) {
+  if (
+    accessToken &&
+    assignedSystemId &&
+    (assignedSystemId === "ice-cream-bar" || !isRestaurantFamilySystem(assignedSystemId))
+  ) {
     return <Navigate to={entryPath(assignedSystemId)} replace />;
   }
 

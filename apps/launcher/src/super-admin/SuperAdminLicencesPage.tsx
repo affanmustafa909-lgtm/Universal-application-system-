@@ -1,7 +1,7 @@
 import { Button } from "@platform/ui";
 import {
   POPS_MODULE_ACCESS,
-  SYSTEM_TYPE_LABELS,
+  systemTypeLabel,
   licencePlanLabel,
 } from "@platform/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -168,7 +168,7 @@ export function SuperAdminLicencesPage(): JSX.Element {
       return (
         b.name.toLowerCase().includes(q) ||
         (b.adminEmail ?? "").toLowerCase().includes(q) ||
-        SYSTEM_TYPE_LABELS[b.systemType].toLowerCase().includes(q) ||
+        systemTypeLabel(b.systemType).toLowerCase().includes(q) ||
         licencePlanLabel(b.licencePlan).toLowerCase().includes(q)
       );
     });
@@ -324,7 +324,7 @@ export function SuperAdminLicencesPage(): JSX.Element {
                       {b.name}
                     </p>
                     <p className={`mt-0.5 text-sm ${mutedClass}`}>
-                      {SYSTEM_TYPE_LABELS[b.systemType]} ·{" "}
+                      {systemTypeLabel(b.systemType)} ·{" "}
                       <span className="capitalize">{b.status}</span>
                       {b.adminEmail ? ` · ${b.adminEmail}` : ""}
                     </p>

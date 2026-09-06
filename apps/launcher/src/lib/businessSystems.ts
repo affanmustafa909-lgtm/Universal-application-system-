@@ -105,10 +105,8 @@ export const businessSystemList: BusinessSystem[] = [
   businessSystems["general-store"],
 ];
 
-/** Backend-provisioned ERP types Super Admin can create (not frontend skins). */
-export const provisionableBusinessSystems: BusinessSystem[] = businessSystemList.filter(
-  (s) => s.id !== "ice-cream-bar",
-);
+/** Backend-provisioned ERP types Super Admin can create. */
+export const provisionableBusinessSystems: BusinessSystem[] = businessSystemList;
 
 export function isBusinessSystemId(value: string): value is BusinessSystemId {
   return (
@@ -148,12 +146,15 @@ export function businessSystemIdFromSystemType(
 ): BusinessSystemId | null {
   if (!systemType) return null;
   if (systemType === "grocery" || systemType === "retail") return "general-store";
+  if (systemType === "ice_cream" || systemType === "ice-cream" || systemType === "ice-cream-bar") {
+    return "ice-cream-bar";
+  }
   const frontend = systemTypeToFrontendId(systemType as SystemType);
   return isBusinessSystemId(frontend) ? frontend : null;
 }
 
 export function systemTypeForBusinessSystemId(id: BusinessSystemId): SystemType {
-  if (id === "ice-cream-bar") return "restaurant";
+  if (id === "ice-cream-bar") return "ice_cream";
   return frontendIdToSystemType(id) ?? "restaurant";
 }
 

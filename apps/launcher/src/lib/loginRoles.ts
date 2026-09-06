@@ -50,11 +50,11 @@ export const DEMO_OWNER_PASSWORD = "Owner@12345";
 /** Demo staff password matching Railway / production seed (Staff@12345). */
 export const DEMO_STAFF_PASSWORD = "Staff@12345";
 export const DEMO_SUPER_ADMIN_EMAIL = "superadmin@pops.platform";
-export const DEMO_SUPER_ADMIN_PASSWORD = "SuperAdmin@123";
+export const DEMO_SUPER_ADMIN_PASSWORD = "Owner@12345";
 
 const DEMO_ADMIN_EMAIL_BY_SYSTEM: Record<BusinessSystemId, string> = {
   restaurant: "admin.restaurant@pops.demo",
-  "ice-cream-bar": "admin.restaurant@pops.demo",
+  "ice-cream-bar": "admin.icecream@pops.demo",
   pharmacy: "admin.pharmacy@pops.demo",
   "general-store": "admin.store@pops.demo",
 };

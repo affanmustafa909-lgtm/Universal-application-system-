@@ -1,4 +1,4 @@
-import { SYSTEM_TYPE_LABELS, type Business, type PlatformUser } from "@platform/contracts";
+import { systemTypeLabel, type Business, type PlatformUser } from "@platform/contracts";
 import { Link } from "react-router-dom";
 import { headingClass, mutedClass } from "../pops/lib/themeClasses";
 
@@ -47,7 +47,7 @@ export function SuperAdminBusinessUsersViewModal({
               {business.name}
             </h3>
             <p className={`mt-0.5 text-sm ${mutedClass}`}>
-              {SYSTEM_TYPE_LABELS[business.systemType]} · {business.status} ·{" "}
+              {systemTypeLabel(business.systemType)} · {business.status} ·{" "}
               {business.userCount ?? users.length} users
             </p>
             <p className={`mt-1 break-all text-xs ${mutedClass}`}>

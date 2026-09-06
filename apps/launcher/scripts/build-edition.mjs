@@ -38,20 +38,21 @@ function withSigningEnv(baseEnv) {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const tauriDir = join(__dirname, "..", "src-tauri");
 
-const LIVE = "https://backend-desktop-production-600b.up.railway.app";
+const LIVE = "https://backend-system-production-28a3.up.railway.app";
 const ICE_CREAM_LIVE = "https://backend-system-production-28a3.up.railway.app";
 
 function resolveApiUrl() {
-  if (edition === "ice-cream-bar") {
-    const fromEnv = (process.env.VITE_API_BASE_URL ?? "").trim().replace(/\/$/, "");
-    if (fromEnv && !/localhost|127\.0\.0\.1/i.test(fromEnv) && !fromEnv.includes("backend-desktop-production-600b")) {
-      return fromEnv;
-    }
-    return ICE_CREAM_LIVE;
+  const live = edition === "ice-cream-bar" ? ICE_CREAM_LIVE : LIVE;
+  const fromEnv = (process.env.VITE_API_BASE_URL ?? "").trim().replace(/\/$/, "");
+  // Installers must never bake the local .env (http://127.0.0.1:3000).
+  if (
+    fromEnv &&
+    !/localhost|127\.0\.0\.1/i.test(fromEnv) &&
+    !fromEnv.includes("backend-desktop-production-600b")
+  ) {
+    return fromEnv;
   }
-  const fromEnv = (process.env.VITE_API_BASE_URL ?? "").trim();
-  if (fromEnv) return fromEnv;
-  return LIVE;
+  return live;
 }
 
 const VALID = new Set(["restaurant", "ice-cream-bar", "general-store", "pharmacy", "suite"]);
