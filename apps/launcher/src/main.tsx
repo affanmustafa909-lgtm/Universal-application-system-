@@ -19,13 +19,6 @@ try {
     localStorage.removeItem("platform-system-v1");
     localStorage.removeItem("platform-session-v1");
   }
-  localStorage.setItem(
-    "platform-data-mode-v2",
-    JSON.stringify({
-      state: { dataMode: "cloud", apiPreset: "local", cloudApiUrl: "", lastSyncedAt: null },
-      version: 0,
-    }),
-  );
 } catch {
   // ignore storage errors
 }
@@ -37,8 +30,11 @@ void fetch(`${getApiBaseUrl()}/health`, { method: "GET" }).catch(() => {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      retry: 0,
+      staleTime: 45_000,
+      gcTime: 10 * 60_000,
       refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     },
   },
 });

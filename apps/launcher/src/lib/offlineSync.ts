@@ -1,4 +1,4 @@
-import { SyncEngine, listPendingOutbox } from "@platform/sync-engine";
+import { SyncEngine, countOutboxByStatus, listPendingOutbox, listRecentOutboxErrors } from "@platform/sync-engine";
 import { platformFetch } from "@platform/auth-client";
 import { isOnline } from "@platform/connectivity";
 import { getApiBaseUrl } from "./apiBase";
@@ -44,6 +44,8 @@ export type SyncSummary = {
   cashFailed: number;
   payrollSynced: number;
   payrollFailed: number;
+  downloaded: number;
+  conflicts: number;
 };
 
 /** Push outbox rows and replay queued store POS + restaurant POS orders to the hosted API. */
@@ -58,9 +60,13 @@ export async function flushAllOfflineData(accessToken: string): Promise<SyncSumm
     cashFailed: 0,
     payrollSynced: 0,
     payrollFailed: 0,
+    downloaded: 0,
+    conflicts: 0,
   };
 
-  if (!isOnline()) return summary;
+  if (!isOnline()) {
+    throw new Error("Connect to the internet to push. Local changes stay on this device.");
+  }
 
   try {
     const { db } = await getRuntimeDb();
@@ -71,7 +77,8 @@ export async function flushAllOfflineData(accessToken: string): Promise<SyncSumm
     });
     const result = await engine.flushOnce(db);
     summary.outboxPushed = result.pushed;
-    if (result.pushed > 0) await persistRuntimeDb();
+    summary.conflicts += result.conflicts;
+    if (result.pushed > 0 || result.conflicts > 0) await persistRuntimeDb();
   } catch {
     // SQLite / sync unavailable in some web contexts — store queue still flushes below.
   }
@@ -159,7 +166,43 @@ export async function flushAllOfflineData(accessToken: string): Promise<SyncSumm
     }
   }
 
+  try {
+    const { db } = await getRuntimeDb();
+    const engine = new SyncEngine({ apiBaseUrl: getApiBaseUrl(), accessToken, fetchImpl: platformFetch });
+    await engine.recordHistory(db, {
+      organizationId: "local",
+      kind: "push",
+      uploaded: summary.salesSynced + summary.popsOrdersSynced + summary.cashSynced + summary.payrollSynced + summary.outboxPushed,
+      downloaded: 0,
+      failed: summary.salesFailed + summary.popsOrdersFailed + summary.cashFailed + summary.payrollFailed,
+      conflicts: summary.conflicts,
+      durationMs: 0,
+    });
+    await persistRuntimeDb();
+  } catch {
+    /* history is best-effort */
+  }
+
   return summary;
+}
+
+export async function pullFromCloud(accessToken: string, organizationId: string): Promise<{ downloaded: number; conflicts: number }> {
+  if (!isOnline()) throw new Error("Connect to the internet to pull.");
+  const { db } = await getRuntimeDb();
+  const engine = new SyncEngine({ apiBaseUrl: getApiBaseUrl(), accessToken, fetchImpl: platformFetch });
+  const result = await engine.pullOnce(db, organizationId);
+  await engine.recordHistory(db, {
+    organizationId,
+    kind: "pull",
+    uploaded: 0,
+    downloaded: result.downloaded,
+    failed: 0,
+    conflicts: result.conflicts,
+    durationMs: 0,
+  });
+  await persistRuntimeDb();
+  useDataModeStore.getState().markSynced();
+  return result;
 }
 
 /** Auto-sync only in cloud mode (local mode keeps data on device until manual sync). */
@@ -175,5 +218,41 @@ export async function countPendingOutbox(): Promise<number> {
     return rows.length;
   } catch {
     return 0;
+  }
+}
+
+export async function countAllPending(): Promise<{
+  sales: number;
+  popsOrders: number;
+  cash: number;
+  payroll: number;
+  outbox: number;
+  failed: number;
+  conflicts: number;
+}> {
+  let outbox = { pending: 0, failed: 0, conflict: 0, synced: 0 };
+  try {
+    const { db } = await getRuntimeDb();
+    outbox = await countOutboxByStatus(db);
+  } catch {
+    /* sqlite unavailable */
+  }
+  return {
+    sales: loadOfflineQueue().length,
+    popsOrders: loadOfflineBillEntries().length + loadOfflineKotEntries().length,
+    cash: loadOfflineCashMovements().length,
+    payroll: loadOfflinePayrollRuns().length,
+    outbox: outbox.pending,
+    failed: outbox.failed,
+    conflicts: outbox.conflict,
+  };
+}
+
+export async function listSyncErrors() {
+  try {
+    const { db } = await getRuntimeDb();
+    return listRecentOutboxErrors(db);
+  } catch {
+    return [];
   }
 }

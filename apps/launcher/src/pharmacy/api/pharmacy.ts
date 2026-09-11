@@ -49,7 +49,12 @@ function qs(branchCode: string): string {
 export async function fetchPharmacyDashboard(branchCode: string) {
   const res = await authFetch(`/v1/pharmacy/dashboard?${qs(branchCode)}`);
   if (!res.ok) await parseError(res, "Failed to load pharmacy dashboard");
-  return pharmacyDashboardSchema.parse(await res.json());
+  const json = await res.json();
+  try {
+    return pharmacyDashboardSchema.parse(json);
+  } catch {
+    return json as ReturnType<typeof pharmacyDashboardSchema.parse>;
+  }
 }
 
 export async function fetchPharmacyMedicines(branchCode: string) {
@@ -113,6 +118,89 @@ export async function createPharmacyDoctor(body: unknown) {
   const res = await authFetch("/v1/pharmacy/doctors", { method: "POST", body: JSON.stringify(body) });
   if (!res.ok) await parseError(res, "Failed to create doctor");
   return pharmacyDoctorSchema.parse(await res.json());
+}
+
+export async function fetchDoctorRecommendations(doctorId: string) {
+  const res = await authFetch(`/v1/pharmacy/doctors/${doctorId}/recommendations`);
+  if (!res.ok) await parseError(res, "Failed to load recommendations");
+  return (await res.json()) as {
+    id: string;
+    doctorId: string;
+    medicineId: string;
+    medicineName?: string;
+    medicineSku?: string;
+    priority: number;
+    notes?: string | null;
+    active: boolean;
+  }[];
+}
+
+export async function addDoctorRecommendation(
+  doctorId: string,
+  body: { medicineId: string; priority?: number; notes?: string },
+) {
+  const res = await authFetch(`/v1/pharmacy/doctors/${doctorId}/recommendations`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) await parseError(res, "Failed to add recommendation");
+  return res.json();
+}
+
+export async function removeDoctorRecommendation(recommendationId: string) {
+  const res = await authFetch(`/v1/pharmacy/doctors/recommendations/${recommendationId}`, { method: "DELETE" });
+  if (!res.ok) await parseError(res, "Failed to remove recommendation");
+}
+
+export async function fetchDoctorCommissionRules(doctorId: string) {
+  const res = await authFetch(`/v1/pharmacy/doctors/${doctorId}/commission-rules`);
+  if (!res.ok) await parseError(res, "Failed to load commission rules");
+  return (await res.json()) as {
+    id: string;
+    doctorId: string;
+    medicineId?: string | null;
+    ruleType: "percent" | "fixed";
+    rateValue: number;
+    active: boolean;
+    notes?: string | null;
+  }[];
+}
+
+export async function addDoctorCommissionRule(
+  doctorId: string,
+  body: { medicineId?: string; ruleType?: "percent" | "fixed"; rateValue: number; notes?: string },
+) {
+  const res = await authFetch(`/v1/pharmacy/doctors/${doctorId}/commission-rules`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) await parseError(res, "Failed to save commission rule");
+  return res.json();
+}
+
+export async function fetchDoctorCommissionEntries(doctorId: string) {
+  const res = await authFetch(`/v1/pharmacy/doctors/${doctorId}/commission-entries`);
+  if (!res.ok) await parseError(res, "Failed to load commission ledger");
+  return (await res.json()) as {
+    id: string;
+    invoiceNumber?: string | null;
+    medicineName?: string | null;
+    basePkr: number;
+    rateValue: number;
+    ruleType: string;
+    amountPkr: number;
+    status: string;
+    notes?: string | null;
+    createdAt: string;
+  }[];
+}
+
+export async function markDoctorCommissionPaid(entryIds: string[]) {
+  const res = await authFetch("/v1/pharmacy/doctors/commission-entries/mark-paid", {
+    method: "POST",
+    body: JSON.stringify({ entryIds }),
+  });
+  if (!res.ok) await parseError(res, "Failed to mark paid");
 }
 
 export async function fetchPharmacyPrescriptions(branchCode: string) {

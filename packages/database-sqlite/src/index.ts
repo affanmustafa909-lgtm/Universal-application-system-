@@ -1,7 +1,7 @@
 import type { Database as SqlJsDatabase, SqlJsStatic } from "sql.js";
 import { drizzle } from "drizzle-orm/sql-js";
 import * as schema from "./schema";
-import { SQLITE_BOOTSTRAP_DDL } from "./migrations";
+import { SQLITE_BOOTSTRAP_DDL, SQLITE_MIGRATIONS } from "./migrations";
 
 type InitSqlJs = (config?: {
   locateFile?: (file: string) => string;
@@ -49,6 +49,13 @@ export async function createSqlJsDb(opts: CreateSqlJsOptions = {}): Promise<{
   });
   const raw = opts.persisted ? new SQL.Database(opts.persisted) : new SQL.Database();
   raw.exec(SQLITE_BOOTSTRAP_DDL);
+  for (const sql of SQLITE_MIGRATIONS) {
+    try {
+      raw.exec(sql);
+    } catch {
+      /* column/table already exists on upgraded local DBs */
+    }
+  }
   const db = drizzle(raw, { schema });
   return {
     raw,
@@ -58,4 +65,4 @@ export async function createSqlJsDb(opts: CreateSqlJsOptions = {}): Promise<{
 }
 
 export * from "./schema";
-export { SQLITE_BOOTSTRAP_DDL } from "./migrations";
+export { SQLITE_BOOTSTRAP_DDL, SQLITE_MIGRATIONS } from "./migrations";

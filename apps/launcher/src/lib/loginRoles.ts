@@ -56,6 +56,7 @@ const DEMO_ADMIN_EMAIL_BY_SYSTEM: Record<BusinessSystemId, string> = {
   restaurant: "admin.restaurant@pops.demo",
   "ice-cream-bar": "admin.icecream@pops.demo",
   pharmacy: "admin.pharmacy@pops.demo",
+  distribution: "admin.distribution@pops.demo",
   "general-store": "admin.store@pops.demo",
 };
 
@@ -109,6 +110,43 @@ export function loginRolesForSystem(systemId: BusinessSystemId): {
           id: "hr",
           label: "Inventory manager",
           description: "Stock, purchases, and expiry",
+          demoEmail: DEMO_EMAIL.hr,
+        },
+      ],
+    };
+  }
+
+  if (systemId === "distribution") {
+    return {
+      admin: {
+        id: "admin",
+        label: "Admin",
+        description: "Full medical distribution control",
+        demoEmail: DEMO_ADMIN_EMAIL_BY_SYSTEM.distribution,
+      },
+      staff: [
+        {
+          id: "manager",
+          label: "Manager",
+          description: "Orders, field force, and recovery oversight",
+          demoEmail: DEMO_EMAIL.manager,
+        },
+        {
+          id: "cashier",
+          label: "Order desk",
+          description: "Booking and wholesale invoices",
+          demoEmail: DEMO_EMAIL.cashier,
+        },
+        {
+          id: "accountant",
+          label: "Collections",
+          description: "Trade recovery and receivables",
+          demoEmail: DEMO_EMAIL.accountant,
+        },
+        {
+          id: "hr",
+          label: "Field force",
+          description: "Assignments, visits, and staff",
           demoEmail: DEMO_EMAIL.hr,
         },
       ],

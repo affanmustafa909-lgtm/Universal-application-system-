@@ -191,6 +191,84 @@ const icons: Record<string, (props: IconProps) => JSX.Element> = {
       <path d="M17 11h4M19 9v4" />
     </Svg>
   ),
+  "PS Window": (p) => (
+    <Svg {...p}>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </Svg>
+  ),
+  Customers: (p) => (
+    <Svg {...p}>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+      <path d="M16 11h5M18.5 8.5v5" />
+    </Svg>
+  ),
+  Purchases: (p) => (
+    <Svg {...p}>
+      <path d="M6 6h15l-1.5 9H7.5L6 6z" />
+      <circle cx="9" cy="19" r="1.5" />
+      <circle cx="17" cy="19" r="1.5" />
+    </Svg>
+  ),
+  Deliveries: (p) => (
+    <Svg {...p}>
+      <path d="M3 7h11v10H3z" />
+      <path d="M14 10h4l3 3v4h-7" />
+      <circle cx="7" cy="19" r="1.5" />
+      <circle cx="17" cy="19" r="1.5" />
+    </Svg>
+  ),
+  Collections: (p) => (
+    <Svg {...p}>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <path d="M3 10h18M8 14h4" />
+    </Svg>
+  ),
+  "Field Force": (p) => (
+    <Svg {...p}>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7" />
+    </Svg>
+  ),
+  Geography: (p) => (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18" />
+    </Svg>
+  ),
+  "Finance & Accounts": (p) => (
+    <Svg {...p}>
+      <path d="M4 19V5a2 2 0 012-2h12a2 2 0 012 2v14" />
+      <path d="M8 17V9M12 17V7M16 17v-5" />
+    </Svg>
+  ),
+  Reports: (p) => (
+    <Svg {...p}>
+      <path d="M4 19V5h12l4 4v10H4z" />
+      <path d="M14 5v4h4M8 13h8M8 16h5" />
+    </Svg>
+  ),
+  Masters: (p) => (
+    <Svg {...p}>
+      <path d="M4 7l8-4 8 4-8 4-8-4z" />
+      <path d="M4 12l8 4 8-4M4 17l8 4 8-4" />
+    </Svg>
+  ),
+  Administration: (p) => (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" />
+    </Svg>
+  ),
+  System: (p) => (
+    <Svg {...p}>
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <path d="M8 8h8M8 12h8M8 16h5" />
+    </Svg>
+  ),
 };
 
 export function PopsNavIcon({ label, className }: { label: string; className?: string }): JSX.Element {

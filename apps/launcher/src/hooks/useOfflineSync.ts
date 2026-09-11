@@ -16,7 +16,7 @@ export function useOfflineSync(): void {
     const token = accessToken;
 
     function sync(): void {
-      if (isOnline()) void autoSyncIfNeeded(token);
+      if (isOnline()) void autoSyncIfNeeded(token).catch(() => undefined);
     }
 
     sync();

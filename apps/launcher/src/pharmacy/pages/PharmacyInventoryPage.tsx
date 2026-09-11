@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { formatMedicineLocation, formatStockLabel } from "@platform/contracts";
 import { fetchPharmacyMedicines, fetchPharmacyReorderSuggestions } from "../api/pharmacy";
@@ -9,6 +10,9 @@ import { PharmacyStatCard } from "../ui/PharmacyUi";
 
 export function PharmacyInventoryPage(): JSX.Element {
   const { branch } = usePharmacyAccess();
+  const [searchParams] = useSearchParams();
+  const focus = (searchParams.get("focus") ?? "").toLowerCase();
+
   const query = useQuery({
     queryKey: ["pharmacy", "medicines", branch?.code],
     enabled: Boolean(branch?.code),
@@ -21,14 +25,37 @@ export function PharmacyInventoryPage(): JSX.Element {
     queryFn: () => fetchPharmacyReorderSuggestions(branch!.code),
   });
 
+  const medicines = query.data ?? [];
+  const low = useMemo(
+    () => medicines.filter((m) => m.currentStock > 0 && m.currentStock <= m.reorderLevel),
+    [medicines],
+  );
+  const out = useMemo(() => medicines.filter((m) => m.currentStock === 0), [medicines]);
+  const critical = useMemo(
+    () => medicines.filter((m) => m.currentStock <= m.reorderLevel),
+    [medicines],
+  );
+
+  const filteredMedicines = useMemo(() => {
+    if (focus === "low" || focus === "lowstock") return low;
+    if (focus === "out" || focus === "outofstock") return out;
+    if (focus === "critical") return critical;
+    return medicines;
+  }, [focus, low, out, critical, medicines]);
+
   if (query.isLoading) return <p className="text-sm text-slate-500">Loading stock…</p>;
   if (query.isError) return <p className="text-sm text-red-400">{(query.error as Error).message}</p>;
 
-  const medicines = query.data ?? [];
-  const low = medicines.filter((m) => m.currentStock > 0 && m.currentStock <= m.reorderLevel);
-  const out = medicines.filter((m) => m.currentStock === 0);
   const totalValue = medicines.reduce((s, m) => s + m.purchasePrice * m.currentStock, 0);
   const reorderList = reorderQuery.data ?? [];
+  const focusLabel =
+    focus === "low" || focus === "lowstock"
+      ? "Showing low stock only"
+      : focus === "out" || focus === "outofstock"
+        ? "Showing out of stock only"
+        : focus === "critical"
+          ? "Showing critical stock (low + out)"
+          : null;
 
   return (
     <div className="space-y-4">
@@ -45,13 +72,13 @@ export function PharmacyInventoryPage(): JSX.Element {
             </Link>
             <Link
               to="/pops/pharmacy/purchase-statement"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Create purchase order
             </Link>
             <Link
               to="/pops/pharmacy/expired"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Expiry reports
             </Link>
@@ -64,6 +91,12 @@ export function PharmacyInventoryPage(): JSX.Element {
         <PharmacyStatCard label="Stock value" value={formatPkr(totalValue)} tone="success" />
         <PharmacyStatCard label="Reorder alerts" value={reorderList.length} tone={reorderList.length > 0 ? "warning" : "default"} />
       </div>
+
+      {focusLabel ? (
+        <p className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-medium text-cyan-900 dark:border-cyan-900/40 dark:bg-cyan-950/30 dark:text-cyan-100">
+          {focusLabel} · {filteredMedicines.length} row(s)
+        </p>
+      ) : null}
 
       {reorderList.length > 0 ? (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
@@ -118,18 +151,26 @@ export function PharmacyInventoryPage(): JSX.Element {
             </tr>
           </thead>
           <tbody>
-            {medicines.map((m) => (
-              <tr key={m.id} className="border-t border-slate-100 dark:border-slate-800">
-                <td className="px-4 py-2">
-                  <div className="font-medium">{m.name}</div>
-                  <div className="text-xs text-slate-500">{m.genericName ?? m.sku}</div>
+            {filteredMedicines.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">
+                  No medicines match this focus filter.
                 </td>
-                <td className="px-4 py-2 text-xs text-slate-600">{formatMedicineLocation(m) ?? "—"}</td>
-                <td className="px-4 py-2">{formatStockLabel(m)}</td>
-                <td className="px-4 py-2">{m.reorderLevel}</td>
-                <td className="px-4 py-2">{formatPkr(m.purchasePrice * m.currentStock)}</td>
               </tr>
-            ))}
+            ) : (
+              filteredMedicines.map((m) => (
+                <tr key={m.id} className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="px-4 py-2">
+                    <div className="font-medium">{m.name}</div>
+                    <div className="text-xs text-slate-500">{m.genericName ?? m.sku}</div>
+                  </td>
+                  <td className="px-4 py-2 text-xs text-slate-600">{formatMedicineLocation(m) ?? "—"}</td>
+                  <td className="px-4 py-2">{formatStockLabel(m)}</td>
+                  <td className="px-4 py-2">{m.reorderLevel}</td>
+                  <td className="px-4 py-2">{formatPkr(m.purchasePrice * m.currentStock)}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

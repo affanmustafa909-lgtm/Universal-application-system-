@@ -25,6 +25,7 @@ import {
   loadPosHeaderVisible,
   POS_HEADER_VISIBLE_EVENT,
 } from "../lib/posTopExperience";
+import { DistGlobalSearch } from "../../distribution/components/DistGlobalSearch";
 import { PopsMobileNav, PopsSidebarNav } from "./PopsNavMenu";
 
 const SIDEBAR_STORAGE_KEY = "pops-sidebar-visible";
@@ -200,7 +201,8 @@ export function PopsShell(): JSX.Element {
                 </div>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+              {systemId === "distribution" ? <DistGlobalSearch /> : null}
               <LiveServerBadge compact />
               <UiZoomControls compact />
               <ThemeToggle compact />

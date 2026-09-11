@@ -51,6 +51,60 @@ const ConsolidatedReportsPage = lazy(() =>
   })),
 );
 
+const AccountingPage = lazy(() =>
+  import("../pops/pages/modules/AccountingPage").then((m) => ({ default: m.AccountingPage })),
+);
+const ExpensesPage = lazy(() =>
+  import("../pops/pages/modules/accounting/ExpensesPage").then((m) => ({ default: m.ExpensesPage })),
+);
+const PurchasesAccountingPage = lazy(() =>
+  import("../pops/pages/modules/accounting/PurchasesPage").then((m) => ({ default: m.PurchasesPage })),
+);
+const VendorsPage = lazy(() =>
+  import("../pops/pages/modules/accounting/VendorsPage").then((m) => ({ default: m.VendorsPage })),
+);
+const AccountingCustomersPage = lazy(() =>
+  import("../pops/pages/modules/accounting/CustomersPage").then((m) => ({ default: m.CustomersPage })),
+);
+const CashManagementPage = lazy(() =>
+  import("../pops/pages/modules/accounting/CashManagementPage").then((m) => ({ default: m.CashManagementPage })),
+);
+const BankAccountsPage = lazy(() =>
+  import("../pops/pages/modules/accounting/BankAccountsPage").then((m) => ({ default: m.BankAccountsPage })),
+);
+const AccountsReceivablePage = lazy(() =>
+  import("../pops/pages/modules/accounting/AccountsReceivablePage").then((m) => ({
+    default: m.AccountsReceivablePage,
+  })),
+);
+const AccountsPayablePage = lazy(() =>
+  import("../pops/pages/modules/accounting/AccountsPayablePage").then((m) => ({ default: m.AccountsPayablePage })),
+);
+const JournalEntriesPage = lazy(() =>
+  import("../pops/pages/modules/accounting/JournalEntriesPage").then((m) => ({ default: m.JournalEntriesPage })),
+);
+const TaxManagementPage = lazy(() =>
+  import("../pops/pages/modules/accounting/TaxManagementPage").then((m) => ({ default: m.TaxManagementPage })),
+);
+const AccountingReportsPage = lazy(() =>
+  import("../pops/pages/modules/accounting/AccountingReportsPage").then((m) => ({
+    default: m.AccountingReportsPage,
+  })),
+);
+const ChartOfAccountsPage = lazy(() =>
+  import("../pops/pages/modules/accounting/ChartOfAccountsPage").then((m) => ({ default: m.ChartOfAccountsPage })),
+);
+const AccountingAuditLogsPage = lazy(() =>
+  import("../pops/pages/modules/accounting/AccountingAuditLogsPage").then((m) => ({
+    default: m.AccountingAuditLogsPage,
+  })),
+);
+const InventoryAccountingPage = lazy(() =>
+  import("../pops/pages/modules/accounting/InventoryAccountingPage").then((m) => ({
+    default: m.InventoryAccountingPage,
+  })),
+);
+
 /** Routes present in every edition. */
 export function sharedRoutes(): JSX.Element {
   return (
@@ -69,12 +123,26 @@ export function sharedRoutes(): JSX.Element {
       <Route path="printer" element={<PrinterPage />} />
       <Route path="closing" element={<ClosingPage />} />
       <Route path="sync" element={<SyncPage />} />
-      {/* Branch create/manage must be available before any branch exists. */}
       <Route path="multi-branch" element={<MultiBranchDashboardPage />} />
       <Route path="multi-branch/transfers" element={<InterBranchTransfersPage />} />
       <Route path="multi-branch/receive" element={<BranchReceivePage />} />
       <Route path="multi-branch/pricing" element={<BranchPricingPage />} />
       <Route path="multi-branch/reports" element={<ConsolidatedReportsPage />} />
+      <Route path="accounting" element={<AccountingPage />} />
+      <Route path="accounting/expenses" element={<ExpensesPage />} />
+      <Route path="accounting/purchases" element={<PurchasesAccountingPage />} />
+      <Route path="accounting/vendors" element={<VendorsPage />} />
+      <Route path="accounting/customers" element={<AccountingCustomersPage />} />
+      <Route path="accounting/inventory" element={<InventoryAccountingPage />} />
+      <Route path="accounting/cash" element={<CashManagementPage />} />
+      <Route path="accounting/bank" element={<BankAccountsPage />} />
+      <Route path="accounting/receivable" element={<AccountsReceivablePage />} />
+      <Route path="accounting/payable" element={<AccountsPayablePage />} />
+      <Route path="accounting/journal" element={<JournalEntriesPage />} />
+      <Route path="accounting/tax" element={<TaxManagementPage />} />
+      <Route path="accounting/reports" element={<AccountingReportsPage />} />
+      <Route path="accounting/accounts" element={<ChartOfAccountsPage />} />
+      <Route path="accounting/audit-logs" element={<AccountingAuditLogsPage />} />
     </>
   );
 }

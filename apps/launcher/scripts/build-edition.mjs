@@ -27,7 +27,7 @@ function withSigningEnv(baseEnv) {
  * Builds a single-system desktop installer.
  *
  * Usage:
- *   node scripts/build-edition.mjs <restaurant|ice-cream-bar|general-store|pharmacy|suite>
+ *   node scripts/build-edition.mjs <restaurant|ice-cream-bar|general-store|pharmacy|distribution|suite>
  *
  * Each edition:
  *   - bakes PLATFORM_EDITION into the web bundle (only that system's UI ships)
@@ -55,7 +55,14 @@ function resolveApiUrl() {
   return live;
 }
 
-const VALID = new Set(["restaurant", "ice-cream-bar", "general-store", "pharmacy", "suite"]);
+const VALID = new Set([
+  "restaurant",
+  "ice-cream-bar",
+  "general-store",
+  "pharmacy",
+  "distribution",
+  "suite",
+]);
 
 const edition = (process.argv[2] ?? "").trim();
 if (!VALID.has(edition)) {

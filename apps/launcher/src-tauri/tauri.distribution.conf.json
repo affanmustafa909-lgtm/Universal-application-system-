@@ -1,0 +1,62 @@
+{
+
+  "$schema": "https://schema.tauri.app/config/2",
+
+  "productName": "Medical Distribution System",
+
+  "identifier": "com.platform.distribution",
+
+  "version": "0.3.60",
+
+  "app": {
+
+    "windows": [
+
+      {
+
+        "label": "main",
+
+        "title": "Medical Distribution System"
+
+      }
+
+    ]
+
+  },
+
+  "bundle": {
+
+    "shortDescription": "Medical wholesale & distribution",
+
+    "longDescription": "Medical Distribution System — order booking, trade customers, deliveries, collections, field force, and territory/PJP.",
+
+    "windows": {
+
+      "nsis": {
+
+        "installMode": "currentUser",
+
+        "displayLanguageSelector": false
+
+      }
+
+    }
+
+  },
+
+  "plugins": {
+
+    "updater": {
+
+      "endpoints": [
+
+        "https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-distribution.json"
+
+      ]
+
+    }
+
+  }
+
+}
+

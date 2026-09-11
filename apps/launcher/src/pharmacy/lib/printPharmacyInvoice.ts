@@ -15,15 +15,28 @@ function saleToTicketInput(
   sale: PharmacySale,
 ): Omit<PrintTicketInput, "kind"> {
   const discountPct = sale.subtotal > 0 ? Math.round((sale.discount / sale.subtotal) * 100) : 0;
+  const channelLabel =
+    sale.saleChannel === "instation"
+      ? "Instation"
+      : sale.saleChannel === "outstation"
+        ? "Outstation"
+        : sale.saleChannel === "counter"
+          ? "Counter"
+          : "Counter";
+  const stationParts = [channelLabel];
+  if (sale.stationLabel) stationParts.push(sale.stationLabel);
+  const notesParts: string[] = [];
+  if (sale.patientName) notesParts.push(`Customer: ${sale.patientName}`);
+  if (sale.employeeName) notesParts.push(`Employee: ${sale.employeeName}`);
   return {
     branchName,
     branchCode,
     orderRef: sale.invoiceNumber,
     billRef: sale.invoiceNumber,
     modeLabel: sale.paymentMethod || "Paid",
-    tableLabel: "Counter",
-    waiterName: useSessionStore.getState().claims?.role?.trim() || "Cashier",
-    notes: sale.patientName ? `Customer: ${sale.patientName}` : undefined,
+    tableLabel: stationParts.join(" · "),
+    waiterName: sale.employeeName?.trim() || useSessionStore.getState().claims?.role?.trim() || "Cashier",
+    notes: notesParts.length > 0 ? notesParts.join(" · ") : undefined,
     lines: sale.lines.map((line) => ({
       label: line.batchNumber
         ? `${line.medicineName} · Batch ${line.batchNumber}`

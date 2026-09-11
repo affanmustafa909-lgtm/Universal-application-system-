@@ -191,9 +191,10 @@ export function usePopsAlerts(): {
 
   const printQueueQuery = useQuery({
     queryKey: ["print-queue-alerts", branch?.code],
-    enabled: Boolean(branch?.code),
+    // Restaurant/print-heavy systems only — Dist/Pharmacy ERP were polling every ~8s for nothing useful.
+    enabled: restaurantAlerts && Boolean(branch?.code),
     queryFn: () => fetchPrintQueueSnapshots(branch!.code),
-    refetchInterval: branch?.code ? printPollMs : false,
+    refetchInterval: restaurantAlerts ? printPollMs : false,
   });
 
   const tickets = kitchenQuery.data ?? [];

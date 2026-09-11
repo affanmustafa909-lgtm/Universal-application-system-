@@ -5,10 +5,16 @@ import {
   type PopsNavLink,
 } from "../pops/spec/modules";
 import { pharmacyNavItems } from "../pharmacy/spec/nav";
+import { distributionNavItems } from "../distribution/spec/nav";
 import { storeNavItems } from "../store/spec/nav";
 import { frontendIdToSystemType, systemTypeToFrontendId, type SystemType } from "@platform/contracts";
 
-export type BusinessSystemId = "restaurant" | "ice-cream-bar" | "pharmacy" | "general-store";
+export type BusinessSystemId =
+  | "restaurant"
+  | "ice-cream-bar"
+  | "pharmacy"
+  | "distribution"
+  | "general-store";
 
 export type BusinessSystem = {
   id: BusinessSystemId;
@@ -25,12 +31,30 @@ export type BusinessSystem = {
 };
 
 const restaurantHidden = new Set<string>();
+const distributionHidden = new Set([
+  "menu",
+  "tables",
+  "kitchen",
+  "waiter",
+  "delivery",
+  "pos",
+  "orders",
+  "bills",
+  "dashboard",
+  "inventory/recipes",
+  "inventory/ingredients",
+  "manufacturing",
+  "content",
+]);
 const pharmacyHidden = new Set([
   "menu",
   "tables",
   "kitchen",
   "waiter",
   "delivery",
+  "pos",
+  "orders",
+  "bills",
   "inventory/recipes",
   "manufacturing",
   "content",
@@ -84,6 +108,19 @@ export const businessSystems: Record<BusinessSystemId, BusinessSystem> = {
     routePrefix: "/pops",
     hiddenNavPaths: pharmacyHidden,
   },
+  distribution: {
+    id: "distribution",
+    name: "Medical Distribution",
+    shortName: "Distribution",
+    tagline: "Wholesale booking, field force, and recovery",
+    description:
+      "Order booking, trade customers, deliveries, collections, territory/PJP, and pricing schemes.",
+    accentClass: "text-cyan-400",
+    iconLetter: "D",
+    gradientClass: "from-cyan-400 to-blue-600",
+    routePrefix: "/pops",
+    hiddenNavPaths: distributionHidden,
+  },
   "general-store": {
     id: "general-store",
     name: "General Store ERP",
@@ -102,6 +139,7 @@ export const businessSystemList: BusinessSystem[] = [
   businessSystems.restaurant,
   businessSystems["ice-cream-bar"],
   businessSystems.pharmacy,
+  businessSystems.distribution,
   businessSystems["general-store"],
 ];
 
@@ -113,6 +151,7 @@ export function isBusinessSystemId(value: string): value is BusinessSystemId {
     value === "restaurant" ||
     value === "ice-cream-bar" ||
     value === "pharmacy" ||
+    value === "distribution" ||
     value === "general-store"
   );
 }
@@ -164,6 +203,9 @@ export function getErpEntryPath(systemId: BusinessSystemId, hasBranch: boolean):
   if (systemId === "pharmacy") {
     return "/pops/pharmacy/pos";
   }
+  if (systemId === "distribution") {
+    return "/pops/distribution/ps";
+  }
   if (systemId === "general-store") {
     return "/pops/store/pos";
   }
@@ -171,7 +213,7 @@ export function getErpEntryPath(systemId: BusinessSystemId, hasBranch: boolean):
   return "/pops/pos";
 }
 
-/** Shared across restaurant / pharmacy / general-store (must not be treated as restaurant-only). */
+/** Shared across restaurant / pharmacy / distribution / general-store (must not be treated as restaurant-only). */
 const SHARED_ERP_PATH_PREFIXES = [
   "auth",
   "notifications",
@@ -182,6 +224,8 @@ const SHARED_ERP_PATH_PREFIXES = [
   "security",
   "sync",
   "multi-branch",
+  "accounting",
+  "hr",
 ] as const;
 
 function isSharedErpSubpath(sub: string): boolean {
@@ -194,16 +238,20 @@ export function resolveBusinessSystemFromPath(pathname: string): BusinessSystemI
   if (pathname.startsWith("/pops/pharmacy/") || pathname === "/pops/pharmacy") {
     return "pharmacy";
   }
+  if (pathname.startsWith("/pops/distribution/") || pathname === "/pops/distribution") {
+    return "distribution";
+  }
   if (pathname.startsWith("/pops/store/") || pathname === "/pops/store") {
     return "general-store";
   }
   return null;
 }
 
-/** True for restaurant-only screens (not pharmacy, store, or shared ERP modules). */
+/** True for restaurant-only screens (not pharmacy, store, distribution, or shared ERP modules). */
 export function isRestaurantExclusivePath(pathname: string): boolean {
   const sub = pathname.replace(/^\/pops\/?/, "").replace(/\/$/, "");
   if (sub.startsWith("pharmacy/") || sub === "pharmacy") return false;
+  if (sub.startsWith("distribution/") || sub === "distribution") return false;
   if (sub.startsWith("store/") || sub === "store") return false;
   if (isSharedErpSubpath(sub)) return false;
   return true;
@@ -227,6 +275,9 @@ function filterNavItem(item: PopsNavItem, hidden: Set<string>): PopsNavItem | nu
 export function getNavItemsForSystem(id: BusinessSystemId): PopsNavItem[] {
   if (id === "pharmacy") {
     return pharmacyNavItems;
+  }
+  if (id === "distribution") {
+    return distributionNavItems;
   }
   if (id === "general-store") {
     return storeNavItems;

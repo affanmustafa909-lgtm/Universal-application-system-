@@ -1,4 +1,4 @@
-import { boolean, date, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { popsBranches } from "./operations";
 import { users } from "./users";
@@ -19,38 +19,96 @@ export const pharmacyMedicines = pgTable("pharmacy_medicines", {
   brandName: text("brand_name"),
   category: text("category").notNull().default("Tablet"),
   manufacturer: text("manufacturer"),
+  /** Optional FK to pharmacy_companies — set after companies table exists via app layer. */
+  companyId: uuid("company_id"),
+  /** Reference masters (bare uuids to avoid pharmacy ↔ pharmacy-erp import cycles). */
+  genericId: uuid("generic_id"),
+  brandId: uuid("brand_id"),
+  categoryId: uuid("category_id"),
+  dosageFormId: uuid("dosage_form_id"),
+  unitId: uuid("unit_id"),
+  taxProfileId: uuid("tax_profile_id"),
   barcode: text("barcode"),
+  alternateBarcode: text("alternate_barcode"),
   purchasePricePkr: integer("purchase_price_pkr").notNull().default(0),
+  costPricePkr: integer("cost_price_pkr").notNull().default(0),
   sellingPricePkr: integer("selling_price_pkr").notNull().default(0),
+  wholesalePricePkr: integer("wholesale_price_pkr").notNull().default(0),
+  dealerPricePkr: integer("dealer_price_pkr").notNull().default(0),
+  minSalePricePkr: integer("min_sale_price_pkr").notNull().default(0),
+  maxRetailPricePkr: integer("max_retail_price_pkr").notNull().default(0),
   taxPct: integer("tax_pct").notNull().default(0),
   reorderLevel: integer("reorder_level").notNull().default(10),
   suggestedReorderQty: integer("suggested_reorder_qty").notNull().default(0),
+  minStock: integer("min_stock").notNull().default(0),
+  maxStock: integer("max_stock").notNull().default(0),
   currentStock: integer("current_stock").notNull().default(0),
   unit: text("unit").notNull().default("Piece"),
   rackLocation: text("rack_location"),
   shelfLocation: text("shelf_location"),
   aisleLocation: text("aisle_location"),
+  preferredWarehouseId: uuid("preferred_warehouse_id"),
   /** Stock is tracked in tablets (base unit) when pack fields are set. */
   tabletsPerStrip: integer("tablets_per_strip").notNull().default(1),
   stripsPerBox: integer("strips_per_box").notNull().default(1),
   /** sellingPricePkr is the price per strip when tabletsPerStrip > 1, else per piece. */
   isControlled: boolean("is_controlled").notNull().default(false),
+  prescriptionRequired: boolean("prescription_required").notNull().default(false),
+  batchTrackingEnabled: boolean("batch_tracking_enabled").notNull().default(true),
+  expiryTrackingEnabled: boolean("expiry_tracking_enabled").notNull().default(true),
+  fefoEnabled: boolean("fefo_enabled").notNull().default(true),
+  restrictedSale: boolean("restricted_sale").notNull().default(false),
+  status: text("status").notNull().default("active"),
   warningsJson: text("warnings_json"),
   instructionsJson: text("instructions_json"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index("pharmacy_medicines_org_branch_status_idx").on(t.organizationId, t.branchId, t.status),
+  index("pharmacy_medicines_org_company_idx").on(t.organizationId, t.companyId),
+  /** Non-unique: legacy duplicates may exist; service enforces uniqueness on write. */
+  index("pharmacy_medicines_org_branch_sku_idx").on(t.organizationId, t.branchId, t.sku),
+]);
 
 export const pharmacyMedicineBatches = pgTable("pharmacy_medicine_batches", {
   id: uuid("id").defaultRandom().primaryKey(),
   medicineId: uuid("medicine_id")
     .notNull()
     .references(() => pharmacyMedicines.id, { onDelete: "cascade" }),
+  warehouseId: uuid("warehouse_id"),
   batchNumber: text("batch_number").notNull(),
   manufacturingDate: date("manufacturing_date"),
   expiryDate: date("expiry_date").notNull(),
+  /**
+   * AVAILABLE quantity in base units (tablets).
+   * Phase 4: stock states are kept in separate columns and are never merged.
+   * physical = quantity + reservedQuantity + damagedQuantity + quarantineQuantity + blockedQuantity
+   * available = quantity, minus EXPIRED which is derived from expiryDate (not a stored bucket).
+   */
   quantity: integer("quantity").notNull().default(0),
+  reservedQuantity: integer("reserved_quantity").notNull().default(0),
+  damagedQuantity: integer("damaged_quantity").notNull().default(0),
+  quarantineQuantity: integer("quarantine_quantity").notNull().default(0),
+  blockedQuantity: integer("blocked_quantity").notNull().default(0),
+  freeQuantity: integer("free_quantity").notNull().default(0),
+  purchaseRatePkr: integer("purchase_rate_pkr").notNull().default(0),
+  saleRatePkr: integer("sale_rate_pkr").notNull().default(0),
+  /** Traceability: which supplier/GRN brought this batch in (bare uuid, no FK, to avoid import cycles). */
+  supplierId: uuid("supplier_id"),
+  grnId: uuid("grn_id"),
+  /** Manual hold flag. Derived status (expired/near-expiry) is computed, never stored. */
+  status: text("status").notNull().default("active"),
+  holdReason: text("hold_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index("pharmacy_medicine_batches_medicine_expiry_idx").on(t.medicineId, t.expiryDate),
+  index("pharmacy_medicine_batches_expiry_qty_idx").on(t.expiryDate, t.quantity),
+  /** FEFO allocation and per-warehouse stock reads. */
+  index("pharmacy_medicine_batches_medicine_wh_expiry_idx").on(t.medicineId, t.warehouseId, t.expiryDate),
+  /** Warehouse stock listing / valuation scans. */
+  index("pharmacy_medicine_batches_wh_qty_idx").on(t.warehouseId, t.quantity),
+  /** receiveBatch merge lookup. */
+  index("pharmacy_medicine_batches_medicine_batchno_idx").on(t.medicineId, t.batchNumber),
+]);
 
 export const pharmacyPatients = pgTable("pharmacy_patients", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -60,6 +118,8 @@ export const pharmacyPatients = pgTable("pharmacy_patients", {
   branchId: uuid("branch_id")
     .notNull()
     .references(() => popsBranches.id, { onDelete: "cascade" }),
+  /** Unique business code e.g. PAT-000123 */
+  code: text("code"),
   name: text("name").notNull(),
   phone: text("phone"),
   email: text("email"),
@@ -85,8 +145,11 @@ export const pharmacyDoctors = pgTable("pharmacy_doctors", {
   branchId: uuid("branch_id")
     .notNull()
     .references(() => popsBranches.id, { onDelete: "cascade" }),
+  /** Unique business code e.g. DOC-000123 */
+  code: text("code"),
   name: text("name").notNull(),
   specialization: text("specialization"),
+  registrationNumber: text("registration_number"),
   clinic: text("clinic"),
   phone: text("phone"),
   email: text("email"),
@@ -138,6 +201,13 @@ export const pharmacySales = pgTable("pharmacy_sales", {
   prescriptionId: uuid("prescription_id").references(() => pharmacyPrescriptions.id, { onDelete: "set null" }),
   shiftId: uuid("shift_id"),
   cashierUserId: uuid("cashier_user_id").references(() => users.id, { onDelete: "set null" }),
+  /** counter | instation | outstation — POS gate context */
+  saleChannel: text("sale_channel"),
+  /** Optional FKs applied in DB script; kept as bare uuids here to avoid pharmacy↔erp import cycles. */
+  areaId: uuid("area_id"),
+  routeId: uuid("route_id"),
+  employeeId: uuid("employee_id"),
+  stationLabel: text("station_label"),
   paymentMethod: text("payment_method").notNull().default("Cash"),
   paymentsJson: text("payments_json"),
   amountPaidPkr: integer("amount_paid_pkr").notNull().default(0),
@@ -244,5 +314,68 @@ export const pharmacyRefillReminders = pgTable("pharmacy_refill_reminders", {
   channel: text("channel").notNull().default("sms"),
   status: text("status").notNull().default("pending"),
   sentAt: timestamp("sent_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Doctor preferred / recommended medicines for POS suggestions. */
+export const pharmacyDoctorRecommendations = pgTable("pharmacy_doctor_recommendations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  doctorId: uuid("doctor_id")
+    .notNull()
+    .references(() => pharmacyDoctors.id, { onDelete: "cascade" }),
+  medicineId: uuid("medicine_id")
+    .notNull()
+    .references(() => pharmacyMedicines.id, { onDelete: "cascade" }),
+  priority: integer("priority").notNull().default(1),
+  notes: text("notes"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Commission rule: percent or fixed PKR on Rx-linked retail sales. */
+export const pharmacyDoctorCommissionRules = pgTable("pharmacy_doctor_commission_rules", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  doctorId: uuid("doctor_id")
+    .notNull()
+    .references(() => pharmacyDoctors.id, { onDelete: "cascade" }),
+  medicineId: uuid("medicine_id").references(() => pharmacyMedicines.id, { onDelete: "cascade" }),
+  companyId: uuid("company_id"),
+  ruleType: text("rule_type").notNull().default("percent"),
+  rateValue: integer("rate_value").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Immutable commission ledger rows per sale line. */
+export const pharmacyDoctorCommissionEntries = pgTable("pharmacy_doctor_commission_entries", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id")
+    .notNull()
+    .references(() => popsBranches.id, { onDelete: "cascade" }),
+  doctorId: uuid("doctor_id")
+    .notNull()
+    .references(() => pharmacyDoctors.id, { onDelete: "cascade" }),
+  saleId: uuid("sale_id")
+    .notNull()
+    .references(() => pharmacySales.id, { onDelete: "cascade" }),
+  saleLineId: uuid("sale_line_id").references(() => pharmacySaleLines.id, { onDelete: "set null" }),
+  medicineId: uuid("medicine_id").references(() => pharmacyMedicines.id, { onDelete: "set null" }),
+  basePkr: integer("base_pkr").notNull().default(0),
+  rateValue: integer("rate_value").notNull().default(0),
+  ruleType: text("rule_type").notNull().default("percent"),
+  amountPkr: integer("amount_pkr").notNull().default(0),
+  status: text("status").notNull().default("accrued"),
+  notes: text("notes"),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

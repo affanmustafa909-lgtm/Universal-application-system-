@@ -16,6 +16,7 @@ export function PharmacyCustomersPage(): JSX.Element {
   const { branch } = usePharmacyAccess();
   const invalidate = useInvalidatePharmacy();
   const [form, setForm] = useState({
+    code: "",
     name: "",
     phone: "",
     email: "",
@@ -52,6 +53,7 @@ export function PharmacyCustomersPage(): JSX.Element {
     return patients.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
+        (p.code ?? "").toLowerCase().includes(q) ||
         (p.phone ?? "").toLowerCase().includes(q) ||
         (p.email ?? "").toLowerCase().includes(q) ||
         p.allergies.some((a) => a.toLowerCase().includes(q)) ||
@@ -63,6 +65,7 @@ export function PharmacyCustomersPage(): JSX.Element {
     mutationFn: () =>
       createPharmacyPatient({
         branchCode: branch!.code,
+        code: form.code.trim() || undefined,
         name: form.name.trim(),
         phone: form.phone.trim() || undefined,
         email: form.email.trim() || undefined,
@@ -84,6 +87,7 @@ export function PharmacyCustomersPage(): JSX.Element {
     onSuccess: () => {
       invalidate();
       setForm({
+        code: "",
         name: "",
         phone: "",
         email: "",
@@ -145,8 +149,9 @@ export function PharmacyCustomersPage(): JSX.Element {
           createMutation.mutate();
         }}
       >
-        <h2 className="text-sm font-semibold">Add patient / customer</h2>
+        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Add patient / customer</h2>
         <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <input className={`${pharmacyInputClass} font-mono uppercase`} placeholder="Code (PAT-… optional)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
           <input className={pharmacyInputClass} placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           <input className={pharmacyInputClass} placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           <input className={pharmacyInputClass} placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
@@ -182,7 +187,7 @@ export function PharmacyCustomersPage(): JSX.Element {
 
       {editingPatient ? (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/20 p-4 dark:bg-emerald-950/20">
-          <h2 className="text-sm font-semibold">Edit — {editingPatient.name}</h2>
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Edit — {editingPatient.name}</h2>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             <input
               className={pharmacyInputClass}
@@ -244,7 +249,7 @@ export function PharmacyCustomersPage(): JSX.Element {
       {historyId && historyQuery.data ? (
         <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">History — {historyQuery.data.patient.name}</h2>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">History — {historyQuery.data.patient.name}</h2>
             <button type="button" className="text-xs text-slate-500" onClick={() => setHistoryId(null)}>
               Close
             </button>
@@ -271,7 +276,7 @@ export function PharmacyCustomersPage(): JSX.Element {
       <div className="flex flex-wrap items-center gap-2">
         <input
           className={`${pharmacyInputClass} min-w-[12rem] flex-1 sm:max-w-xs`}
-          placeholder="Search name, phone, email…"
+          placeholder="Search code, name, phone…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -283,6 +288,7 @@ export function PharmacyCustomersPage(): JSX.Element {
       <SimpleTable<PharmacyPatient>
         rowKey={(r) => r.id}
         columns={[
+          { key: "code", header: "Code", render: (r) => <span className="font-mono text-xs">{r.code ?? "—"}</span> },
           { key: "name", header: "Customer" },
           { key: "phone", header: "Phone", render: (r) => r.phone ?? "—" },
           { key: "chronicDiseases", header: "Chronic", render: (r) => (r.chronicDiseases.length ? r.chronicDiseases.join(", ") : "—") },

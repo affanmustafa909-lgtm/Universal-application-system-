@@ -13,12 +13,18 @@ import {
   saveBillPrintSettings,
   type BillPrintSettings,
 } from "../lib/billPrintSettings";
+import { isRestaurantFamilySystem } from "../../lib/businessSystems";
 
 export type CustomizeSub = "receipt" | "kot" | "paper";
 
-const SUBS: { id: CustomizeSub; label: string; hint: string; Icon: typeof IconReceipt }[] = [
+const RESTAURANT_SUBS: { id: CustomizeSub; label: string; hint: string; Icon: typeof IconReceipt }[] = [
   { id: "receipt", label: "Receipt / Bill", hint: "Customer slip layout & fields", Icon: IconReceipt },
   { id: "kot", label: "Kitchen (KOT)", hint: "Station ticket layout", Icon: IconPrinter },
+  { id: "paper", label: "Paper & preview", hint: "Width, margins, test print", Icon: IconPalette },
+];
+
+const NON_RESTAURANT_SUBS: { id: CustomizeSub; label: string; hint: string; Icon: typeof IconReceipt }[] = [
+  { id: "receipt", label: "Invoice / slip", hint: "Booking & invoice layout", Icon: IconReceipt },
   { id: "paper", label: "Paper & preview", hint: "Width, margins, test print", Icon: IconPalette },
 ];
 
@@ -32,6 +38,8 @@ export function PrintCustomizeHub({ branchCode, notify, initialSub = "receipt" }
   const [sub, setSub] = useState<CustomizeSub>(initialSub);
   const branchName = usePopsStore((s) => s.branch?.name) ?? branchCode;
   const systemId = useActiveSystemId();
+  const restaurantUi = isRestaurantFamilySystem(systemId);
+  const subs = restaurantUi ? RESTAURANT_SUBS : NON_RESTAURANT_SUBS;
   const kotVariant = systemId === "general-store" ? "store" : "restaurant";
   const [billSettings, setBillSettings] = useState<BillPrintSettings>(() =>
     loadBillPrintSettings(branchCode),
@@ -39,8 +47,8 @@ export function PrintCustomizeHub({ branchCode, notify, initialSub = "receipt" }
 
   useEffect(() => {
     setBillSettings(loadBillPrintSettings(branchCode));
-    setSub(initialSub);
-  }, [branchCode, initialSub]);
+    setSub(initialSub === "kot" && !restaurantUi ? "receipt" : initialSub);
+  }, [branchCode, initialSub, restaurantUi]);
 
   useEffect(() => {
     function onBillChanged(event: Event): void {
@@ -69,14 +77,16 @@ export function PrintCustomizeHub({ branchCode, notify, initialSub = "receipt" }
           <div>
             <h2 className="text-sm font-semibold text-white">Print customization</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-slate-400">
-              Receipt, kitchen ticket, aur paper — ek hi section. Har jagah se yahin aao.
+              {restaurantUi
+                ? "Receipt, kitchen ticket, aur paper — ek hi section."
+                : "Invoice slip aur paper settings — is system ke hisaab se."}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3">
-        {SUBS.map(({ id, label, hint, Icon }) => {
+      <div className={`grid gap-2 ${restaurantUi ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+        {subs.map(({ id, label, hint, Icon }) => {
           const on = sub === id;
           return (
             <button
@@ -114,11 +124,13 @@ export function PrintCustomizeHub({ branchCode, notify, initialSub = "receipt" }
             branchCode={branchCode}
             settings={billSettings}
             onChange={setBillSettings}
-            onSave={(next) => setBillSettings(next)}
+            onSave={(next) => {
+              persistBill(next);
+            }}
             onNotice={notify}
           />
         ) : null}
-        {sub === "kot" ? (
+        {sub === "kot" && restaurantUi ? (
           <KotCustomizationPanel
             branchCode={branchCode}
             branchName={branchName}

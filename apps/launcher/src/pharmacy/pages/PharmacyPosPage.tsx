@@ -22,10 +22,19 @@ import {
   fetchPharmacyOpenShift,
   fetchPharmacyPatients,
   fetchPharmacyPrescriptions,
+  fetchDoctorRecommendations,
   lookupPharmacyBarcode,
 } from "../api/pharmacy";
 import { MedicineWarningsPanel, PharmacyCheckoutModal } from "../components/PharmacyCheckoutModal";
+import { PharmacyPosContextModal } from "../components/PharmacyPosContextModal";
 import { printPharmacyInvoice } from "../lib/printPharmacyInvoice";
+import {
+  EMPTY_POS_SALE_CONTEXT,
+  formatPharmacyPosContextLabel,
+  pharmacyPosContextPayload,
+  validatePharmacyPosContext,
+  type PharmacyPosSaleContext,
+} from "../lib/posSaleContext";
 import { findAllergyConflicts } from "../lib/pharmacySafety";
 import { formatPkr, useInvalidatePharmacy, usePharmacyAccess } from "../hooks/usePharmacy";
 import { PharmacyField, PharmacyInput, PharmacySelect } from "../ui/PharmacyUi";
@@ -33,6 +42,7 @@ import { PageHeader } from "../../pops/ui/PageHeader";
 import { Badge } from "../../pops/ui/Badge";
 import { noticeErrorClass, noticeSuccessClass } from "../../pops/lib/themeClasses";
 import { useBarcodeScanner } from "../../store/hooks/useBarcodeScanner";
+import { useSessionStore } from "../../stores/sessionStore";
 
 type CartLine = {
   medicine: Medicine;
@@ -47,6 +57,8 @@ type CartLine = {
 export function PharmacyPosPage(): JSX.Element {
   const { branch } = usePharmacyAccess();
   const invalidate = useInvalidatePharmacy();
+  const pharmacyPosContextModalShown = useSessionStore((s) => s.pharmacyPosContextModalShown);
+  const markPharmacyPosContextModalShown = useSessionStore((s) => s.markPharmacyPosContextModalShown);
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [patientId, setPatientId] = useState("");
@@ -61,6 +73,8 @@ export function PharmacyPosPage(): JSX.Element {
   const [saleUnit, setSaleUnit] = useState<PharmacySaleUnit>("strip");
   const [saleQtyInput, setSaleQtyInput] = useState("1");
   const [alternatives, setAlternatives] = useState<MedicineAlternative[]>([]);
+  const [saleContext, setSaleContext] = useState<PharmacyPosSaleContext>(EMPTY_POS_SALE_CONTEXT);
+  const [contextModalOpen, setContextModalOpen] = useState(!pharmacyPosContextModalShown);
 
   const medicinesQuery = useQuery({
     queryKey: ["pharmacy", "medicines", branch?.code],
@@ -105,6 +119,12 @@ export function PharmacyPosPage(): JSX.Element {
     [prescriptionsQuery.data, prescriptionId],
   );
 
+  const doctorPrefsQuery = useQuery({
+    queryKey: ["pharmacy", "doctor-prefs", linkedPrescription?.doctorId],
+    enabled: Boolean(linkedPrescription?.doctorId),
+    queryFn: () => fetchDoctorRecommendations(linkedPrescription!.doctorId!),
+  });
+
   const saleMutation = useMutation({
     mutationFn: (payload: {
       paymentMethod: PharmacySale["paymentMethod"];
@@ -116,6 +136,7 @@ export function PharmacyPosPage(): JSX.Element {
         patientId: patientId || undefined,
         prescriptionId: prescriptionId || undefined,
         shiftId: shiftQuery.data?.id,
+        ...pharmacyPosContextPayload(saleContext),
         paymentMethod: payload.paymentMethod,
         payments: payload.payments,
         controlledApproved: payload.controlledApproved,
@@ -336,13 +357,44 @@ export function PharmacyPosPage(): JSX.Element {
     [branch, medicinesQuery.data, selectedPatient],
   );
 
-  useBarcodeScanner(handleBarcodeScan, Boolean(branch?.code) && !pendingMedicine && !checkoutOpen);
+  useBarcodeScanner(handleBarcodeScan, Boolean(branch?.code) && !pendingMedicine && !checkoutOpen && !contextModalOpen);
 
   useEffect(() => {
     if (linkedPrescription?.patientId && !patientId) {
       setPatientId(linkedPrescription.patientId);
     }
   }, [linkedPrescription?.patientId, patientId]);
+
+  useEffect(() => {
+    if (pharmacyPosContextModalShown) return;
+    setContextModalOpen(true);
+  }, [pharmacyPosContextModalShown]);
+
+  const contextLabel = formatPharmacyPosContextLabel(saleContext);
+
+  function openCheckout(): void {
+    const ctxErr = validatePharmacyPosContext(saleContext);
+    if (ctxErr) {
+      setError(ctxErr);
+      setContextModalOpen(true);
+      return;
+    }
+    if (cart.length === 0) return;
+    setError(null);
+    setCheckoutOpen(true);
+  }
+
+  function handleContextComplete(ctx: PharmacyPosSaleContext): void {
+    setSaleContext(ctx);
+    markPharmacyPosContextModalShown();
+    setContextModalOpen(false);
+    setError(null);
+  }
+
+  function handleContextClose(): void {
+    markPharmacyPosContextModalShown();
+    setContextModalOpen(false);
+  }
 
   if (medicinesQuery.isLoading) {
     return <p className="text-sm text-slate-500">Loading medicines…</p>;
@@ -500,7 +552,7 @@ export function PharmacyPosPage(): JSX.Element {
                     <button
                       type="button"
                       onClick={() => void pickMedicine(m)}
-                      className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-left transition hover:border-emerald-500 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:border-emerald-600"
+                      className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-left transition hover:border-emerald-500 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:border-emerald-600 dark:hover:bg-emerald-950/30"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
@@ -526,6 +578,19 @@ export function PharmacyPosPage(): JSX.Element {
         <div className="lg:col-span-2">
           <div className="sticky top-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/40">
             <h2 className="text-base font-semibold">Current bill · {itemCount} line{itemCount === 1 ? "" : "s"}</h2>
+
+            <button
+              type="button"
+              onClick={() => setContextModalOpen(true)}
+              className="mt-2 flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-sm transition hover:border-emerald-500 dark:border-slate-700 dark:bg-slate-950/50 dark:hover:border-emerald-600"
+            >
+              <span className={contextLabel ? "font-medium text-slate-800 dark:text-slate-100" : "text-slate-500"}>
+                {contextLabel ?? "Select counter / employee"}
+              </span>
+              <span className="shrink-0 text-slate-400" aria-hidden>
+                ›
+              </span>
+            </button>
 
             {cart.length === 0 ? (
               <p className="py-10 text-center text-sm text-slate-500">Scan medicines to start the invoice.</p>
@@ -612,6 +677,7 @@ export function PharmacyPosPage(): JSX.Element {
                 <div className="rounded-lg border border-violet-300 bg-violet-50 px-3 py-2 text-xs dark:border-violet-800 dark:bg-violet-950/30">
                   <div className="font-semibold text-violet-900 dark:text-violet-200">
                     Prescription {linkedPrescription.prescriptionNumber}
+                    {linkedPrescription.doctorName ? ` · Dr ${linkedPrescription.doctorName}` : ""}
                     {linkedPrescription.hasAttachment ? " · attachment on file" : ""}
                   </div>
                   <ul className="mt-1 space-y-0.5 text-violet-800 dark:text-violet-300">
@@ -621,6 +687,27 @@ export function PharmacyPosPage(): JSX.Element {
                       </li>
                     ))}
                   </ul>
+                  {(doctorPrefsQuery.data ?? []).length > 0 ? (
+                    <div className="mt-2 border-t border-violet-200 pt-2 dark:border-violet-800">
+                      <div className="font-semibold text-violet-900 dark:text-violet-200">Doctor recommended</div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {(doctorPrefsQuery.data ?? []).map((pref) => {
+                          const med = (medicinesQuery.data ?? []).find((m) => m.id === pref.medicineId);
+                          if (!med) return null;
+                          return (
+                            <button
+                              key={pref.id}
+                              type="button"
+                              className="rounded-md bg-violet-600/90 px-2 py-1 text-[11px] font-medium text-white"
+                              onClick={() => setPendingMedicine(med)}
+                            >
+                              + {pref.medicineSku ?? med.sku}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                   <button
                     type="button"
                     className="mt-2 text-xs font-semibold text-violet-700 underline dark:text-violet-400"
@@ -634,7 +721,7 @@ export function PharmacyPosPage(): JSX.Element {
               <button
                 type="button"
                 disabled={cart.length === 0 || saleMutation.isPending}
-                onClick={() => setCheckoutOpen(true)}
+                onClick={openCheckout}
                 className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white disabled:opacity-50"
               >
                 Proceed to checkout
@@ -643,6 +730,14 @@ export function PharmacyPosPage(): JSX.Element {
           </div>
         </div>
       </div>
+
+      {contextModalOpen ? (
+        <PharmacyPosContextModal
+          value={saleContext}
+          onComplete={handleContextComplete}
+          onClose={handleContextClose}
+        />
+      ) : null}
 
       {checkoutOpen ? (
         <PharmacyCheckoutModal
@@ -655,7 +750,16 @@ export function PharmacyPosPage(): JSX.Element {
           hasControlled={hasControlled}
           isSubmitting={saleMutation.isPending}
           onClose={() => setCheckoutOpen(false)}
-          onConfirm={(payload) => saleMutation.mutate(payload)}
+          onConfirm={(payload) => {
+            const ctxErr = validatePharmacyPosContext(saleContext);
+            if (ctxErr) {
+              setError(ctxErr);
+              setCheckoutOpen(false);
+              setContextModalOpen(true);
+              return;
+            }
+            saleMutation.mutate(payload);
+          }}
         />
       ) : null}
     </div>

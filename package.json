@@ -20,6 +20,7 @@
     "installer:restaurant": "pnpm --filter @platform/launcher build:restaurant",
     "installer:general-store": "pnpm --filter @platform/launcher build:general-store",
     "installer:pharmacy": "pnpm --filter @platform/launcher build:pharmacy",
+    "installer:distribution": "pnpm --filter @platform/launcher build:distribution",
     "installer:suite": "pnpm --filter @platform/launcher build:suite",
     "installer:universal": "pnpm --filter @platform/launcher build:suite",
     "installer:windows": "node apps/launcher/scripts/build-windows-installer.mjs",

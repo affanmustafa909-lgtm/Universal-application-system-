@@ -28,8 +28,15 @@ const emptyForm = {
   category: "Tablet" as (typeof MEDICINE_CATEGORIES)[number],
   manufacturer: "",
   barcode: "",
+  alternateBarcode: "",
   purchasePrice: "",
   sellingPrice: "",
+  wholesalePrice: "",
+  dealerPrice: "",
+  costPrice: "",
+  minSalePrice: "",
+  maxRetailPrice: "",
+  taxPct: "0",
   reorderLevel: "10",
   suggestedReorderQty: "",
   currentStock: "",
@@ -40,6 +47,8 @@ const emptyForm = {
   shelfLocation: "",
   batchNumber: "",
   expiryDate: "",
+  isControlled: false,
+  prescriptionRequired: false,
   warnings: [] as string[],
   instructions: "",
 };
@@ -95,6 +104,15 @@ export function MedicinesPage(): JSX.Element {
         barcode: form.barcode.trim() || undefined,
         purchasePrice: Number(form.purchasePrice) || 0,
         sellingPrice: Number(form.sellingPrice) || 0,
+        wholesalePrice: Number(form.wholesalePrice) || undefined,
+        dealerPrice: Number(form.dealerPrice) || undefined,
+        costPrice: Number(form.costPrice) || undefined,
+        minSalePrice: Number(form.minSalePrice) || undefined,
+        maxRetailPrice: Number(form.maxRetailPrice) || undefined,
+        taxPct: Number(form.taxPct) || 0,
+        alternateBarcode: form.alternateBarcode.trim() || undefined,
+        isControlled: form.isControlled,
+        prescriptionRequired: form.prescriptionRequired,
         reorderLevel: Number(form.reorderLevel) || 10,
         suggestedReorderQty: Number(form.suggestedReorderQty) || undefined,
         currentStock: Number(form.currentStock) || 0,
@@ -318,7 +336,7 @@ export function MedicinesPage(): JSX.Element {
                 onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })}
               />
             </PharmacyField>
-            <PharmacyField label="Selling price (Rs)" hint="Price per strip when pack fields are set">
+            <PharmacyField label="Selling / retail price (Rs)" hint="Price per strip when pack fields are set">
               <PharmacyInput
                 type="number"
                 min={0}
@@ -326,6 +344,37 @@ export function MedicinesPage(): JSX.Element {
                 value={form.sellingPrice}
                 onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })}
               />
+            </PharmacyField>
+            <PharmacyField label="Wholesale price">
+              <PharmacyInput type="number" min={0} value={form.wholesalePrice} onChange={(e) => setForm({ ...form, wholesalePrice: e.target.value })} />
+            </PharmacyField>
+            <PharmacyField label="Dealer price">
+              <PharmacyInput type="number" min={0} value={form.dealerPrice} onChange={(e) => setForm({ ...form, dealerPrice: e.target.value })} />
+            </PharmacyField>
+            <PharmacyField label="Cost / min / MRP">
+              <div className="grid grid-cols-3 gap-1">
+                <PharmacyInput type="number" min={0} placeholder="Cost" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} />
+                <PharmacyInput type="number" min={0} placeholder="Min" value={form.minSalePrice} onChange={(e) => setForm({ ...form, minSalePrice: e.target.value })} />
+                <PharmacyInput type="number" min={0} placeholder="MRP" value={form.maxRetailPrice} onChange={(e) => setForm({ ...form, maxRetailPrice: e.target.value })} />
+              </div>
+            </PharmacyField>
+            <PharmacyField label="Tax %">
+              <PharmacyInput type="number" min={0} value={form.taxPct} onChange={(e) => setForm({ ...form, taxPct: e.target.value })} />
+            </PharmacyField>
+            <PharmacyField label="Alternate barcode">
+              <PharmacyInput value={form.alternateBarcode} onChange={(e) => setForm({ ...form, alternateBarcode: e.target.value })} />
+            </PharmacyField>
+            <PharmacyField label="Flags">
+              <div className="flex flex-wrap gap-3 text-sm">
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={form.isControlled} onChange={(e) => setForm({ ...form, isControlled: e.target.checked })} />
+                  Controlled
+                </label>
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={form.prescriptionRequired} onChange={(e) => setForm({ ...form, prescriptionRequired: e.target.checked })} />
+                  Rx required
+                </label>
+              </div>
             </PharmacyField>
             <PharmacyField label="Tablets per strip">
               <PharmacyInput type="number" min={1} value={form.tabletsPerStrip} onChange={(e) => setForm({ ...form, tabletsPerStrip: e.target.value })} />
@@ -608,7 +657,7 @@ export function MedicinesPage(): JSX.Element {
                           <button
                             type="button"
                             onClick={() => openEdit(m)}
-                            className="mr-2 rounded-md px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400"
+                            className="mr-2 rounded-md px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
                           >
                             Edit
                           </button>

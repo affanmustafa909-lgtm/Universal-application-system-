@@ -15,6 +15,20 @@ const POPS_ROLES: readonly PopsRole[] = [
   "rider",
 ];
 
+const NON_RESTAURANT_ROLES: readonly PopsRole[] = [
+  "admin",
+  "manager",
+  "cashier",
+  "accountant",
+  "hr",
+];
+
+/** Roles offered when creating users — kitchen/waiter/rider only for restaurant family. */
+export function popsRolesForSystem(systemId: BusinessSystemId): readonly PopsRole[] {
+  if (systemId === "restaurant" || systemId === "ice-cream-bar") return POPS_ROLES;
+  return NON_RESTAURANT_ROLES;
+}
+
 export function isPopsRole(value: string | undefined | null): value is PopsRole {
   return Boolean(value && (POPS_ROLES as readonly string[]).includes(value));
 }
@@ -151,6 +165,9 @@ export function erpEntryPathForRole(
 ): string {
   if (systemId === "pharmacy") {
     return role === "admin" ? "/pops/pharmacy/dashboard" : "/pops/pharmacy/pos";
+  }
+  if (systemId === "distribution") {
+    return "/pops/distribution/ps";
   }
   if (systemId === "general-store") {
     return role === "admin" ? "/pops/store/dashboard" : "/pops/store/pos";

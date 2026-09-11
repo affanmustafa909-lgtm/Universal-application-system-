@@ -11,6 +11,19 @@ export const pharmacyInputClass =
 
 export const pharmacySelectClass = pharmacyInputClass;
 
+export const pharmacyPanelClass =
+  "rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/40";
+
+export const pharmacyHeadingClass = "text-sm font-semibold text-slate-900 dark:text-slate-100";
+
+export const pharmacyMutedClass = "text-xs text-slate-500 dark:text-slate-400";
+
+export const pharmacyRowHoverClass =
+  "hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors";
+
+export const pharmacyRowHoverNeutralClass =
+  "hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors";
+
 export function usePharmacyAccess() {
   const branch = usePopsStore((s) => s.branch);
   const claims = useSessionStore((s) => s.claims);
@@ -19,9 +32,22 @@ export function usePharmacyAccess() {
   return { branch, canManage };
 }
 
-export function useInvalidatePharmacy() {
+export function useInvalidatePharmacy(keys?: string[][]) {
   const queryClient = useQueryClient();
   return () => {
-    void queryClient.invalidateQueries({ queryKey: ["pharmacy"] });
+    if (keys?.length) {
+      for (const key of keys) {
+        void queryClient.invalidateQueries({ queryKey: key });
+      }
+      return;
+    }
+    // Prefer narrow keys from callers; full wipe is last resort and expensive.
+    void queryClient.invalidateQueries({
+      predicate: (q) => {
+        const k0 = q.queryKey[0];
+        return k0 === "pharmacy" || k0 === "distribution";
+      },
+      refetchType: "active",
+    });
   };
 }

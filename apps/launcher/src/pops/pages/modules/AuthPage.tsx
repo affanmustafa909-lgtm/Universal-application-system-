@@ -18,6 +18,11 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useSessionStore } from "../../../stores/sessionStore";
+import { useActiveSystemId } from "../../../hooks/useActiveSystemId";
+import {
+  getNavItemsForSystem,
+  isRestaurantFamilySystem,
+} from "../../../lib/businessSystems";
 import { fetchPopsBranches } from "../../api/operations";
 import { useOrgModuleCeiling } from "../../hooks/useOrgModuleCeiling";
 import {
@@ -39,8 +44,10 @@ import { getUserPin, setUserPin } from "../../lib/posPinAuth";
 import { popsNavItems } from "../../spec/modules";
 import {
   allRestaurantNavPaths,
+  popsRolesForSystem,
   primaryPermissionForNavPath,
 } from "../../lib/roleAccess";
+import type { PopsNavItem } from "../../spec/modules";
 
 function formatLastActivity(iso: string | null): string {
   if (!iso) return "—";
@@ -90,17 +97,18 @@ function pathIsOn(allowlist: string[] | null, path: string): boolean {
   return allowlist.includes(path);
 }
 
-function materializeAllowlist(current: string[] | null): string[] {
+function materializeAllowlist(current: string[] | null, systemNav: readonly PopsNavItem[]): string[] {
   if (current != null) return [...current];
-  return allRestaurantNavPaths(popsNavItems);
+  return allRestaurantNavPaths(systemNav);
 }
 
 function toggleNavPath(
   form: UserFormState,
   path: string,
   enabled: boolean,
+  systemNav: readonly PopsNavItem[],
 ): Pick<UserFormState, "navAllowlist" | "permissions"> {
-  let next = materializeAllowlist(form.navAllowlist);
+  let next = materializeAllowlist(form.navAllowlist, systemNav);
   if (enabled) {
     if (!next.includes(path)) next.push(path);
   } else {
@@ -120,8 +128,9 @@ function toggleNavGroup(
   form: UserFormState,
   paths: string[],
   enabled: boolean,
+  systemNav: readonly PopsNavItem[],
 ): Pick<UserFormState, "navAllowlist" | "permissions"> {
-  let next = materializeAllowlist(form.navAllowlist);
+  let next = materializeAllowlist(form.navAllowlist, systemNav);
   let permissions = form.permissions;
   if (enabled) {
     for (const path of paths) {
@@ -164,9 +173,11 @@ function applyRoleDefaults(role: PopsRole): Pick<UserFormState, "role" | "permis
 function CashierPresetPanel({
   form,
   setForm,
+  systemNav,
 }: {
   form: UserFormState;
   setForm: Dispatch<SetStateAction<UserFormState>>;
+  systemNav: readonly PopsNavItem[];
 }): JSX.Element {
   const coreOn =
     pathIsOn(form.navAllowlist, "pos") &&
@@ -214,7 +225,7 @@ function CashierPresetPanel({
                 className="accent-emerald-500"
                 checked={on}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, ...toggleNavPath(f, item.path, e.target.checked) }))
+                  setForm((f) => ({ ...f, ...toggleNavPath(f, item.path, e.target.checked, systemNav) }))
                 }
               />
               <span>
@@ -251,7 +262,7 @@ function CashierPresetPanel({
                   className="mt-0.5 accent-sky-500"
                   checked={on}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, ...toggleNavPath(f, item.path, e.target.checked) }))
+                    setForm((f) => ({ ...f, ...toggleNavPath(f, item.path, e.target.checked, systemNav) }))
                   }
                 />
                 <span>
@@ -309,6 +320,8 @@ function UserFormModal({
   initial,
   branchOptions,
   roleOptions,
+  systemNav,
+  restaurantUi,
   requirePassword,
   showPassword = true,
   showAccessControls = false,
@@ -323,6 +336,8 @@ function UserFormModal({
   initial: UserFormState;
   branchOptions: { value: string; label: string }[];
   roleOptions: { id: PopsRole; label: string }[];
+  systemNav: readonly PopsNavItem[];
+  restaurantUi: boolean;
   requirePassword: boolean;
   showPassword?: boolean;
   /** Account on/off + module permission toggles (edit / add). */
@@ -512,7 +527,9 @@ function UserFormModal({
                 </label>
               </div>
 
-              {form.role === "cashier" ? <CashierPresetPanel form={form} setForm={setForm} /> : null}
+              {form.role === "cashier" && restaurantUi ? (
+                <CashierPresetPanel form={form} setForm={setForm} systemNav={systemNav} />
+              ) : null}
 
               <div>
                 <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Modules</div>
@@ -575,7 +592,7 @@ function UserFormModal({
                   </div>
                 </div>
                 <div className="mt-2 space-y-2">
-                  {popsNavItems.map((item) => {
+                  {systemNav.map((item) => {
                     if (item.type === "link") {
                       const on = pathIsOn(form.navAllowlist, item.path);
                       return (
@@ -592,7 +609,7 @@ function UserFormModal({
                             className="accent-sky-500"
                             checked={on}
                             onChange={(e) =>
-                              setForm((f) => ({ ...f, ...toggleNavPath(f, item.path, e.target.checked) }))
+                              setForm((f) => ({ ...f, ...toggleNavPath(f, item.path, e.target.checked, systemNav) }))
                             }
                           />
                           <span className="font-medium">{item.label}</span>
@@ -614,7 +631,7 @@ function UserFormModal({
                               if (el) el.indeterminate = someOn && !allOn;
                             }}
                             onChange={(e) =>
-                              setForm((f) => ({ ...f, ...toggleNavGroup(f, childPaths, e.target.checked) }))
+                              setForm((f) => ({ ...f, ...toggleNavGroup(f, childPaths, e.target.checked, systemNav) }))
                             }
                           />
                           {item.label}
@@ -641,7 +658,7 @@ function UserFormModal({
                                   onChange={(e) =>
                                     setForm((f) => ({
                                       ...f,
-                                      ...toggleNavPath(f, child.path, e.target.checked),
+                                      ...toggleNavPath(f, child.path, e.target.checked, systemNav),
                                     }))
                                   }
                                 />
@@ -677,6 +694,9 @@ export function AuthPage(): JSX.Element {
   const queryClient = useQueryClient();
   const branch = usePopsStore((s) => s.branch);
   const claims = useSessionStore((s) => s.claims);
+  const systemId = useActiveSystemId();
+  const restaurantUi = isRestaurantFamilySystem(systemId);
+  const systemNav = useMemo(() => getNavItemsForSystem(systemId), [systemId]);
   const canManage = canManageOrgUsers(claims?.permissions ?? []);
 
   const [modal, setModal] = useState<"add" | "invite" | "edit" | "reset" | null>(null);
@@ -716,12 +736,18 @@ export function AuthPage(): JSX.Element {
     return opts;
   }, [branchesQuery.data]);
 
-  const roleOptions = useMemo(
-    () => POPS_ROLE_TEMPLATES.map((r) => ({ id: r.id, label: r.label })),
-    [],
-  );
+  const roleOptions = useMemo(() => {
+    const allowed = new Set(popsRolesForSystem(systemId));
+    return POPS_ROLE_TEMPLATES.filter((r) => allowed.has(r.id)).map((r) => ({
+      id: r.id,
+      label: r.label,
+    }));
+  }, [systemId]);
 
-  const matrixRoles: RoleTemplate[] = accessQuery.data?.roles ?? [];
+  const matrixRoles: RoleTemplate[] = useMemo(() => {
+    const allowed = new Set(popsRolesForSystem(systemId));
+    return (accessQuery.data?.roles ?? []).filter((r) => allowed.has(r.id));
+  }, [accessQuery.data?.roles, systemId]);
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["users"] });
@@ -912,7 +938,9 @@ export function AuthPage(): JSX.Element {
       <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-4">
         <div className="text-sm font-medium text-white">Permission matrix</div>
         <p className="mt-1 text-xs text-slate-500">
-          Capabilities by role template. Cashier defaults to POS + add-only menu/tables (no void/discount/closing).
+          {restaurantUi
+            ? "Capabilities by role template. Cashier defaults to POS + add-only menu/tables (no void/discount/closing)."
+            : "Capabilities by role template for this system (no kitchen / waiter / rider roles)."}
         </p>
         <div className="mt-3 overflow-x-auto text-xs">
           <table className="w-full border-collapse text-left">
@@ -1026,6 +1054,8 @@ export function AuthPage(): JSX.Element {
           initial={defaultForm()}
           branchOptions={branchOptions}
           roleOptions={roleOptions}
+          systemNav={systemNav}
+          restaurantUi={restaurantUi}
           requirePassword
           showPassword
           showAccessControls
@@ -1068,6 +1098,8 @@ export function AuthPage(): JSX.Element {
           initial={{ ...defaultForm(), password: "" }}
           branchOptions={branchOptions}
           roleOptions={roleOptions}
+          systemNav={systemNav}
+          restaurantUi={restaurantUi}
           requirePassword={false}
           showPassword={false}
           emailHint="Sends an email with a link to set their password (7-day expiry)."
@@ -1093,6 +1125,8 @@ export function AuthPage(): JSX.Element {
           initial={userToForm(selected)}
           branchOptions={branchOptions}
           roleOptions={roleOptions}
+          systemNav={systemNav}
+          restaurantUi={restaurantUi}
           requirePassword={false}
           showAccessControls
           submitLabel="Save changes"
@@ -1124,6 +1158,8 @@ export function AuthPage(): JSX.Element {
           initial={{ ...userToForm(selected), password: "" }}
           branchOptions={branchOptions}
           roleOptions={roleOptions}
+          systemNav={systemNav}
+          restaurantUi={restaurantUi}
           requirePassword
           submitLabel="Reset password"
           error={formError}

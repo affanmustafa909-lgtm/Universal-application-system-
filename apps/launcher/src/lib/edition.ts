@@ -9,13 +9,8 @@ import {
 /**
  * Edition = the business module baked into this build/installer.
  *
- * - A specific id (`restaurant` | `ice-cream-bar` | `pharmacy` | `general-store`) produces a
- *   single-system installer that boots straight into that system and hides all
- *   others (the modular per-.exe installation).
+ * - A specific id produces a single-system installer that boots straight into that system.
  * - `"suite"` keeps every system available behind the picker (dev + admin build).
- *
- * The value is injected at build time via Vite `define` from `PLATFORM_EDITION`
- * (see vite.config.ts). Defaults to `"suite"` when unset.
  */
 export type PlatformEdition = BusinessSystemId | "suite";
 
@@ -41,6 +36,8 @@ export const HAS_ICE_CREAM_BAR =
   PLATFORM_EDITION === "restaurant";
 export const HAS_PHARMACY =
   PLATFORM_EDITION === "suite" || PLATFORM_EDITION === "pharmacy";
+export const HAS_DISTRIBUTION =
+  PLATFORM_EDITION === "suite" || PLATFORM_EDITION === "distribution";
 export const HAS_GENERAL_STORE =
   PLATFORM_EDITION === "suite" || PLATFORM_EDITION === "general-store";
 
@@ -71,6 +68,7 @@ export function isSystemAvailable(id: BusinessSystemId): boolean {
   if (id === "restaurant") return HAS_RESTAURANT && PLATFORM_EDITION !== "ice-cream-bar";
   if (id === "ice-cream-bar") return HAS_ICE_CREAM_BAR;
   if (id === "pharmacy") return HAS_PHARMACY;
+  if (id === "distribution") return HAS_DISTRIBUTION;
   if (id === "general-store") return HAS_GENERAL_STORE;
   return false;
 }

@@ -35,10 +35,55 @@ export const DEFAULT_STORE_PRINTER_SECTIONS: PrinterSection[] = [
   { id: "back-office", name: "Back office", icon: "🖨️", color: "#94a3b8", enabled: true, isSystem: true, sortOrder: 5 },
 ];
 
-export type PrinterSectionPreset = "restaurant" | "general-store";
+/** Medical Distribution — booking / invoice / warehouse (no kitchen / bar / waiter). */
+export const DEFAULT_DISTRIBUTION_PRINTER_SECTIONS: PrinterSection[] = [
+  { id: "receipt", name: "Booking / invoice", icon: "🧾", color: "#22d3ee", enabled: true, isSystem: true, sortOrder: 0 },
+  { id: "counter", name: "Order desk", icon: "🖥️", color: "#38bdf8", enabled: true, isSystem: true, sortOrder: 1 },
+  { id: "warehouse", name: "Warehouse", icon: "📦", color: "#fb923c", enabled: true, isSystem: true, sortOrder: 2 },
+  { id: "returns", name: "Returns (WRN/SRN)", icon: "↩️", color: "#f472b6", enabled: true, isSystem: true, sortOrder: 3 },
+  { id: "label", name: "Labels", icon: "🏷️", color: "#a3e635", enabled: true, isSystem: true, sortOrder: 4 },
+  { id: "back-office", name: "Back office", icon: "🖨️", color: "#94a3b8", enabled: true, isSystem: true, sortOrder: 5 },
+];
+
+/** Pharmacy retail — counter / Rx (no kitchen stations). */
+export const DEFAULT_PHARMACY_PRINTER_SECTIONS: PrinterSection[] = [
+  { id: "receipt", name: "Receipt", icon: "🧾", color: "#34d399", enabled: true, isSystem: true, sortOrder: 0 },
+  { id: "counter", name: "Counter", icon: "💊", color: "#38bdf8", enabled: true, isSystem: true, sortOrder: 1 },
+  { id: "warehouse", name: "Store room", icon: "📦", color: "#fb923c", enabled: true, isSystem: true, sortOrder: 2 },
+  { id: "returns", name: "Returns", icon: "↩️", color: "#f472b6", enabled: true, isSystem: true, sortOrder: 3 },
+  { id: "label", name: "Labels", icon: "🏷️", color: "#22d3ee", enabled: true, isSystem: true, sortOrder: 4 },
+  { id: "back-office", name: "Back office", icon: "🖨️", color: "#94a3b8", enabled: true, isSystem: true, sortOrder: 5 },
+];
+
+export type PrinterSectionPreset = "restaurant" | "general-store" | "distribution" | "pharmacy";
+
+const RESTAURANT_LEAK_IDS = new Set([
+  "kitchen",
+  "bar",
+  "waiter",
+  "grill",
+  "dessert",
+  "drinks",
+  "cashier",
+  "pickup",
+  "delivery",
+  ...KITCHEN_SALE_PRINT_SECTIONS.map((s) => s.id),
+]);
 
 export function defaultPrinterSectionsFor(preset: PrinterSectionPreset = "restaurant"): PrinterSection[] {
-  return preset === "general-store" ? DEFAULT_STORE_PRINTER_SECTIONS : DEFAULT_PRINTER_SECTIONS;
+  if (preset === "general-store") return DEFAULT_STORE_PRINTER_SECTIONS;
+  if (preset === "distribution") return DEFAULT_DISTRIBUTION_PRINTER_SECTIONS;
+  if (preset === "pharmacy") return DEFAULT_PHARMACY_PRINTER_SECTIONS;
+  return DEFAULT_PRINTER_SECTIONS;
+}
+
+export function printerSectionPresetForSystem(
+  systemId: string | null | undefined,
+): PrinterSectionPreset {
+  if (systemId === "general-store") return "general-store";
+  if (systemId === "distribution") return "distribution";
+  if (systemId === "pharmacy") return "pharmacy";
+  return "restaurant";
 }
 
 export const PRINTER_SECTIONS_CHANGED_EVENT = "pops-printer-sections-changed";
@@ -74,30 +119,34 @@ export function loadPrinterSections(
   const stored = all[branchCode];
   if (!stored || stored.length === 0) return defaults;
 
-  // Ensure Kitchen Sale Report sections exist on older branches.
-  const missingSale = KITCHEN_SALE_PRINT_SECTIONS.filter(
-    (sale) => !stored.some((s) => s.id === sale.id),
-  );
   let merged = stored;
-  if (missingSale.length > 0) {
-    merged = [
-      ...missingSale.map((s, i) => ({
-        ...s,
-        sortOrder: Math.min(...stored.map((x) => x.sortOrder), 0) - missingSale.length + i,
-      })),
-      ...stored,
-    ];
-    savePrinterSections(branchCode, merged);
+
+  // Ensure Kitchen Sale Report sections exist on older restaurant branches only.
+  if (preset === "restaurant") {
+    const missingSale = KITCHEN_SALE_PRINT_SECTIONS.filter(
+      (sale) => !stored.some((s) => s.id === sale.id),
+    );
+    if (missingSale.length > 0) {
+      merged = [
+        ...missingSale.map((s, i) => ({
+          ...s,
+          sortOrder: Math.min(...stored.map((x) => x.sortOrder), 0) - missingSale.length + i,
+        })),
+        ...stored,
+      ];
+      savePrinterSections(branchCode, merged);
+    }
   }
 
-  // General Store: replace leftover restaurant Kitchen/Bar defaults with store sections.
-  if (
-    preset === "general-store" &&
-    merged.some((s) => s.id === "kitchen" || s.id === "bar") &&
-    !merged.some((s) => s.id === "receipt")
-  ) {
-    savePrinterSections(branchCode, defaults);
-    return defaults;
+  // Non-restaurant systems: strip Kitchen/Bar/Waiter leftovers; keep custom sections.
+  if (preset !== "restaurant" && merged.some((s) => RESTAURANT_LEAK_IDS.has(s.id))) {
+    const customs = merged.filter((s) => !s.isSystem && !RESTAURANT_LEAK_IDS.has(s.id));
+    const next = [
+      ...defaults,
+      ...customs.map((s, i) => ({ ...s, sortOrder: defaults.length + i })),
+    ];
+    savePrinterSections(branchCode, next);
+    return next;
   }
 
   return [...merged].sort((a, b) => a.sortOrder - b.sortOrder);

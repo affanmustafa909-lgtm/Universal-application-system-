@@ -96,7 +96,7 @@ export const popsNavItems: PopsNavItem[] = [
       { path: "multi-branch/reports", label: "Consolidated report" },
     ],
   },
-  { type: "link", path: "sync", label: "Sync & backup" },
+  { type: "link", path: "sync", label: "Connection & Sync" },
   {
     type: "group",
     label: "Reports",

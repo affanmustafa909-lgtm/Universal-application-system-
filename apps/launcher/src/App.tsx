@@ -14,13 +14,15 @@ import { BranchGate } from "./pops/components/BranchGate";
 import { PopsRootRedirect } from "./pops/components/PopsRootRedirect";
 import { PopsShell } from "./pops/layouts/PopsShell";
 import { BranchSelectPage } from "./pops/pages/BranchSelectPage";
-import { HAS_GENERAL_STORE, HAS_PHARMACY, HAS_RESTAURANT, isSingleSystemEdition } from "./lib/edition";
+import { HAS_DISTRIBUTION, HAS_GENERAL_STORE, HAS_PHARMACY, HAS_RESTAURANT, isSingleSystemEdition } from "./lib/edition";
 import { restaurantRoutes } from "./routes/restaurantRoutes";
 import { pharmacyRoutes } from "./routes/pharmacyRoutes";
+import { distributionRoutes } from "./routes/distributionRoutes";
 import { generalStoreRoutes } from "./routes/generalStoreRoutes";
 import { sharedRoutes } from "./routes/sharedRoutes";
 import { HistoryNavBar } from "./components/HistoryNavBar";
 import { ConnectivityBanner } from "./components/ConnectivityBanner";
+import { SyncStatusChip } from "./components/SyncStatusChip";
 import { MaintenanceBanner } from "./components/MaintenanceBanner";
 import { DesktopUpdateBanner } from "./components/DesktopUpdateBanner";
 import { useOfflineSync } from "./hooks/useOfflineSync";
@@ -110,6 +112,7 @@ export function App(): JSX.Element {
           <DesktopUpdateBanner />
           <MaintenanceBanner />
           <ConnectivityBanner />
+          <SyncStatusChip />
           <RootErrorBoundary>
           <Routes>
           <Route path="/role" element={<RoleSelectPage />} />
@@ -168,6 +171,7 @@ export function App(): JSX.Element {
                 {sharedRoutes()}
                 {HAS_RESTAURANT ? restaurantRoutes() : null}
                 {HAS_PHARMACY ? pharmacyRoutes() : null}
+                {HAS_DISTRIBUTION ? distributionRoutes() : null}
                 {HAS_GENERAL_STORE ? generalStoreRoutes() : null}
               </Route>
             </Route>

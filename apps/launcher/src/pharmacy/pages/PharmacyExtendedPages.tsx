@@ -117,7 +117,7 @@ export function PharmacyKhataPage(): JSX.Element {
               paymentMutation.mutate();
             }}
           >
-            <h2 className="text-sm font-semibold">Record partial payment</h2>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Record partial payment</h2>
             <div className="mt-2 grid gap-2 sm:grid-cols-3">
               <PharmacyInput
                 type="number"
@@ -256,7 +256,7 @@ export function PharmacyShiftPage(): JSX.Element {
             openMutation.mutate();
           }}
         >
-          <h2 className="text-sm font-semibold">Open new shift</h2>
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Open new shift</h2>
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
             <PharmacyInput placeholder="Cashier name" value={cashierName} onChange={(e) => setCashierName(e.target.value)} required />
             <PharmacyInput type="number" min={0} placeholder="Opening cash" value={openingCash} onChange={(e) => setOpeningCash(e.target.value)} />
@@ -422,7 +422,7 @@ export function PharmacyTaxCompliancePage(): JSX.Element {
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/40">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Tax summary — {report.periodLabel}</h2>
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Tax summary — {report.periodLabel}</h2>
           {report.fbrCompliant ? <Badge tone="success">FBR compliant</Badge> : <Badge tone="danger">Review required</Badge>}
         </div>
         <table className="mt-4 w-full text-sm">

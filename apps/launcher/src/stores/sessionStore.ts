@@ -12,6 +12,12 @@ export type SessionState = {
   orderTypeModalShown: boolean;
   /** Whether the POS "Select seating section" auto-prompt has already been shown this app run. Not persisted — resets whenever the app is closed and reopened. */
   seatingModalShown: boolean;
+  /** Whether the pharmacy POS channel/station/employee gate has been shown this app run. Not persisted. */
+  pharmacyPosContextModalShown: boolean;
+  /** True when the user is working from a trusted offline identity (JWT may be expired). */
+  offlineSession: boolean;
+  lastOnlineAt: string | null;
+  setOfflineSession: (offline: boolean) => void;
   setTokens: (
     accessToken: string,
     refreshToken: string,
@@ -20,6 +26,7 @@ export type SessionState = {
   ) => void;
   markOrderTypeModalShown: () => void;
   markSeatingModalShown: () => void;
+  markPharmacyPosContextModalShown: () => void;
   clear: () => void;
 };
 
@@ -32,15 +39,26 @@ export const useSessionStore = create<SessionState>()(
       email: null,
       orderTypeModalShown: false,
       seatingModalShown: false,
+      pharmacyPosContextModalShown: false,
+      offlineSession: false,
+      lastOnlineAt: null,
+      setOfflineSession: (offline) =>
+        set((s) => ({
+          offlineSession: offline,
+          lastOnlineAt: offline ? s.lastOnlineAt : new Date().toISOString(),
+        })),
       setTokens: (accessToken, refreshToken, claims, email) =>
         set((state) => ({
           accessToken,
           refreshToken,
           claims,
           email: email !== undefined ? email : state.email,
+          offlineSession: false,
+          lastOnlineAt: new Date().toISOString(),
         })),
       markOrderTypeModalShown: () => set({ orderTypeModalShown: true }),
       markSeatingModalShown: () => set({ seatingModalShown: true }),
+      markPharmacyPosContextModalShown: () => set({ pharmacyPosContextModalShown: true }),
       clear: () =>
         set({
           accessToken: null,
@@ -49,17 +67,22 @@ export const useSessionStore = create<SessionState>()(
           email: null,
           orderTypeModalShown: false,
           seatingModalShown: false,
+          pharmacyPosContextModalShown: false,
+          offlineSession: false,
+          lastOnlineAt: null,
         }),
     }),
     {
       name: "platform-session-v1",
-      // orderTypeModalShown / seatingModalShown intentionally excluded — they must
-      // reset to false on every fresh app launch, not persist across restarts.
+      // orderTypeModalShown / seatingModalShown / pharmacyPosContextModalShown intentionally excluded —
+      // they must reset to false on every fresh app launch, not persist across restarts.
       partialize: (s) => ({
         accessToken: s.accessToken,
         refreshToken: s.refreshToken,
         claims: s.claims,
         email: s.email,
+        offlineSession: s.offlineSession,
+        lastOnlineAt: s.lastOnlineAt,
       }),
       // Belt-and-suspenders: force these false after rehydration too, in case an
       // older build already wrote them to disk before they were excluded above.
@@ -67,6 +90,7 @@ export const useSessionStore = create<SessionState>()(
         if (state) {
           state.orderTypeModalShown = false;
           state.seatingModalShown = false;
+          state.pharmacyPosContextModalShown = false;
         }
       },
     },

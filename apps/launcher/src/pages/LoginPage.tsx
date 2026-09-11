@@ -1,5 +1,5 @@
 import { Button } from "@platform/ui";
-import { AuthClient } from "@platform/auth-client";
+import { AuthClient, isLikelyNetworkFailure } from "@platform/auth-client";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { decodeAccessToken, isSuperAdminClaims } from "../lib/jwt";
@@ -32,6 +32,12 @@ import {
 import { useSystemStore } from "../stores/systemStore";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { fieldInputClass, loginCardClass, mutedClass, subtleClass } from "../pops/lib/themeClasses";
+import { getOrCreateDeviceId } from "../lib/deviceId";
+import {
+  offlineLoginMessage,
+  rememberOfflineIdentity,
+  verifyOfflinePassword,
+} from "../lib/offlineAuth";
 import { useSessionStore } from "../stores/sessionStore";
 import { usePopsStore } from "../stores/popsStore";
 import { findUserIdByPin, isValidPin, loadBranchPinMap } from "../pops/lib/posPinAuth";
@@ -187,6 +193,28 @@ export function LoginPage(): JSX.Element {
     recordDeviceInstall(claims.systemType ?? lockedId, lockedId);
     setSystem(lockedId);
     setTokens(accessToken, refreshToken, claims, loginEmail);
+    if (loginEmail && password) {
+      void rememberOfflineIdentity({
+        email: loginEmail,
+        password,
+        claims,
+        accessToken,
+        refreshToken,
+      }).catch(() => {
+        /* SQLite unavailable — online session still works */
+      });
+      void fetch(`${getApiBaseUrl()}/v1/sync/register-device`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          deviceId: getOrCreateDeviceId(),
+          deviceName: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 80) : "desktop",
+          platform: "launcher",
+        }),
+      }).catch(() => {
+        /* device table may not be migrated yet */
+      });
+    }
     const display = normalizeMembershipRole(claims.role) ?? selectedRole!;
     if (isPopsRole(claims.role) || claims.role === "owner") {
       setDisplayRole(display);
@@ -203,6 +231,17 @@ export function LoginPage(): JSX.Element {
       const tokens = await client.login(email, password);
       await completeLogin(tokens.accessToken, tokens.refreshToken);
     } catch (err) {
+      if (isLikelyNetworkFailure(err)) {
+        const verified = await verifyOfflinePassword(email, password);
+        if (verified.ok && verified.identity.lastAccessToken && verified.identity.lastRefreshToken) {
+          useSessionStore.getState().setOfflineSession(true);
+          await completeLogin(verified.identity.lastAccessToken, verified.identity.lastRefreshToken);
+          useSessionStore.getState().setOfflineSession(true);
+          return;
+        }
+        setError(verified.ok ? "Offline profile is incomplete. Sign in once while online." : offlineLoginMessage(verified.reason));
+        return;
+      }
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);

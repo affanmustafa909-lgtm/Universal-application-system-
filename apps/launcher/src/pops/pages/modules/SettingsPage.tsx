@@ -9,6 +9,8 @@ import {
   resetOrgData,
   updatePopsBranch,
 } from "../../api/operations";
+import { useActiveSystemId } from "../../../hooks/useActiveSystemId";
+import { getBusinessSystem, isRestaurantFamilySystem } from "../../../lib/businessSystems";
 import {
   DEFAULT_POS_SETTINGS,
   loadPosSettings,
@@ -58,7 +60,6 @@ import {
   useTaxAuthorityFeatures,
 } from "../../hooks/useTaxAuthorityFeatures";
 import { ThemeToggle } from "../../../components/ThemeToggle";
-import { useActiveSystemId } from "../../../hooks/useActiveSystemId";
 import { useThemeStore } from "../../../stores/themeStore";
 
 type OrderTypeChargeKey = {
@@ -82,24 +83,27 @@ const DATA_RESET_OPTIONS: {
   scope: DataResetScope;
   title: string;
   detail: string;
+  /** When set, only these systems see the option. Omit = all systems. */
+  systems?: Array<"restaurant" | "ice-cream-bar" | "pharmacy" | "distribution" | "general-store">;
 }[] = [
   {
     scope: "hr",
     title: "HR reset",
     detail:
-      "Removes employees, payroll runs, advances, attendance, leave, and staff food. Users/login accounts stay.",
+      "Removes employees, payroll, advances, attendance, leave, and staff food. Login accounts stay.",
   },
   {
     scope: "restaurant",
     title: "Restaurant reset",
     detail:
       "Removes sales, bills, kitchen tickets, cash sessions, journals, expenses, inventory movements, and zeros stock balances. Menu and users stay.",
+    systems: ["restaurant", "ice-cream-bar"],
   },
   {
     scope: "all",
     title: "All data reset",
     detail:
-      "Full wipe: restaurant + HR + store/pharmacy transactions. Users, menu, and catalogue stay. Dashboard and P&L go to zero.",
+      "Full wipe of transactional data for this business (sales, stock movements, journals, HR). Users and catalogue stay. Dashboard and P&L go to zero.",
   },
 ];
 
@@ -107,13 +111,24 @@ function DataResetPanel(props: {
   onNotice: (message: string) => void;
   onError: (message: string) => void;
 }): JSX.Element {
-  const [scope, setScope] = useState<DataResetScope>("restaurant");
+  const systemId = useActiveSystemId();
+  const restaurantUi = isRestaurantFamilySystem(systemId);
+  const options = DATA_RESET_OPTIONS.filter(
+    (o) => !o.systems || o.systems.includes(systemId),
+  );
+  const [scope, setScope] = useState<DataResetScope>(restaurantUi ? "restaurant" : "hr");
   const [confirmText, setConfirmText] = useState("");
   const profile = useQuery({
     queryKey: ["operations", "business-profile"],
     queryFn: fetchBusinessProfile,
   });
   const businessName = profile.data?.name ?? "";
+
+  useEffect(() => {
+    if (!options.some((o) => o.scope === scope)) {
+      setScope(options[0]?.scope ?? "hr");
+    }
+  }, [options, scope]);
 
   const resetMut = useMutation({
     mutationFn: () => resetOrgData(scope, confirmText),
@@ -131,7 +146,7 @@ function DataResetPanel(props: {
     (businessName.length > 0 &&
       confirmText.trim().toLowerCase() === businessName.trim().toLowerCase());
 
-  const selected = DATA_RESET_OPTIONS.find((o) => o.scope === scope)!;
+  const selected = options.find((o) => o.scope === scope) ?? options[0]!;
 
   return (
     <section className="max-w-xl space-y-3 rounded-xl border border-red-300 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
@@ -149,7 +164,7 @@ function DataResetPanel(props: {
       </p>
 
       <div className="space-y-2">
-        {DATA_RESET_OPTIONS.map((opt) => (
+        {options.map((opt) => (
           <label
             key={opt.scope}
             className="flex cursor-pointer gap-2 rounded-lg border border-red-200/80 bg-white/70 px-3 py-2 dark:border-red-900/50 dark:bg-slate-950/40"
@@ -212,6 +227,8 @@ export function SettingsPage(): JSX.Element {
   const claims = useSessionStore((s) => s.claims);
   const themeMode = useThemeStore((s) => s.mode);
   const systemId = useActiveSystemId();
+  const restaurantUi = isRestaurantFamilySystem(systemId);
+  const systemName = getBusinessSystem(systemId).shortName;
   const [saved, setSaved] = useState<PosSettings>(DEFAULT_POS_SETTINGS);
   const [draft, setDraft] = useState<PosSettings>(DEFAULT_POS_SETTINGS);
   const [modeVisibilityDraft, setModeVisibilityDraft] = useState<PosOrderModeVisibility>(
@@ -523,7 +540,7 @@ export function SettingsPage(): JSX.Element {
         <p className="mt-1 text-xs text-slate-500">
           {systemId === "ice-cream-bar"
             ? `Choose light or dark, plus Yellow Black, Blue Black Sky, or Mint. Current: ${themeMode}.`
-            : `Choose light or dark mode for the restaurant ERP interface. Current: ${themeMode}.`}
+            : `Choose light or dark mode for the ${systemName} ERP interface. Current: ${themeMode}.`}
         </p>
         <div className="mt-3">
           <ThemeToggle />
@@ -602,6 +619,7 @@ export function SettingsPage(): JSX.Element {
           On: bill note / item note fields appear on New order. Off: those fields are hidden.
         </p>
 
+        {restaurantUi ? (
         <div className="mt-4 rounded-lg border border-slate-700/80 bg-slate-950/40 p-3">
           <div className="text-xs font-semibold text-slate-300">Display · Full screen menu</div>
           <label className="mt-2 flex items-center gap-2 text-xs text-slate-400">
@@ -649,6 +667,7 @@ export function SettingsPage(): JSX.Element {
             Category wise: categories on top, items below. All items: every dish in one list.
           </p>
         </div>
+        ) : null}
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="block text-xs text-slate-400">

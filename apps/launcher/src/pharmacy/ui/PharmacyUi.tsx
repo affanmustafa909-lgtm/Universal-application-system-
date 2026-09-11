@@ -19,7 +19,7 @@ export function PharmacyField({
         {required ? <span className="text-emerald-600 dark:text-emerald-400">*</span> : null}
       </span>
       {children}
-      {hint ? <span className="mt-1 block text-[11px] text-slate-500">{hint}</span> : null}
+      {hint ? <span className="mt-1 block text-[11px] text-slate-500 dark:text-slate-400">{hint}</span> : null}
     </label>
   );
 }
@@ -45,7 +45,7 @@ export function PharmacyFormSection({
     <section className="rounded-xl border border-slate-200/80 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-950/40">
       <div className="mb-3">
         <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{title}</h3>
-        {description ? <p className="mt-0.5 text-xs text-slate-500">{description}</p> : null}
+        {description ? <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{description}</p> : null}
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{children}</div>
     </section>
@@ -63,11 +63,11 @@ export function PharmacyStatCard({
 }): JSX.Element {
   const toneClass =
     tone === "success"
-      ? "border-emerald-500/25 bg-emerald-500/5"
+      ? "border-emerald-500/25 bg-emerald-500/5 dark:border-emerald-500/40 dark:bg-emerald-950/40"
       : tone === "warning"
-        ? "border-amber-500/25 bg-amber-500/5"
+        ? "border-amber-500/25 bg-amber-500/5 dark:border-amber-500/40 dark:bg-amber-950/40"
         : tone === "danger"
-          ? "border-red-500/25 bg-red-500/5"
+          ? "border-red-500/25 bg-red-500/5 dark:border-red-500/40 dark:bg-red-950/40"
           : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/30";
   const valueClass =
     tone === "success"
@@ -80,7 +80,7 @@ export function PharmacyStatCard({
 
   return (
     <div className={`rounded-xl border px-4 py-3 ${toneClass}`}>
-      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</div>
+      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</div>
       <div className={`mt-1 text-2xl font-semibold tabular-nums ${valueClass}`}>{value}</div>
     </div>
   );

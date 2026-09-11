@@ -21,6 +21,7 @@ import {
   duplicatePrinterSection,
   loadPrinterSections,
   PRINTER_SECTIONS_CHANGED_EVENT,
+  printerSectionPresetForSystem,
   updatePrinterSection,
   type PrinterSection,
   type PrinterSectionPreset,
@@ -2985,8 +2986,8 @@ function PrintQueueTab({ branchCode }: { branchCode: string }): JSX.Element {
 function PrinterManagement({ branchCode }: { branchCode: string }): JSX.Element {
   const [searchParams] = useSearchParams();
   const systemId = useActiveSystemId();
-  const isStore = systemId === "general-store";
-  const sectionPreset: PrinterSectionPreset = isStore ? "general-store" : "restaurant";
+  const isStore = systemId !== "restaurant" && systemId !== "ice-cream-bar";
+  const sectionPreset: PrinterSectionPreset = printerSectionPresetForSystem(systemId);
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [printHistoryTick, setPrintHistoryTick] = useState(0);
   const printQueueAlertCount = useMemo(() => {
@@ -2997,6 +2998,13 @@ function PrinterManagement({ branchCode }: { branchCode: string }): JSX.Element 
   const [customizeSub, setCustomizeSub] = useState<"receipt" | "kot" | "paper">("receipt");
   const [notice, setNotice] = useState<string | null>(null);
   const { sections, routing } = usePrinterConfig(branchCode, sectionPreset);
+
+  useEffect(() => {
+    if (isStore && (routingSub === "categories" || routingSub === "items" || routingSub === "preview")) {
+      setRoutingSub("staff");
+    }
+    if (isStore && customizeSub === "kot") setCustomizeSub("receipt");
+  }, [isStore, routingSub, customizeSub]);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -3308,7 +3316,9 @@ function PrinterManagement({ branchCode }: { branchCode: string }): JSX.Element 
       {activeTab === "routing" ? (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-1 rounded-xl border border-slate-800 bg-slate-950/40 p-1">
-            {ROUTING_SUBS.map(({ id, label, Icon }) => (
+            {ROUTING_SUBS.filter((s) =>
+              isStore ? s.id === "staff" || s.id === "sections" : true,
+            ).map(({ id, label, Icon }) => (
               <button
                 key={id}
                 type="button"

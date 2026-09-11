@@ -17,6 +17,13 @@ export class SessionExpiredError extends Error {
   }
 }
 
+export class OfflineNetworkError extends Error {
+  constructor(message = "You are offline. Local work is saved; cloud actions need a connection.") {
+    super(message);
+    this.name = "OfflineNetworkError";
+  }
+}
+
 async function refreshAccessToken(): Promise<string> {
   if (refreshInFlight) return refreshInFlight;
 
@@ -34,6 +41,11 @@ async function refreshAccessToken(): Promise<string> {
       setTokens(tokens.accessToken, tokens.refreshToken, claims);
       return tokens.accessToken;
     } catch {
+      const session = useSessionStore.getState();
+      if (session.claims && session.accessToken) {
+        session.setOfflineSession(true);
+        throw new OfflineNetworkError();
+      }
       clear();
       throw new SessionExpiredError();
     }
@@ -72,6 +84,10 @@ export async function getValidAccessToken(): Promise<string> {
   if (!accessToken) throw new SessionExpiredError();
 
   if (!isAccessTokenExpired(accessToken)) return accessToken;
+  const session = useSessionStore.getState();
+  if (session.offlineSession && session.claims) {
+    throw new OfflineNetworkError();
+  }
   if (!refreshToken) {
     clear();
     throw new SessionExpiredError();
@@ -82,13 +98,16 @@ export async function getValidAccessToken(): Promise<string> {
 
 /** Restore session on cold start when the access token has expired but refresh is still valid. */
 export async function bootstrapSession(): Promise<void> {
-  const { accessToken, refreshToken } = useSessionStore.getState();
+  const { accessToken, refreshToken, claims, setOfflineSession } = useSessionStore.getState();
   if (!accessToken || !refreshToken) return;
   if (!isAccessTokenExpired(accessToken)) return;
   try {
     await refreshAccessToken();
   } catch {
-    /* refreshAccessToken clears session on failure */
+    if (claims) {
+      setOfflineSession(true);
+      return;
+    }
   }
 }
 
