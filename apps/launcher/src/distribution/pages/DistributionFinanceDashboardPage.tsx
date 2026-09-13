@@ -34,6 +34,9 @@ export function DistributionFinanceDashboardPage(): JSX.Element {
       breadcrumb={[{ label: "Distribution", to: `${DIST}/ps` }, { label: "Finance" }]}
       actions={
         <div className="flex flex-wrap gap-2">
+          <Link to={`${DIST}/cash`}>
+            <DistButton variant="secondary">Cash session</DistButton>
+          </Link>
           <Link to={`${DIST}/finance/gl`}>
             <DistButton>General ledger</DistButton>
           </Link>
@@ -59,7 +62,7 @@ export function DistributionFinanceDashboardPage(): JSX.Element {
         emptyDescription="Post a sale, collection, GRN, or expense to seed the ledger."
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <DistKpiCard label="Cash" value={formatPkr(num(k.cashBalance))} to={`${ACC}/cash`} />
+          <DistKpiCard label="Cash" value={formatPkr(num(k.cashBalance))} to={`${DIST}/cash`} />
           <DistKpiCard label="Bank" value={formatPkr(num(k.bankBalance))} to={`${ACC}/bank`} />
           <DistKpiCard
             label="Accounts receivable"

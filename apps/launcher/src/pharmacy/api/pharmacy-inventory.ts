@@ -112,6 +112,10 @@ export type LedgerMovementRow = {
   valuePkr: number;
   referenceType: string | null;
   referenceId: string | null;
+  /** Human document # / party — never a bare UUID (when API provides it). */
+  referenceLabel?: string | null;
+  referenceNumber?: string | null;
+  partyName?: string | null;
   notes: string | null;
   reversesMovementId: string | null;
   medicineId: string | null;
@@ -168,6 +172,8 @@ export type StockListResult = PageResult<StockRow> & { totals: StockTotals };
 export type StockListParams = PageParams & {
   branchCode: string;
   warehouseId?: string;
+  /** Exact warehouse match for transfer pickers. */
+  strictWarehouse?: boolean;
   companyId?: string;
   q?: string;
   stockState?: string;
@@ -505,6 +511,7 @@ export type ExpiryBucketsResult = {
 export type BatchListParams = PageParams & {
   branchCode: string;
   warehouseId?: string;
+  strictWarehouse?: boolean;
   medicineId?: string;
   companyId?: string;
   q?: string;
@@ -965,6 +972,8 @@ export type CountType = (typeof COUNT_TYPES)[number];
 export type CountScope = {
   companyId?: string;
   categoryId?: string;
+  /** Free-text medicine.category when no master category row exists. */
+  category?: string;
   medicineIds?: string[];
   rackLocation?: string;
 };

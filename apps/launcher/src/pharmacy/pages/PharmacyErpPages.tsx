@@ -1029,6 +1029,8 @@ export function PharmacyWholesaleReturnsPage(): JSX.Element {
   const { branch } = usePharmacyAccess();
   const invalidate = useInvalidatePharmacy();
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [tradeCustomerId, setTradeCustomerId] = useState("");
   const [medicineId, setMedicineId] = useState("");
   const [qty, setQty] = useState(1);
@@ -1044,26 +1046,49 @@ export function PharmacyWholesaleReturnsPage(): JSX.Element {
     enabled: Boolean(branch?.code),
     queryFn: () => fetchPharmacyWholesaleReturns(branch!.code),
   });
+
+  const resetForm = () => {
+    setTradeCustomerId("");
+    setMedicineId("");
+    setQty(1);
+    setUnitPrice(0);
+  };
+
   return (
     <div className="space-y-4">
       <PageHeader title="Wholesale returns" subtitle="Return from retailer/pharmacy — restores stock and reduces outstanding (WRN-…)." />
       <Err error={error} />
+      {notice ? (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+          {notice}
+        </div>
+      ) : null}
       <form
         className="rounded-xl border border-slate-200 p-4 dark:border-slate-800"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!branch) return;
+          if (!branch || busy) return;
+          setBusy(true);
+          setError(null);
+          setNotice(null);
           createPharmacyWholesaleReturn({
             branchCode: branch.code,
             tradeCustomerId,
             reason: "Wholesale return",
             lines: [{ medicineId, quantity: qty, unitPricePkr: unitPrice }],
           })
-            .then(() => {
-              invalidate();
-              setError(null);
+            .then((created) => {
+              const wrn =
+                created && typeof created === "object" && "returnNumber" in created
+                  ? String((created as { returnNumber?: string }).returnNumber ?? "")
+                  : "";
+              resetForm();
+              setNotice(wrn ? `Wholesale return posted — ${wrn}` : "Wholesale return posted successfully.");
+              void invalidate();
+              void query.refetch();
             })
-            .catch((err: Error) => setError(err.message));
+            .catch((err: Error) => setError(err.message || "Failed to post wholesale return"))
+            .finally(() => setBusy(false));
         }}
       >
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -1086,8 +1111,12 @@ export function PharmacyWholesaleReturnsPage(): JSX.Element {
           <input className={pharmacyInputClass} type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} />
           <input className={pharmacyInputClass} type="number" min={0} value={unitPrice} onChange={(e) => setUnitPrice(Number(e.target.value))} placeholder="Unit PKR" />
         </div>
-        <button type="submit" className="mt-3 rounded-md bg-emerald-600 px-4 py-2 text-sm text-white">
-          Post wholesale return
+        <button
+          type="submit"
+          disabled={busy}
+          className="mt-3 rounded-md bg-emerald-600 px-4 py-2 text-sm text-white disabled:opacity-60"
+        >
+          {busy ? "Posting…" : "Post wholesale return"}
         </button>
       </form>
       <SimpleTable

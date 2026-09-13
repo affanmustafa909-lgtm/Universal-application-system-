@@ -1,0 +1,382 @@
+{
+  "generatedAt": "2026-09-13T09:07:56.988Z",
+  "api": "https://backend-system-production-28a3.up.railway.app",
+  "branch": "DIST-HQ",
+  "runId": "90397943",
+  "suite": "phase5-sale-window",
+  "honesty": "If this file was produced without a real API, treat results as invalid. Soft timings are never hard pass/fail.",
+  "summary": {
+    "total": 29,
+    "passed": 29,
+    "failed": 0
+  },
+  "results": [
+    {
+      "name": "Security: unauthenticated product search is rejected",
+      "passed": true,
+      "detail": "status 401",
+      "expected": "401 or 403",
+      "actual": 401
+    },
+    {
+      "name": "Security: invalid/tampered token on product search is rejected",
+      "passed": true,
+      "detail": "status 401",
+      "expected": "401 or 403",
+      "actual": 401
+    },
+    {
+      "name": "Setup: stock GRN for book/invoice medicine",
+      "passed": true,
+      "detail": "{\"id\":\"e2e58013-bcab-4123-91af-99e87b47cbf3\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"e11a5c45-fccc-4f8a-8046-da4f7086c0",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Product search: server-side search returns 200",
+      "passed": true,
+      "detail": "status 200",
+      "expected": "200",
+      "actual": 200
+    },
+    {
+      "name": "Product search: includes created P5TEST medicine",
+      "passed": true,
+      "detail": "id=0b4ca34e-ca61-4d02-a0c2-3491e555ddec sku=P5TEST-90397943-SEARCH",
+      "expected": "0b4ca34e-ca61-4d02-a0c2-3491e555ddec",
+      "actual": "0b4ca34e-ca61-4d02-a0c2-3491e555ddec"
+    },
+    {
+      "name": "Product search: lean payload (no huge unused fields)",
+      "passed": true,
+      "detail": "keys=id,sku,name,genericName,brandName,companyName,barcode,unit,presentation,strength,wholesalePricePkr,sellingPricePkr,table",
+      "expected": "lean row",
+      "actual": "ok"
+    },
+    {
+      "name": "Product search: has core lean fields",
+      "passed": true,
+      "detail": "id/name present; availableQty=0",
+      "expected": "id+name",
+      "actual": "ok"
+    },
+    {
+      "name": "Customer search: returns 200",
+      "passed": true,
+      "detail": "status 200",
+      "expected": "200",
+      "actual": 200
+    },
+    {
+      "name": "Customer search: finds P5TEST customer",
+      "passed": true,
+      "detail": "1 hits",
+      "expected": "40e0db86-2d03-4e60-8cc8-6e25b4b09894",
+      "actual": "40e0db86-2d03-4e60-8cc8-6e25b4b09894"
+    },
+    {
+      "name": "Barcode lookup: returns matching medicine",
+      "passed": true,
+      "detail": "status 200, count=1",
+      "expected": "0b4ca34e-ca61-4d02-a0c2-3491e555ddec",
+      "actual": "0b4ca34e-ca61-4d02-a0c2-3491e555ddec"
+    },
+    {
+      "name": "Scheme: create buy_x_get_y for test medicine",
+      "passed": true,
+      "detail": "id=d057e429-3335-443f-aed6-5551b6748c38",
+      "expected": "created",
+      "actual": "created"
+    },
+    {
+      "name": "Pricing quote: returns 200 with line price",
+      "passed": true,
+      "detail": "status 201, source=medicine_wholesale",
+      "expected": "200 + unitPricePkr",
+      "actual": 140
+    },
+    {
+      "name": "Pricing quote: priceSource label present",
+      "passed": true,
+      "detail": "medicine_wholesale",
+      "expected": "non-empty source",
+      "actual": "medicine_wholesale"
+    },
+    {
+      "name": "Pricing quote: scheme free qty floor(qty/buy)*free",
+      "passed": true,
+      "detail": "freeQuantity=2",
+      "expected": 2,
+      "actual": 2
+    },
+    {
+      "name": "Validate: insufficient stock returns structured INSUFFICIENT_STOCK",
+      "passed": true,
+      "detail": "valid=false, codes=CREDIT_LIMIT,INSUFFICIENT_STOCK",
+      "expected": "valid:false + INSUFFICIENT_STOCK",
+      "actual": "INSUFFICIENT_STOCK"
+    },
+    {
+      "name": "Credit: over-limit validate blocks without override",
+      "passed": true,
+      "detail": "valid=false, msg=Credit limit exceeded (outstanding 0 + order 500 > limit 50)",
+      "expected": "CREDIT_LIMIT",
+      "actual": "CREDIT_LIMIT"
+    },
+    {
+      "name": "Credit: override without reason is refused",
+      "passed": true,
+      "detail": "status 201, body={\"valid\":false,\"errors\":[{\"code\":\"credit_limit\",\"message\":\"creditoverridereason is required when creditoverride is true — credit override cannot be silent\"}],\"w",
+      "expected": "400 or invalid / reason required",
+      "actual": 201
+    },
+    {
+      "name": "Credit: override with reason clears credit block",
+      "passed": true,
+      "detail": "valid=true, creditAllowed=true, errors=",
+      "expected": "no CREDIT_LIMIT error",
+      "actual": "ok"
+    },
+    {
+      "name": "Book: first book with idempotency key succeeds",
+      "passed": true,
+      "detail": "status 201, booked=true, id=bfd2937e-47c3-4f53-a219-96d7001e475f",
+      "expected": "booked order id",
+      "actual": "bfd2937e-47c3-4f53-a219-96d7001e475f"
+    },
+    {
+      "name": "Book idempotency: same key twice → one order id",
+      "passed": true,
+      "detail": "first=bfd2937e-47c3-4f53-a219-96d7001e475f, second=bfd2937e-47c3-4f53-a219-96d7001e475f, numbers=DO-90429540/DO-90429540",
+      "expected": "bfd2937e-47c3-4f53-a219-96d7001e475f",
+      "actual": "bfd2937e-47c3-4f53-a219-96d7001e475f"
+    },
+    {
+      "name": "Book: different idempotency keys create two orders",
+      "passed": true,
+      "detail": "idA=f5489557-cb61-4d55-866e-b24de32c7ebf, idB=5a69ebea-5ba6-4d32-a4b9-877a2f5d56b9",
+      "expected": "two distinct ids",
+      "actual": "distinct"
+    },
+    {
+      "name": "FEFO setup: late-expiry GRN posts",
+      "passed": true,
+      "detail": "{\"id\":\"912f7eb2-58ec-4b97-8d85-bd330e3444a0\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"e11a5c45-fccc-4f8a-8046-da4f7086c0",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "FEFO setup: early-expiry GRN posts",
+      "passed": true,
+      "detail": "{\"id\":\"6c526e41-a092-4c93-9a92-b8ff2e57fb93\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"e11a5c45-fccc-4f8a-8046-da4f7086c0",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Availability: FEFO first allocation is earliest expiry batch",
+      "passed": true,
+      "detail": "first=B-EARLY-90397943, allocs=B-EARLY-90397943:30,B-LATE-90397943:10",
+      "expected": "B-EARLY-90397943",
+      "actual": "B-EARLY-90397943"
+    },
+    {
+      "name": "Book→invoice: approve booked order",
+      "passed": true,
+      "detail": "status 201 {\"id\":\"c3097962-b9a0-4651-9b58-17dad5d05d96\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"e11a5c45-fccc-4f8a-8046-da4f7086c0",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Book→invoice: invoice posts",
+      "passed": true,
+      "detail": "status 201 {\"id\":\"363e6386-5df9-491d-b7b7-cdc4148b6f2e\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"orderId\":\"c3097962-b9a0-4651-9b58-17dad5d05d96\",",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Book→invoice: available qty decreases by paid+free",
+      "passed": true,
+      "detail": "before=100, after=98, need=2",
+      "expected": 98,
+      "actual": 98
+    },
+    {
+      "name": "Book→invoice: order status is invoiced",
+      "passed": true,
+      "detail": "status=invoiced",
+      "expected": "invoiced",
+      "actual": "invoiced"
+    },
+    {
+      "name": "Performance: soft timings recorded (not hard-fail)",
+      "passed": true,
+      "detail": "8 probes written to PHASE_5_TEST_RESULTS.json",
+      "expected": "recorded",
+      "actual": "recorded"
+    }
+  ],
+  "softPerformance": [
+    {
+      "label": "product-search",
+      "samples": [
+        1094
+      ],
+      "median": 1094,
+      "best": 1094,
+      "worst": 1094,
+      "budgetMs": 300,
+      "withinBudget": false,
+      "hardAssert": false,
+      "note": "soft timing only — not a pass/fail gate"
+    },
+    {
+      "label": "customer-search",
+      "samples": [
+        560
+      ],
+      "median": 560,
+      "best": 560,
+      "worst": 560,
+      "budgetMs": 300,
+      "withinBudget": false,
+      "hardAssert": false,
+      "note": "soft timing only — not a pass/fail gate"
+    },
+    {
+      "label": "barcode-lookup",
+      "samples": [
+        924
+      ],
+      "median": 924,
+      "best": 924,
+      "worst": 924,
+      "budgetMs": 300,
+      "withinBudget": false,
+      "hardAssert": false,
+      "note": "soft timing only — not a pass/fail gate"
+    },
+    {
+      "label": "pricing-quote",
+      "samples": [
+        2186
+      ],
+      "median": 2186,
+      "best": 2186,
+      "worst": 2186,
+      "budgetMs": 500,
+      "withinBudget": false,
+      "hardAssert": false,
+      "note": "soft timing only — not a pass/fail gate"
+    },
+    {
+      "label": "validate",
+      "samples": [
+        3487
+      ],
+      "median": 3487,
+      "best": 3487,
+      "worst": 3487,
+      "budgetMs": 500,
+      "withinBudget": false,
+      "hardAssert": false,
+      "note": "soft timing only — not a pass/fail gate"
+    },
+    {
+      "label": "book",
+      "samples": [
+        7685
+      ],
+      "median": 7685,
+      "best": 7685,
+      "worst": 7685,
+      "budgetMs": 1000,
+      "withinBudget": false,
+      "hardAssert": false,
+      "note": "soft timing only — not a pass/fail gate"
+    },
+    {
+      "label": "book-replay",
+      "samples": [
+        3852
+      ],
+      "median": 3852,
+      "best": 3852,
+      "worst": 3852,
+      "budgetMs": 1000,
+      "withinBudget": false,
+      "hardAssert": false,
+      "note": "soft timing only — not a pass/fail gate"
+    },
+    {
+      "label": "availability",
+      "samples": [
+        1354
+      ],
+      "median": 1354,
+      "best": 1354,
+      "worst": 1354,
+      "budgetMs": 300,
+      "withinBudget": false,
+      "hardAssert": false,
+      "note": "soft timing only — not a pass/fail gate"
+    }
+  ],
+  "timings": [
+    {
+      "label": "product-search",
+      "route": "/v1/pharmacy/sales/products/search",
+      "method": "GET",
+      "ms": 1094,
+      "status": 200
+    },
+    {
+      "label": "customer-search",
+      "route": "/v1/pharmacy/sales/customers/search",
+      "method": "GET",
+      "ms": 560,
+      "status": 200
+    },
+    {
+      "label": "barcode-lookup",
+      "route": "/v1/pharmacy/sales/products/barcode",
+      "method": "GET",
+      "ms": 924,
+      "status": 200
+    },
+    {
+      "label": "pricing-quote",
+      "route": "/v1/pharmacy/sales/pricing/quote",
+      "method": "POST",
+      "ms": 2186,
+      "status": 201
+    },
+    {
+      "label": "validate",
+      "route": "/v1/pharmacy/sales/validate",
+      "method": "POST",
+      "ms": 3487,
+      "status": 201
+    },
+    {
+      "label": "book",
+      "route": "/v1/pharmacy/sales/book",
+      "method": "POST",
+      "ms": 7685,
+      "status": 201
+    },
+    {
+      "label": "book-replay",
+      "route": "/v1/pharmacy/sales/book",
+      "method": "POST",
+      "ms": 3852,
+      "status": 201
+    },
+    {
+      "label": "availability",
+      "route": "/v1/pharmacy/inventory/availability",
+      "method": "GET",
+      "ms": 1354,
+      "status": 200
+    }
+  ]
+}

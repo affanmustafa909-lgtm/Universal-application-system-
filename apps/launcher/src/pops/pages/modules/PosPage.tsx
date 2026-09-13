@@ -123,6 +123,7 @@ import { PosCheckoutModal, type CheckoutModalMode } from "../../components/PosCh
 import { PosSplitBillModal, type SplitBillPart } from "../../components/PosSplitBillModal";
 import { ChangeOrderTableModal, type ChangeTableTicket } from "../../components/ChangeOrderTableModal";
 import { PosPayOutModal } from "../../components/PosPayOutModal";
+import { PosPayInModal } from "../../components/PosPayInModal";
 import { PosCreateAccountModal } from "../../components/PosCreateAccountModal";
 import { PosTeamChangeModal } from "../../components/PosTeamChangeModal";
 import { PosMyPrintersModal } from "../../components/PosMyPrintersModal";
@@ -403,6 +404,7 @@ export function PosPage(): JSX.Element {
   const [tableTransferTicket, setTableTransferTicket] = useState<ChangeTableTicket | null>(null);
   const [tableTransferPickerOpen, setTableTransferPickerOpen] = useState(false);
   const [payOutModalOpen, setPayOutModalOpen] = useState(false);
+  const [payInModalOpen, setPayInModalOpen] = useState(false);
   const [createAccountModalOpen, setCreateAccountModalOpen] = useState(false);
   const [teamChangeModalOpen, setTeamChangeModalOpen] = useState(false);
   const [shiftTeam, setShiftTeam] = useState(() => loadPosShiftTeam(branch?.code));
@@ -477,7 +479,11 @@ export function PosPage(): JSX.Element {
     return () => window.removeEventListener(POS_SETTINGS_CHANGED_EVENT, onPosSettingsChanged);
   }, [branch?.code]);
 
-  const taxPct = effectiveTaxPctForMode(posSettings, mode);
+  const taxPct = effectiveTaxPctForMode(
+    posSettings,
+    mode,
+    posSettings.taxByPaymentMethod ? "cash" : undefined,
+  );
   const defaultServicePct = effectiveServicePctForMode(posSettings, mode);
 
   useEffect(() => {
@@ -2574,7 +2580,7 @@ export function PosPage(): JSX.Element {
   return (
     <div className="flex min-h-[calc(100vh-4.25rem)] flex-col gap-2">
       {terminalBlocked ? (
-        <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+        <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
           This terminal is not authorized for POS access. Ask an admin to authorize it under Settings →
           Authorized terminals.
         </div>
@@ -2625,7 +2631,7 @@ export function PosPage(): JSX.Element {
                     }`}
                   >
                     <span className="truncate">{item.name}</span>
-                    <span className={`shrink-0 font-semibold ${index === searchHighlight ? "" : "text-amber-300"}`}>
+                    <span className={`shrink-0 font-semibold ${index === searchHighlight ? "" : "text-amber-700 dark:text-amber-300"}`}>
                       {hasPicker ? "From " : ""}
                       {price.toLocaleString()}
                     </span>
@@ -2667,6 +2673,15 @@ export function PosPage(): JSX.Element {
           </button>
           <button type="button" className={POS_TOOLBAR_BTN} onClick={openSplitBill}>
             Merge / split
+          </button>
+          <button
+            type="button"
+            className={POS_TOOLBAR_BTN}
+            title="Pay In — add cash to drawer"
+            onClick={() => setPayInModalOpen(true)}
+            disabled={!cashSessionQuery.data}
+          >
+            Pay In
           </button>
           <button
             type="button"
@@ -2748,7 +2763,7 @@ export function PosPage(): JSX.Element {
       </div>
 
       {menuQuery.isError ? (
-        <p className="shrink-0 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+        <p className="shrink-0 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
           Could not load menu — {(menuQuery.error as Error).message}
         </p>
       ) : null}
@@ -4008,10 +4023,20 @@ export function PosPage(): JSX.Element {
                 ) : null}
                 {showTaxRow ? (
                   <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                    <span>Tax {taxPct}%</span>
+                    <span>
+                      Tax {taxPct}%
+                      {posSettings.taxByPaymentMethod ? " · cash" : ""}
+                    </span>
                     <span className="tabular-nums text-slate-900 dark:text-slate-300">
                       {tax.toLocaleString()}
                     </span>
+                  </div>
+                ) : null}
+                {posSettings.taxEnabled && posSettings.taxByPaymentMethod ? (
+                  <div className="text-[10px] leading-snug text-slate-500 dark:text-slate-400">
+                    Rates: cash {posSettings.cashTaxPct}% · card {posSettings.cardTaxPct}% · online{" "}
+                    {posSettings.onlineTaxPct}% · default {posSettings.taxPct}% · service{" "}
+                    {posSettings.servicePct}%
                   </div>
                 ) : null}
                 {mode === "delivery" && deliveryCharge > 0 ? (
@@ -4192,6 +4217,13 @@ export function PosPage(): JSX.Element {
               }
             }
           }}
+        />
+      ) : null}
+
+      {payInModalOpen ? (
+        <PosPayInModal
+          onClose={() => setPayInModalOpen(false)}
+          onSuccess={(message) => setPrintNotice({ message, tone: "success" })}
         />
       ) : null}
 

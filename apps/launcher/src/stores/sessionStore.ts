@@ -23,6 +23,7 @@ export type SessionState = {
     refreshToken: string,
     claims: AccessTokenClaims,
     email?: string | null,
+    opts?: { offline?: boolean; lastOnlineAt?: string | null },
   ) => void;
   markOrderTypeModalShown: () => void;
   markSeatingModalShown: () => void;
@@ -47,15 +48,20 @@ export const useSessionStore = create<SessionState>()(
           offlineSession: offline,
           lastOnlineAt: offline ? s.lastOnlineAt : new Date().toISOString(),
         })),
-      setTokens: (accessToken, refreshToken, claims, email) =>
-        set((state) => ({
-          accessToken,
-          refreshToken,
-          claims,
-          email: email !== undefined ? email : state.email,
-          offlineSession: false,
-          lastOnlineAt: new Date().toISOString(),
-        })),
+      setTokens: (accessToken, refreshToken, claims, email, opts) =>
+        set((state) => {
+          const offline = Boolean(opts?.offline);
+          return {
+            accessToken,
+            refreshToken,
+            claims,
+            email: email !== undefined ? email : state.email,
+            offlineSession: offline,
+            lastOnlineAt: offline
+              ? (opts?.lastOnlineAt ?? state.lastOnlineAt)
+              : new Date().toISOString(),
+          };
+        }),
       markOrderTypeModalShown: () => set({ orderTypeModalShown: true }),
       markSeatingModalShown: () => set({ seatingModalShown: true }),
       markPharmacyPosContextModalShown: () => set({ pharmacyPosContextModalShown: true }),

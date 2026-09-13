@@ -280,6 +280,11 @@ const DistributionFinancialPeriodsPage = lazy(() =>
     default: m.DistributionFinancialPeriodsPage,
   })),
 );
+const DistributionCashSessionPage = lazy(() =>
+  import("../distribution/pages/DistributionPages").then((m) => ({
+    default: m.DistributionCashSessionPage,
+  })),
+);
 
 /** Medical Distribution routes. Rendered in distribution or suite editions. */
 export function distributionRoutes(): JSX.Element {
@@ -343,6 +348,7 @@ export function distributionRoutes(): JSX.Element {
       <Route path="distribution/audit" element={<DistributionAuditPage />} />
       <Route path="distribution/registers" element={<DistributionRegistersPage />} />
       <Route path="distribution/finance" element={<DistributionFinanceDashboardPage />} />
+      <Route path="distribution/cash" element={<DistributionCashSessionPage />} />
       <Route path="distribution/finance/gl" element={<DistributionGeneralLedgerPage />} />
       <Route path="distribution/finance/customer-ledger" element={<DistributionCustomerLedgerPage />} />
       <Route path="distribution/finance/supplier-ledger" element={<DistributionSupplierLedgerPage />} />

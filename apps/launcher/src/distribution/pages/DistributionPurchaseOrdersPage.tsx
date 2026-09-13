@@ -6,7 +6,7 @@ import {
   type PurchaseOrder,
   type SupplierHit,
 } from "../../pharmacy/api/pharmacy-purchase";
-import { formatPkr, useInvalidatePharmacy, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
+import { formatPkr, distLiveListOptions, useInvalidatePharmacy, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
 import { DistDrawerField, DistMasterDrawer } from "../components/DistMasterDrawer";
 import { DistPagination } from "../components/DistPagination";
 import { WarehouseFilter, errorMessage, formatDate, formatDateTime } from "../components/DistInventoryShared";
@@ -20,6 +20,7 @@ import {
   DistSelect,
   DistStatusBadge,
 } from "../ui/DistUi";
+import { printDistDocument } from "../lib/printDistOrder";
 
 const DIST = "/pops/distribution";
 
@@ -88,6 +89,17 @@ export function DistributionPurchaseOrdersPage(): JSX.Element {
     }
   }, [focus]);
 
+  useEffect(() => {
+    if (focus !== "new" && focus !== "composer") return;
+    setComposerOpen(true);
+    const sku = searchParams.get("sku");
+    const qParam = searchParams.get("q");
+    const seed = (sku || qParam || "").trim();
+    if (seed) productSearch.setQuery(seed);
+    // only when deep-link opens New PO
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus]);
+
   const listStatus = focus === "pending" && !status ? "pending" : status || undefined;
 
   const list = useQuery({
@@ -111,30 +123,31 @@ export function DistributionPurchaseOrdersPage(): JSX.Element {
         page,
         pageSize,
       }),
+    ...distLiveListOptions,
   });
 
   const detail = useQuery({
     queryKey: ["distribution", "purchase", "order", detailId, branchCode],
     enabled: Boolean(detailId) && Boolean(branchCode),
     queryFn: () => purchaseApi.getOrder(detailId!, branchCode),
+    ...distLiveListOptions,
   });
 
   const suppliers = useQuery({
     queryKey: ["distribution", "purchase", "supplier-search", branchCode, supplierQ],
-    enabled: Boolean(branchCode) && composerOpen && supplierQ.trim().length >= 1,
+    enabled: Boolean(branchCode) && composerOpen,
     queryFn: () =>
       purchaseApi.searchSuppliers({
         branchCode: branchCode!,
-        q: supplierQ.trim(),
+        q: supplierQ.trim() || undefined,
         limit: 30,
       }),
   });
 
-  const after = () => {
+  const after = async () => {
     setActionError(null);
-    invalidate();
-    void list.refetch();
-    void detail.refetch();
+    await invalidate();
+    await Promise.all([list.refetch(), detail.refetch()]);
   };
 
   const saveDraft = useMutation({
@@ -243,9 +256,15 @@ export function DistributionPurchaseOrdersPage(): JSX.Element {
           <DistButton onClick={openComposer}>New PO</DistButton>
         </div>
       }
-      error={!branch ? "Select a branch." : null}
+      error={
+        !branch
+          ? "Select a branch."
+          : list.isError
+            ? errorMessage(list.error, "Failed to load purchase orders")
+            : null
+      }
     >
-      {actionError ? <DistErrorBanner message={actionError} /> : null}
+      {actionError ? <DistErrorBanner message={actionError} onRetry={() => setActionError(null)} /> : null}
       {focus === "pending" ? (
         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
           Showing pending purchase work from PS Window. Adjust status filter to broaden the list.
@@ -369,9 +388,6 @@ export function DistributionPurchaseOrdersPage(): JSX.Element {
             <span className="mr-auto text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100">
               {formatPkr(totalsPreview)}
             </span>
-            <DistButton variant="secondary" onClick={() => setComposerOpen(false)}>
-              Cancel
-            </DistButton>
             <DistButton
               variant="secondary"
               disabled={!cart.lines.length || saveDraft.isPending}
@@ -626,6 +642,11 @@ export function DistributionPurchaseOrdersPage(): JSX.Element {
         footer={
           detail.data ? (
             <>
+              {detail.data.status === "submitted" ? (
+                <p className="w-full text-xs text-amber-800 dark:text-amber-200">
+                  Submitted — click Approve, then Receive GRN to complete the purchase.
+                </p>
+              ) : null}
               {actionsFor(detail.data.status).submit ? (
                 <DistButton
                   disabled={workflow.isPending}
@@ -665,6 +686,37 @@ export function DistributionPurchaseOrdersPage(): JSX.Element {
                   <DistButton>Receive GRN</DistButton>
                 </Link>
               ) : null}
+              <DistButton
+                variant="secondary"
+                onClick={() => {
+                  const po = detail.data!;
+                  void printDistDocument({
+                    title: "Purchase order",
+                    documentNumber: String(po.poNumber ?? po.id),
+                    partyLabel: "Supplier",
+                    partyName: String(po.supplierName ?? po.supplierId ?? "—"),
+                    branchName: branch?.name,
+                    branchCode: branch?.code,
+                    meta: [
+                      { label: "Status", value: String(po.status ?? "") },
+                      { label: "Date", value: String(po.orderDate ?? "") },
+                      { label: "Expected", value: String(po.expectedDate ?? "—") },
+                      { label: "Terms", value: String(po.paymentTerms ?? "—") },
+                    ],
+                    lines: (po.lines ?? []).map((l) => ({
+                      label: String(l.medicineName ?? l.medicineId ?? "Item"),
+                      qty: Number(l.quantity ?? 0),
+                      unitPrice: Number(l.unitCostPkr ?? 0),
+                      freeQty: Number(l.freeQuantity ?? 0) || undefined,
+                      note: l.medicineSku ? String(l.medicineSku) : undefined,
+                    })),
+                    totalPkr: Number(po.totalPkr ?? 0),
+                    footerNote: "Purchase order — distribution procurement",
+                  }).catch((e) => setActionError(errorMessage(e, "Print failed")));
+                }}
+              >
+                Print
+              </DistButton>
             </>
           ) : null
         }
@@ -682,11 +734,17 @@ export function DistributionPurchaseOrdersPage(): JSX.Element {
 function PoDetailBody({ po }: { po: PurchaseOrder }): JSX.Element {
   return (
     <div className="space-y-3">
+      {po.status === "submitted" ? (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
+          Already submitted. Do not submit again — Approve this PO, then open Receive GRN.
+        </p>
+      ) : null}
       <dl>
         <DistDrawerField
           label="Status"
           value={<DistStatusBadge status={po.status} tone={STATUS_TONES[po.status]} />}
         />
+        <DistDrawerField label="Supplier" value={po.supplierName ?? po.supplierId} />
         <DistDrawerField label="Date" value={formatDate(po.orderDate)} />
         <DistDrawerField label="Expected" value={formatDate(po.expectedDate)} />
         <DistDrawerField label="Total" value={formatPkr(po.totalPkr ?? 0)} />
@@ -700,7 +758,12 @@ function PoDetailBody({ po }: { po: PurchaseOrder }): JSX.Element {
             key={l.id ?? `${l.medicineId}-${i}`}
             className="rounded-md border border-slate-100 px-2 py-1.5 dark:border-slate-800"
           >
-            <div className="font-medium">{l.medicineName ?? l.medicineId}</div>
+            <div className="font-medium">
+              {l.medicineName ?? l.medicineId}
+              {l.medicineSku ? (
+                <span className="ml-1.5 text-xs font-normal text-slate-500">({l.medicineSku})</span>
+              ) : null}
+            </div>
             <div className="text-xs text-slate-500">
               Qty {l.quantity}
               {l.freeQuantity ? ` +${l.freeQuantity} free` : ""}

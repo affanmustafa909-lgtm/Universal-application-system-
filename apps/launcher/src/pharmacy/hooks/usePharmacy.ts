@@ -24,6 +24,18 @@ export const pharmacyRowHoverClass =
 export const pharmacyRowHoverNeutralClass =
   "hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors";
 
+/**
+ * Dist list/detail queries: keep the open page fresh without a manual browser refresh.
+ */
+export const distLiveListOptions = {
+  staleTime: 0,
+  refetchOnMount: "always" as const,
+  refetchOnWindowFocus: true,
+  refetchOnReconnect: true,
+  refetchInterval: 12_000,
+  refetchIntervalInBackground: false,
+};
+
 export function usePharmacyAccess() {
   const branch = usePopsStore((s) => s.branch);
   const claims = useSessionStore((s) => s.claims);
@@ -32,17 +44,22 @@ export function usePharmacyAccess() {
   return { branch, canManage };
 }
 
+/** Mark Dist/Pharmacy queries stale and refetch active ones immediately. */
 export function useInvalidatePharmacy(keys?: string[][]) {
   const queryClient = useQueryClient();
-  return () => {
+  return async () => {
     if (keys?.length) {
-      for (const key of keys) {
-        void queryClient.invalidateQueries({ queryKey: key });
-      }
+      await Promise.all(
+        keys.map((key) =>
+          queryClient.invalidateQueries({ queryKey: key, refetchType: "active" }),
+        ),
+      );
+      await Promise.all(
+        keys.map((key) => queryClient.refetchQueries({ queryKey: key, type: "active" })),
+      );
       return;
     }
-    // Prefer narrow keys from callers; full wipe is last resort and expensive.
-    void queryClient.invalidateQueries({
+    await queryClient.invalidateQueries({
       predicate: (q) => {
         const k0 = q.queryKey[0];
         return k0 === "pharmacy" || k0 === "distribution";

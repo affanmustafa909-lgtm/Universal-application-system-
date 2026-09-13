@@ -62,9 +62,13 @@ export function DistributionPurchaseReturnsPage(): JSX.Element {
 
   const suppliers = useQuery({
     queryKey: ["distribution", "purchase", "return-suppliers", branchCode, supplierQ],
-    enabled: Boolean(branchCode) && supplierQ.trim().length >= 1,
+    enabled: Boolean(branchCode),
     queryFn: () =>
-      purchaseApi.searchSuppliers({ branchCode: branchCode!, q: supplierQ.trim(), limit: 30 }),
+      purchaseApi.searchSuppliers({
+        branchCode: branchCode!,
+        q: supplierQ.trim() || undefined,
+        limit: 30,
+      }),
   });
 
   const grns = useQuery({
@@ -296,6 +300,7 @@ export function DistributionPurchaseReturnsPage(): JSX.Element {
                           prev.map((x) => (x.key === l.key ? { ...x, batchId } : x)),
                         )
                       }
+                      stockMode="adjustable"
                     />
                   </div>
                 </div>

@@ -16,6 +16,7 @@ import {
   DistSelect,
   DistStatusBadge,
 } from "../ui/DistUi";
+import { customerDisplayName, looksLikeUuid } from "../lib/customerDisplay";
 
 const DIST = "/pops/distribution";
 
@@ -231,22 +232,33 @@ export function DistributionDispatchPage(): JSX.Element {
           {
             key: "customer",
             header: "Customer",
-            render: (r) => r.tradeCustomerName ?? "—",
+            render: (r) => customerDisplayName(r),
           },
           {
             key: "source",
             header: "Order / Invoice",
-            render: (r) => r.orderNumber ?? r.invoiceNumber ?? "—",
+            render: (r) => {
+              const order = r.orderNumber && !looksLikeUuid(r.orderNumber) ? r.orderNumber : null;
+              const inv = r.invoiceNumber && !looksLikeUuid(r.invoiceNumber) ? r.invoiceNumber : null;
+              if (order && inv) return `${order} · ${inv}`;
+              return order ?? inv ?? "—";
+            },
           },
           {
             key: "rider",
             header: "Rider",
-            render: (r) => r.driverName ?? r.riderName ?? "—",
+            render: (r) => {
+              const name = r.driverName ?? r.riderName;
+              return name && !looksLikeUuid(name) ? name : "—";
+            },
           },
           {
             key: "route",
             header: "Route",
-            render: (r) => r.routeName ?? r.routeId ?? "—",
+            render: (r) => {
+              const name = r.routeName;
+              return name && !looksLikeUuid(name) ? name : "—";
+            },
           },
           {
             key: "actions",
@@ -287,14 +299,9 @@ export function DistributionDispatchPage(): JSX.Element {
         title={`Bulk assign + dispatch (${selected.size})`}
         onClose={() => !posting && setBulkOpen(false)}
         footer={
-          <div className="flex justify-end gap-2">
-            <DistButton variant="secondary" disabled={posting} onClick={() => setBulkOpen(false)}>
-              Cancel
-            </DistButton>
-            <DistButton disabled={posting || !selected.size} onClick={() => void runBulk()}>
-              {posting ? "Posting…" : "Assign & dispatch"}
-            </DistButton>
-          </div>
+          <DistButton disabled={posting || !selected.size} onClick={() => void runBulk()}>
+            {posting ? "Posting…" : "Assign & dispatch"}
+          </DistButton>
         }
       >
         <div className="space-y-3">

@@ -7,7 +7,6 @@ import {
   type CountScope,
   type CountType,
 } from "../../pharmacy/api/pharmacy-inventory";
-import { categoriesApi } from "../../pharmacy/api/pharmacy-masters";
 import { formatPkr, useInvalidatePharmacy, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
 import { DistMasterDrawer } from "../components/DistMasterDrawer";
 import { DistPagination } from "../components/DistPagination";
@@ -18,6 +17,7 @@ import {
   formatDate,
   formatDateTime,
   formatQty,
+  useCategoryOptions,
   useCompanyOptions,
   type PickedMedicine,
 } from "../components/DistInventoryShared";
@@ -84,11 +84,7 @@ export function DistributionStockCountPage(): JSX.Element {
   const [scopeMedicines, setScopeMedicines] = useState<PickedMedicine[]>([]);
 
   const companies = useCompanyOptions();
-  const categories = useQuery({
-    queryKey: ["distribution", "count-categories"],
-    staleTime: 60_000,
-    queryFn: () => categoriesApi.list({ page: 1, pageSize: 100, status: "active" }),
-  });
+  const categories = useCategoryOptions(branchCode);
 
   const resetPage = () => setPage(1);
 
@@ -132,7 +128,13 @@ export function DistributionStockCountPage(): JSX.Element {
     mutationFn: () => {
       const scope: CountScope = {};
       if (scopeCompanyId) scope.companyId = scopeCompanyId;
-      if (scopeCategoryId) scope.categoryId = scopeCategoryId;
+      if (scopeCategoryId) {
+        if (scopeCategoryId.startsWith("name:")) {
+          scope.category = scopeCategoryId.slice("name:".length);
+        } else {
+          scope.categoryId = scopeCategoryId;
+        }
+      }
       if (scopeRack.trim()) scope.rackLocation = scopeRack.trim();
       if (scopeMedicines.length) scope.medicineIds = scopeMedicines.map((m) => m.id);
       return countsApi.create({
@@ -575,9 +577,6 @@ export function DistributionStockCountPage(): JSX.Element {
         onClose={() => setCreateOpen(false)}
         footer={
           <>
-            <DistButton variant="ghost" onClick={() => setCreateOpen(false)}>
-              Cancel
-            </DistButton>
             <DistButton
               disabled={!branchCode || !createWarehouse || create.isPending}
               onClick={() => create.mutate()}
@@ -660,10 +659,31 @@ export function DistributionStockCountPage(): JSX.Element {
                       </option>
                     ))}
                   </DistSelect>
+                  {categories.isError ? (
+                    <span className="mt-1 block text-red-600 dark:text-red-400">
+                      {errorMessage(categories.error, "Failed to load categories")}
+                    </span>
+                  ) : null}
+                  {!categories.isLoading && !categories.isError && (categories.data?.items.length ?? 0) === 0 ? (
+                    <span className="mt-1 block text-amber-700 dark:text-amber-300">
+                      No categories on products yet — add a category on medicines or under Product masters.
+                    </span>
+                  ) : null}
                 </label>
                 <label className="text-xs text-slate-500 sm:col-span-2">
                   Rack location contains
-                  <DistInput className="mt-1" value={scopeRack} onChange={(e) => setScopeRack(e.target.value)} />
+                  <DistInput
+                    className="mt-1"
+                    value={scopeRack}
+                    placeholder="Optional — leave blank unless products have rack set"
+                    onChange={(e) => setScopeRack(e.target.value)}
+                  />
+                  {scopeRack.trim() ? (
+                    <span className="mt-1 block text-[11px] text-amber-700 dark:text-amber-300">
+                      Only products whose rack location contains “{scopeRack.trim()}” will be counted.
+                      Wrong text = empty sheet error.
+                    </span>
+                  ) : null}
                 </label>
               </div>
               <div className="space-y-1">

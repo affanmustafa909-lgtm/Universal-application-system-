@@ -249,7 +249,9 @@ export function resolveBusinessSystemFromPath(pathname: string): BusinessSystemI
 
 /** True for restaurant-only screens (not pharmacy, store, distribution, or shared ERP modules). */
 export function isRestaurantExclusivePath(pathname: string): boolean {
-  const sub = pathname.replace(/^\/pops\/?/, "").replace(/\/$/, "");
+  const sub = String(pathname ?? "")
+    .replace(/^\/pops\/?/, "")
+    .replace(/\/$/, "");
   if (sub.startsWith("pharmacy/") || sub === "pharmacy") return false;
   if (sub.startsWith("distribution/") || sub === "distribution") return false;
   if (sub.startsWith("store/") || sub === "store") return false;

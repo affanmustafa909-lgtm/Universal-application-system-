@@ -25,6 +25,24 @@ const DESKTOP_FEEDS = {
     downloadTag: (v: string) =>
       `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/Restaurant-Management-System_${v}_x64-setup.exe`,
   },
+  "general-store": {
+    manifest: "latest-general-store.json",
+    label: "Desktop · General Store",
+    downloadTag: (v: string) =>
+      `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/General-Store-Management-System_${v}_x64-setup.exe`,
+  },
+  pharmacy: {
+    manifest: "latest-pharmacy.json",
+    label: "Desktop · Pharmacy",
+    downloadTag: (v: string) =>
+      `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/Pharmacy-Management-System_${v}_x64-setup.exe`,
+  },
+  distribution: {
+    manifest: "latest-distribution.json",
+    label: "Desktop · Distribution",
+    downloadTag: (v: string) =>
+      `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/Medical-Distribution-System_${v}_x64-setup.exe`,
+  },
 } as const;
 
 const ICE_CREAM_FEED = {
@@ -54,7 +72,7 @@ type GhRelease = {
   assets?: Array<{ name: string; browser_download_url: string }>;
 };
 
-function versionFromTag(tag: string, prefix: "desktop" | "mobile"): string | null {
+function versionFromTag(tag: string, prefix: "desktop" | "mobile" | "ice-cream"): string | null {
   const m = tag.match(new RegExp(`^${prefix}-v(.+)$`, "i"));
   return m?.[1]?.trim() || null;
 }

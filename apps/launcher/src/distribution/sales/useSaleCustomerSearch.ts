@@ -1,9 +1,14 @@
+import { isOnline } from "@platform/connectivity";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   searchSaleCustomers,
   type SaleCustomerHit,
 } from "../../pharmacy/api/pharmacy-sales";
+import {
+  cacheDistCustomers,
+  searchCachedDistCustomers,
+} from "../lib/distOfflineSales";
 
 const DEBOUNCE_MS = 250;
 
@@ -24,17 +29,30 @@ export function useSaleCustomerSearch(opts: {
     setHighlightIndex(0);
   }, [debounced]);
 
-  const enabled = Boolean(opts.enabled && debounced.length >= 1);
+  const enabled = Boolean(opts.enabled);
+  const branchCode = opts.branchCode ?? "";
 
   const search = useQuery({
-    queryKey: ["pharmacy", "sales", "customer-search", opts.branchCode ?? "", debounced],
-    enabled,
-    queryFn: () =>
-      searchSaleCustomers({
-        branchCode: opts.branchCode,
-        q: debounced,
-        limit: 25,
-      }),
+    // Always run when branch is set — do not gate on isOnline(); that hid the
+    // whole customer list when connectivity falsely reported offline.
+    queryKey: ["pharmacy", "sales", "customer-search", branchCode, debounced],
+    enabled: enabled && Boolean(branchCode),
+    queryFn: async () => {
+      if (!isOnline()) {
+        return searchCachedDistCustomers(branchCode, debounced);
+      }
+      try {
+        const rows = await searchSaleCustomers({
+          branchCode: opts.branchCode,
+          q: debounced,
+          limit: 40,
+        });
+        if (branchCode) cacheDistCustomers(branchCode, rows);
+        return rows;
+      } catch {
+        return searchCachedDistCustomers(branchCode, debounced);
+      }
+    },
     staleTime: 20_000,
     placeholderData: (prev) => prev,
   });
@@ -48,7 +66,7 @@ export function useSaleCustomerSearch(opts: {
     debounced,
     results,
     isLoading: search.isFetching && enabled,
-    isError: search.isError,
+    isError: search.isError && results.length === 0,
     error: search.error instanceof Error ? search.error.message : null,
     highlightIndex,
     setHighlightIndex,

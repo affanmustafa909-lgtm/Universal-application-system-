@@ -212,6 +212,18 @@ export const createCategory = categoriesApi.create;
 export const updateCategory = categoriesApi.update;
 export const setCategoryStatus = categoriesApi.setStatus;
 
+export type CategoryPickerItem = {
+  id: string;
+  code: string;
+  name: string;
+  source: "master" | "medicine";
+};
+
+/** Master categories plus distinct medicine free-text categories. */
+export function listCategoryPicker(filters?: { branchCode?: string; status?: string }) {
+  return getJson<{ items: CategoryPickerItem[] }>(withQs("/v1/pharmacy/masters/categories/picker", filters));
+}
+
 export const listDosageForms = dosageFormsApi.list;
 export const createDosageForm = dosageFormsApi.create;
 export const updateDosageForm = dosageFormsApi.update;

@@ -1,0 +1,103 @@
+{
+  "phase": 8,
+  "runId": "90490993",
+  "api": "https://backend-system-production-28a3.up.railway.app",
+  "generatedAt": "2026-09-13T09:08:22.997Z",
+  "summary": {
+    "passed": 14,
+    "failed": 0,
+    "total": 14
+  },
+  "results": [
+    {
+      "name": "auth.login",
+      "passed": true,
+      "detail": "DIST-HQ"
+    },
+    {
+      "name": "achievement.50pct",
+      "passed": true,
+      "detail": "500k/1m",
+      "expected": 50,
+      "actual": 50
+    },
+    {
+      "name": "achievement.zeroTarget",
+      "passed": true,
+      "detail": "must be N/A not Infinity",
+      "expected": null,
+      "actual": null
+    },
+    {
+      "name": "field.dashboard",
+      "passed": true,
+      "detail": "{\"asOf\":\"2026-09-13T09:08:13.993Z\",\"date\":\"2026-09-13\",\"kpis\":{\"totalSalesmen\":1,\"activeSalesmen\":1,\"plannedVisits\":0,\"completedVisits\":0,\"inProgress\":0,\"missedVisits\":0,\"cancelledVisits\":0,\"orders\":1",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "name": "field.dashboard.kpis",
+      "passed": true,
+      "detail": "kpis object"
+    },
+    {
+      "name": "field.dashboard.noInfinity",
+      "passed": true,
+      "detail": "null"
+    },
+    {
+      "name": "field.salesmen",
+      "passed": true,
+      "detail": "{\"items\":[],\"page\":1,\"pageSize\":10,\"total\":0,\"totalPages\":1}",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "name": "field.visits.list",
+      "passed": true,
+      "detail": "{\"items\":[],\"page\":1,\"pageSize\":25,\"total\":0,\"totalPages\":1}",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "name": "field.pjp.list",
+      "passed": true,
+      "detail": "{\"items\":[{\"id\":\"93ff1b6a-548a-4fdf-bcc5-76464c935b1b\",\"pjpNumber\":\"PJP-2026-00003\",\"name\":\"QA Show Plan\",\"employeeId\":\"9e9737d0-e00c-404c-8e1d-d3c634ce7026\",\"employeeName\":\"Bilal Ahmed\",\"territoryId\"",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "name": "field.targets.list",
+      "passed": true,
+      "detail": "{\"items\":[{\"id\":\"a99fd620-d5f2-4d4c-ad98-8671fc4d2c81\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"periodType\":\"monthly\",\"periodStart\":\"2026-10-01\",\"periodEnd\":\"2026-10-31\",\"employeeId\":n",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "name": "field.performance",
+      "passed": true,
+      "detail": "{\"from\":\"2026-09-13\",\"to\":\"2026-09-13\",\"group\":\"salesman\",\"items\":[]}",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "name": "field.generate.idempotent",
+      "passed": true,
+      "detail": "first created=0 second created=0 skipped=0"
+    },
+    {
+      "name": "field.target.create",
+      "passed": true,
+      "detail": "SKIPPED: Overlapping active target exists — pass changeReason to revise",
+      "expected": "skipped",
+      "actual": "skipped"
+    },
+    {
+      "name": "field.closeDay.rejectsToday",
+      "passed": true,
+      "detail": "Only past planned dates can be auto-missed",
+      "expected": 400,
+      "actual": 400
+    }
+  ]
+}

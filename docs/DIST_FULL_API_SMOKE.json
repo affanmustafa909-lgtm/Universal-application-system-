@@ -1,0 +1,1066 @@
+{
+  "api": "https://backend-system-production-28a3.up.railway.app",
+  "email": "admin.distribution@pops.demo",
+  "branch": "DIST-HQ",
+  "at": "2026-09-13T09:01:05.483Z",
+  "total": 103,
+  "passed": 100,
+  "failed": 3,
+  "byGroup": {
+    "auth": {
+      "pass": 1,
+      "fail": 0
+    },
+    "lookup": {
+      "pass": 2,
+      "fail": 0
+    },
+    "masters": {
+      "pass": 7,
+      "fail": 0
+    },
+    "companies": {
+      "pass": 1,
+      "fail": 0
+    },
+    "warehouses": {
+      "pass": 1,
+      "fail": 0
+    },
+    "geo": {
+      "pass": 5,
+      "fail": 0
+    },
+    "customers": {
+      "pass": 1,
+      "fail": 0
+    },
+    "medicines": {
+      "pass": 2,
+      "fail": 0
+    },
+    "batches": {
+      "pass": 1,
+      "fail": 0
+    },
+    "inventory": {
+      "pass": 11,
+      "fail": 0
+    },
+    "purchase": {
+      "pass": 10,
+      "fail": 0
+    },
+    "sales": {
+      "pass": 3,
+      "fail": 0
+    },
+    "orders": {
+      "pass": 4,
+      "fail": 0
+    },
+    "dash": {
+      "pass": 7,
+      "fail": 0
+    },
+    "pricing": {
+      "pass": 3,
+      "fail": 0
+    },
+    "delivery": {
+      "pass": 5,
+      "fail": 0
+    },
+    "collections": {
+      "pass": 7,
+      "fail": 0
+    },
+    "field": {
+      "pass": 11,
+      "fail": 0
+    },
+    "finance": {
+      "pass": 5,
+      "fail": 0
+    },
+    "io": {
+      "pass": 3,
+      "fail": 0
+    },
+    "reports": {
+      "pass": 8,
+      "fail": 0
+    },
+    "write": {
+      "pass": 2,
+      "fail": 3
+    }
+  },
+  "failures": [
+    {
+      "group": "write",
+      "name": "POST field-force/targets",
+      "passed": false,
+      "status": 0,
+      "ms": 0,
+      "error": "no salesman",
+      "note": ""
+    },
+    {
+      "group": "write",
+      "name": "POST field-force/visits/generate",
+      "passed": false,
+      "status": 500,
+      "ms": 367,
+      "error": "Internal server error",
+      "note": ""
+    },
+    {
+      "group": "write",
+      "name": "POST sales/pricing/quote",
+      "passed": false,
+      "status": 500,
+      "ms": 297,
+      "error": "Internal server error",
+      "note": ""
+    }
+  ],
+  "ids": {
+    "warehouseId": "dcd037da-a89a-4b23-b22c-f9d8f92c8619",
+    "customerId": "402f1043-bbe2-4a55-86cf-402e7294232e",
+    "medicineId": "ee3c862f-4c73-4dec-8b7b-6b48bbc8acd5",
+    "poId": "ae215713-f9fe-47a9-9e2f-b56c8e91710b",
+    "routeId": "3204ab17-8993-4c35-84cc-eec6d697a204",
+    "pjpId": "93ff1b6a-548a-4fdf-bcc5-76464c935b1b",
+    "newPoId": "a06a9c29-2559-42b1-a920-f49ffe3a9981"
+  },
+  "results": [
+    {
+      "group": "auth",
+      "name": "POST /v1/auth/login",
+      "passed": true,
+      "status": 201,
+      "ms": 1589,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "lookup",
+      "name": "GET /v1/pharmacy/lookup",
+      "passed": true,
+      "status": 200,
+      "ms": 3567,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "lookup",
+      "name": "GET /v1/pharmacy/code-catalog",
+      "passed": true,
+      "status": 200,
+      "ms": 317,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "masters",
+      "name": "GET /v1/pharmacy/masters/overview",
+      "passed": true,
+      "status": 200,
+      "ms": 1383,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "masters",
+      "name": "GET /v1/pharmacy/masters/data-quality",
+      "passed": true,
+      "status": 200,
+      "ms": 1340,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "masters",
+      "name": "GET /v1/pharmacy/masters/generics",
+      "passed": true,
+      "status": 200,
+      "ms": 862,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "masters",
+      "name": "GET /v1/pharmacy/masters/brands",
+      "passed": true,
+      "status": 200,
+      "ms": 552,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "masters",
+      "name": "GET /v1/pharmacy/masters/categories",
+      "passed": true,
+      "status": 200,
+      "ms": 547,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "masters",
+      "name": "GET /v1/pharmacy/masters/units",
+      "passed": true,
+      "status": 200,
+      "ms": 542,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "masters",
+      "name": "GET /v1/pharmacy/masters/medicines",
+      "passed": true,
+      "status": 200,
+      "ms": 722,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "companies",
+      "name": "GET /v1/pharmacy/companies",
+      "passed": true,
+      "status": 200,
+      "ms": 815,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "warehouses",
+      "name": "GET /v1/pharmacy/warehouses",
+      "passed": true,
+      "status": 200,
+      "ms": 672,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "geo",
+      "name": "GET /v1/pharmacy/provinces",
+      "passed": true,
+      "status": 200,
+      "ms": 424,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "geo",
+      "name": "GET /v1/pharmacy/cities",
+      "passed": true,
+      "status": 200,
+      "ms": 435,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "geo",
+      "name": "GET /v1/pharmacy/areas",
+      "passed": true,
+      "status": 200,
+      "ms": 428,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "geo",
+      "name": "GET /v1/pharmacy/routes",
+      "passed": true,
+      "status": 200,
+      "ms": 408,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "geo",
+      "name": "GET /v1/pharmacy/territories",
+      "passed": true,
+      "status": 200,
+      "ms": 405,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "customers",
+      "name": "GET /v1/pharmacy/trade-customers",
+      "passed": true,
+      "status": 200,
+      "ms": 558,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "medicines",
+      "name": "GET /v1/pharmacy/medicines",
+      "passed": true,
+      "status": 200,
+      "ms": 820,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "medicines",
+      "name": "GET /v1/pharmacy/medicines/:id/batches",
+      "passed": true,
+      "status": 200,
+      "ms": 670,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "batches",
+      "name": "GET /v1/pharmacy/batches",
+      "passed": true,
+      "status": 200,
+      "ms": 566,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "inventory",
+      "name": "GET inventory/dashboard",
+      "passed": true,
+      "status": 200,
+      "ms": 3989,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "inventory",
+      "name": "GET inventory/stock",
+      "passed": true,
+      "status": 200,
+      "ms": 1177,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "inventory",
+      "name": "GET inventory/batches",
+      "passed": true,
+      "status": 200,
+      "ms": 940,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "inventory",
+      "name": "GET inventory/expiry/buckets",
+      "passed": true,
+      "status": 200,
+      "ms": 930,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "inventory",
+      "name": "GET inventory/ledger",
+      "passed": true,
+      "status": 200,
+      "ms": 955,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "inventory",
+      "name": "GET inventory/valuation/summary",
+      "passed": true,
+      "status": 200,
+      "ms": 822,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "inventory",
+      "name": "GET inventory/reorder",
+      "passed": true,
+      "status": 200,
+      "ms": 934,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "inventory",
+      "name": "GET inventory/transfers",
+      "passed": true,
+      "status": 200,
+      "ms": 669,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "inventory",
+      "name": "GET inventory/adjustments",
+      "passed": true,
+      "status": 200,
+      "ms": 687,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "inventory",
+      "name": "GET inventory/counts",
+      "passed": true,
+      "status": 200,
+      "ms": 1139,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "inventory",
+      "name": "GET inventory/settings",
+      "passed": true,
+      "status": 200,
+      "ms": 677,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "purchase",
+      "name": "GET purchase/dashboard",
+      "passed": true,
+      "status": 200,
+      "ms": 2610,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "purchase",
+      "name": "GET purchase/requisitions",
+      "passed": true,
+      "status": 200,
+      "ms": 762,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "purchase",
+      "name": "GET purchase/orders",
+      "passed": true,
+      "status": 200,
+      "ms": 709,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "purchase",
+      "name": "GET purchase/orders/:id",
+      "passed": true,
+      "status": 200,
+      "ms": 791,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "purchase",
+      "name": "GET purchase/grns",
+      "passed": true,
+      "status": 200,
+      "ms": 1020,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "purchase",
+      "name": "GET purchase/invoices",
+      "passed": true,
+      "status": 200,
+      "ms": 1246,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "purchase",
+      "name": "GET purchase/returns",
+      "passed": true,
+      "status": 200,
+      "ms": 793,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "purchase",
+      "name": "GET purchase/suppliers/search",
+      "passed": true,
+      "status": 200,
+      "ms": 632,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "purchase",
+      "name": "GET purchase-orders (legacy)",
+      "passed": true,
+      "status": 200,
+      "ms": 761,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "purchase",
+      "name": "GET grns (legacy)",
+      "passed": true,
+      "status": 200,
+      "ms": 743,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "sales",
+      "name": "GET sales/products/search",
+      "passed": true,
+      "status": 200,
+      "ms": 1088,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "sales",
+      "name": "GET sales/customers/search",
+      "passed": true,
+      "status": 200,
+      "ms": 541,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "sales",
+      "name": "GET sales/held",
+      "passed": true,
+      "status": 200,
+      "ms": 533,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "orders",
+      "name": "GET distribution/orders",
+      "passed": true,
+      "status": 200,
+      "ms": 632,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "orders",
+      "name": "GET distribution/invoices",
+      "passed": true,
+      "status": 200,
+      "ms": 1035,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "orders",
+      "name": "GET distribution/ps-window",
+      "passed": true,
+      "status": 200,
+      "ms": 1427,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "orders",
+      "name": "GET distribution/ps-window/widgets",
+      "passed": true,
+      "status": 200,
+      "ms": 776,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "dash",
+      "name": "GET distribution/dashboard/summary",
+      "passed": true,
+      "status": 200,
+      "ms": 1410,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "dash",
+      "name": "GET …/sales-trend",
+      "passed": true,
+      "status": 200,
+      "ms": 549,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "dash",
+      "name": "GET …/top-products",
+      "passed": true,
+      "status": 200,
+      "ms": 551,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "dash",
+      "name": "GET …/top-customers",
+      "passed": true,
+      "status": 200,
+      "ms": 877,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "dash",
+      "name": "GET …/action-center",
+      "passed": true,
+      "status": 200,
+      "ms": 563,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "dash",
+      "name": "GET …/stock-health",
+      "passed": true,
+      "status": 200,
+      "ms": 549,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "dash",
+      "name": "GET …/field-force",
+      "passed": true,
+      "status": 200,
+      "ms": 680,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "pricing",
+      "name": "GET pricing/lists",
+      "passed": true,
+      "status": 200,
+      "ms": 1341,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "pricing",
+      "name": "GET pricing/schemes",
+      "passed": true,
+      "status": 200,
+      "ms": 432,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "pricing",
+      "name": "GET pricing/resolve",
+      "passed": true,
+      "status": 200,
+      "ms": 542,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "delivery",
+      "name": "GET delivery/dashboard",
+      "passed": true,
+      "status": 200,
+      "ms": 550,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "delivery",
+      "name": "GET delivery/drivers",
+      "passed": true,
+      "status": 200,
+      "ms": 671,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "delivery",
+      "name": "GET delivery/vehicles",
+      "passed": true,
+      "status": 200,
+      "ms": 697,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "delivery",
+      "name": "GET delivery/orders",
+      "passed": true,
+      "status": 200,
+      "ms": 678,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "delivery",
+      "name": "GET distribution/deliveries (legacy)",
+      "passed": true,
+      "status": 200,
+      "ms": 562,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "collections",
+      "name": "GET collections/dashboard",
+      "passed": true,
+      "status": 200,
+      "ms": 591,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "collections",
+      "name": "GET collections/aging",
+      "passed": true,
+      "status": 200,
+      "ms": 668,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "collections",
+      "name": "GET collections/recovery",
+      "passed": true,
+      "status": 200,
+      "ms": 962,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "collections",
+      "name": "GET collections/promises",
+      "passed": true,
+      "status": 200,
+      "ms": 546,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "collections",
+      "name": "GET /v1/pharmacy/collections",
+      "passed": true,
+      "status": 200,
+      "ms": 690,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "collections",
+      "name": "GET distribution/collections (legacy)",
+      "passed": true,
+      "status": 200,
+      "ms": 671,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "collections",
+      "name": "GET trade-customers/:id/ledger",
+      "passed": true,
+      "status": 200,
+      "ms": 712,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "field",
+      "name": "GET field-force/dashboard",
+      "passed": true,
+      "status": 200,
+      "ms": 1734,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "field",
+      "name": "GET field-force/performance",
+      "passed": true,
+      "status": 200,
+      "ms": 1082,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "field",
+      "name": "GET field-force/coverage",
+      "passed": true,
+      "status": 200,
+      "ms": 549,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "field",
+      "name": "GET field-force/salesmen",
+      "passed": true,
+      "status": 200,
+      "ms": 554,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "field",
+      "name": "GET field-force/routes/:id",
+      "passed": true,
+      "status": 200,
+      "ms": 538,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "field",
+      "name": "GET field-force/pjp",
+      "passed": true,
+      "status": 200,
+      "ms": 557,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "field",
+      "name": "GET field-force/pjp/:id",
+      "passed": true,
+      "status": 200,
+      "ms": 711,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "field",
+      "name": "GET field-force/visits",
+      "passed": true,
+      "status": 200,
+      "ms": 686,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "field",
+      "name": "GET field-force/targets",
+      "passed": true,
+      "status": 200,
+      "ms": 2787,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "field",
+      "name": "GET employees-picker",
+      "passed": true,
+      "status": 200,
+      "ms": 415,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "field",
+      "name": "GET sales-force",
+      "passed": true,
+      "status": 200,
+      "ms": 424,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "finance",
+      "name": "GET finance/dashboard",
+      "passed": true,
+      "status": 200,
+      "ms": 4283,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "finance",
+      "name": "GET finance/reconciliation",
+      "passed": true,
+      "status": 200,
+      "ms": 2520,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "finance",
+      "name": "GET finance/customer-ledger/:id",
+      "passed": true,
+      "status": 200,
+      "ms": 1381,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "finance",
+      "name": "GET accounting/ledger",
+      "passed": true,
+      "status": 200,
+      "ms": 833,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "finance",
+      "name": "GET accounting/periods",
+      "passed": true,
+      "status": 200,
+      "ms": 541,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "io",
+      "name": "GET io/modules",
+      "passed": true,
+      "status": 200,
+      "ms": 407,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "io",
+      "name": "GET io/jobs",
+      "passed": true,
+      "status": 200,
+      "ms": 562,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "io",
+      "name": "GET io/audit",
+      "passed": true,
+      "status": 200,
+      "ms": 551,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "reports",
+      "name": "GET reports/purchase-statement",
+      "passed": true,
+      "status": 200,
+      "ms": 553,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "reports",
+      "name": "GET reports/reorder-suggestions",
+      "passed": true,
+      "status": 200,
+      "ms": 566,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "reports",
+      "name": "GET distribution/reports/daily-sales",
+      "passed": true,
+      "status": 200,
+      "ms": 564,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "reports",
+      "name": "GET distribution/reports/outstanding-aging",
+      "passed": true,
+      "status": 200,
+      "ms": 780,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "reports",
+      "name": "GET distribution/reports/stock-near-expiry",
+      "passed": true,
+      "status": 200,
+      "ms": 762,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "reports",
+      "name": "GET distribution/reports/pending-deliveries",
+      "passed": true,
+      "status": 200,
+      "ms": 548,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "reports",
+      "name": "GET distribution/reports/visit-coverage",
+      "passed": true,
+      "status": 200,
+      "ms": 691,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "reports",
+      "name": "GET distribution/reports/po-register",
+      "passed": true,
+      "status": 200,
+      "ms": 546,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "write",
+      "name": "POST field-force/targets",
+      "passed": false,
+      "status": 0,
+      "ms": 0,
+      "error": "no salesman",
+      "note": ""
+    },
+    {
+      "group": "write",
+      "name": "POST field-force/visits/generate",
+      "passed": false,
+      "status": 500,
+      "ms": 367,
+      "error": "Internal server error",
+      "note": ""
+    },
+    {
+      "group": "write",
+      "name": "POST purchase/orders",
+      "passed": true,
+      "status": 201,
+      "ms": 1226,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "write",
+      "name": "GET new purchase/orders/:id",
+      "passed": true,
+      "status": 200,
+      "ms": 670,
+      "error": null,
+      "note": ""
+    },
+    {
+      "group": "write",
+      "name": "POST sales/pricing/quote",
+      "passed": false,
+      "status": 500,
+      "ms": 297,
+      "error": "Internal server error",
+      "note": ""
+    }
+  ]
+}

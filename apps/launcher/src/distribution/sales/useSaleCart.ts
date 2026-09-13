@@ -20,6 +20,9 @@ export type SaleCartLine = {
   fulfillable?: boolean | null;
   companyName?: string | null;
   pack?: string | null;
+  genericName?: string | null;
+  tabletsPerStrip?: number | null;
+  stripsPerBox?: number | null;
 };
 
 export type SaleCartAddInput = {
@@ -36,6 +39,9 @@ export type SaleCartAddInput = {
   allocations?: AvailabilityAllocation[];
   companyName?: string | null;
   pack?: string | null;
+  genericName?: string | null;
+  tabletsPerStrip?: number | null;
+  stripsPerBox?: number | null;
   availableQty?: number | null;
 };
 
@@ -96,6 +102,9 @@ export function useSaleCart() {
           availableQty: input.availableQty ?? cur.availableQty,
           companyName: input.companyName ?? cur.companyName,
           pack: input.pack ?? cur.pack,
+          genericName: input.genericName ?? cur.genericName,
+          tabletsPerStrip: input.tabletsPerStrip ?? cur.tabletsPerStrip,
+          stripsPerBox: input.stripsPerBox ?? cur.stripsPerBox,
         };
         return next;
       }
@@ -119,6 +128,9 @@ export function useSaleCart() {
           availableQty: input.availableQty ?? null,
           companyName: input.companyName ?? null,
           pack: input.pack ?? null,
+          genericName: input.genericName ?? null,
+          tabletsPerStrip: input.tabletsPerStrip ?? null,
+          stripsPerBox: input.stripsPerBox ?? null,
           fulfillable: null,
           shortfall: null,
         },

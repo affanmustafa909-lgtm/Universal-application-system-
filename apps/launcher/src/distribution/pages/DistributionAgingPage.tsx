@@ -19,6 +19,7 @@ import {
   DistPageShell,
   exportRowsToCsv,
 } from "../ui/DistUi";
+import { customerDisplayName } from "../lib/customerDisplay";
 
 const DIST = "/pops/distribution";
 
@@ -271,7 +272,7 @@ export function DistributionAgingPage(): JSX.Element {
         }
         columns={[
           { key: "code", header: "Code", render: (r) => r.code ?? "—" },
-          { key: "name", header: "Customer" },
+          { key: "name", header: "Customer", render: (r) => customerDisplayName(r) },
           {
             key: "area",
             header: "Area",

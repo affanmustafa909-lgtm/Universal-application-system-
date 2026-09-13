@@ -327,9 +327,6 @@ export function DistributionPurchaseRequisitionsPage(): JSX.Element {
         onClose={() => setCreateOpen(false)}
         footer={
           <>
-            <DistButton variant="secondary" onClick={() => setCreateOpen(false)}>
-              Cancel
-            </DistButton>
             <DistButton
               disabled={!cart.lines.length || create.isPending}
               onClick={() => create.mutate()}
@@ -518,15 +515,27 @@ export function DistributionPurchaseRequisitionsPage(): JSX.Element {
               <DistDrawerField label="Status" value={<DistStatusBadge status={detail.data.status} />} />
               <DistDrawerField label="Priority" value={detail.data.priority} />
               <DistDrawerField label="Notes" value={detail.data.notes} />
-              <DistDrawerField label="Reject" value={detail.data.rejectReason} />
+              {detail.data.rejectReason ? (
+                <DistDrawerField label="Reject reason" value={detail.data.rejectReason} />
+              ) : null}
             </dl>
+            {detail.data.status === "submitted" ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
+                Already submitted — click Approve (then Convert to PO). Do not submit again.
+              </p>
+            ) : null}
             <ul className="space-y-2 text-sm">
               {(detail.data.lines ?? []).map((l, i) => (
                 <li
                   key={l.id ?? `${l.medicineId}-${i}`}
                   className="rounded-md border border-slate-100 px-2 py-1.5 dark:border-slate-800"
                 >
-                  <div className="font-medium">{l.medicineName ?? l.medicineId}</div>
+                  <div className="font-medium">
+                    {l.medicineName ?? l.medicineId}
+                    {l.medicineSku ? (
+                      <span className="ml-1.5 text-xs font-normal text-slate-500">({l.medicineSku})</span>
+                    ) : null}
+                  </div>
                   <div className="text-xs text-slate-500">
                     Qty {l.requestedQty}
                     {l.lastPurchasePricePkr != null

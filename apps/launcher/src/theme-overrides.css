@@ -13,7 +13,7 @@ html[data-theme="dark"] #root {
 }
 
 html[data-theme="light"] #root {
-  min-height: 100vh;
+  min-height: 100%;
 }
 
 /* ── Surfaces (all slate backgrounds) ─────────────────────────────────── */
@@ -65,6 +65,29 @@ html[data-theme="light"] .bg-black\/60 {
   background-color: rgb(15 23 42 / 0.25) !important;
 }
 
+/* Dist drawers: dim overlay only — never opaque white over the page */
+.dist-drawer-root {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+.dist-drawer-backdrop {
+  background: rgb(15 23 42 / 0.4) !important;
+  background-color: rgb(15 23 42 / 0.4) !important;
+  border: 0 !important;
+  cursor: pointer;
+}
+html[data-theme="dark"] .dist-drawer-backdrop {
+  background: rgb(0 0 0 / 0.55) !important;
+  background-color: rgb(0 0 0 / 0.55) !important;
+}
+.dist-drawer-panel {
+  align-self: stretch !important;
+  max-height: 100% !important;
+  border-radius: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
 /* ── Text ─────────────────────────────────────────────────────────────── */
 
 /* Legacy dark-first pages: remap white text on light surfaces, keep accent buttons */
@@ -74,11 +97,22 @@ html[data-theme="light"] .text-white {
 
 html[data-theme="light"] [class*="bg-indigo-"].text-white,
 html[data-theme="light"] [class*="bg-emerald-"].text-white,
+html[data-theme="light"] [class*="bg-cyan-"].text-white,
+html[data-theme="light"] [class*="bg-teal-"].text-white,
+html[data-theme="light"] [class*="bg-orange-"].text-white,
+html[data-theme="light"] [class*="bg-blue-"].text-white,
+html[data-theme="light"] [class*="bg-rose-"].text-white,
 html[data-theme="light"] [class*="bg-red-5"].text-white,
 html[data-theme="light"] [class*="bg-amber-5"].text-white,
 html[data-theme="light"] [class*="bg-sky-5"].text-white,
 html[data-theme="light"] [class*="bg-violet-"].text-white {
   color: #ffffff !important;
+}
+
+html[data-theme="light"] .text-red-200,
+html[data-theme="light"] .text-red-200\/80,
+html[data-theme="light"] .text-red-200\/90 {
+  color: #b91c1c !important;
 }
 
 html[data-theme="light"] .text-slate-50,

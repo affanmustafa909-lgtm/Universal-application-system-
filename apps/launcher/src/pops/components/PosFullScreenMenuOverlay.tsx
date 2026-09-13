@@ -71,28 +71,36 @@ export function PosFullScreenMenuOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-[45] flex flex-col bg-slate-950"
+      className="fixed inset-0 z-[45] flex flex-col bg-white dark:bg-slate-950"
       role="dialog"
       aria-modal="true"
       aria-labelledby="pos-fullscreen-menu-title"
     >
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-3">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
         <div className="min-w-0 flex-1">
-          <h2 id="pos-fullscreen-menu-title" className="text-sm font-semibold text-white">
+          <h2
+            id="pos-fullscreen-menu-title"
+            className="text-sm font-semibold text-slate-900 dark:text-white"
+          >
             Full screen menu
           </h2>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
             {viewMode === "category"
               ? "Categories on top — tap one to see its items"
               : "All active items in one list"}
           </p>
         </div>
-        <div className="inline-flex rounded-md border border-slate-700 bg-slate-900 p-0.5" role="group">
+        <div
+          className="inline-flex rounded-md border border-slate-300 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-900"
+          role="group"
+        >
           <button
             type="button"
             onClick={() => setViewMode("category")}
             className={`rounded px-2.5 py-1.5 text-[11px] font-semibold ${
-              viewMode === "category" ? "bg-amber-500 text-slate-950" : "text-slate-300"
+              viewMode === "category"
+                ? "bg-amber-500 text-slate-950"
+                : "text-slate-600 dark:text-slate-300"
             }`}
           >
             Category wise
@@ -104,7 +112,7 @@ export function PosFullScreenMenuOverlay({
               setCategoryId(null);
             }}
             className={`rounded px-2.5 py-1.5 text-[11px] font-semibold ${
-              viewMode === "all" ? "bg-amber-500 text-slate-950" : "text-slate-300"
+              viewMode === "all" ? "bg-amber-500 text-slate-950" : "text-slate-600 dark:text-slate-300"
             }`}
           >
             All items
@@ -114,19 +122,19 @@ export function PosFullScreenMenuOverlay({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search item…"
-          className="w-44 rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white outline-none focus:border-amber-500/50 sm:w-56"
+          className="w-44 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-amber-500/50 dark:border-slate-700 dark:bg-slate-900 dark:text-white sm:w-56"
         />
         <button
           type="button"
           onClick={onClose}
-          className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700"
+          className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
         >
           Close
         </button>
       </div>
 
       {viewMode === "category" && categories.length > 0 ? (
-        <div className="shrink-0 border-b border-slate-800 bg-amber-500/5 px-3 py-2">
+        <div className="shrink-0 border-b border-slate-200 bg-amber-50/80 px-3 py-2 dark:border-slate-800 dark:bg-amber-500/5">
           <div className="flex gap-2 overflow-x-auto pb-1">
             {categories.map((c) => {
               const active = activeCategoryId === c.id;
@@ -140,7 +148,7 @@ export function PosFullScreenMenuOverlay({
                   className={`flex min-w-[5.5rem] flex-col items-center gap-1 rounded-lg px-2 py-2 text-center transition ${
                     active
                       ? "bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/25"
-                      : "bg-slate-900 text-slate-200 ring-1 ring-slate-700 hover:bg-slate-800"
+                      : "bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
                   }`}
                 >
                   {img ? (
@@ -148,7 +156,9 @@ export function PosFullScreenMenuOverlay({
                   ) : (
                     <span
                       className={`flex h-10 w-10 items-center justify-center rounded-md text-sm font-bold ${
-                        active ? "bg-slate-950/15" : "bg-amber-500/15 text-amber-300"
+                        active
+                          ? "bg-slate-950/15"
+                          : "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"
                       }`}
                     >
                       {(c.name.trim().charAt(0) || "?").toUpperCase()}
@@ -183,24 +193,24 @@ export function PosFullScreenMenuOverlay({
                 key={item.id}
                 type="button"
                 onClick={() => onPickItem(item)}
-                className="flex flex-col rounded-md border border-slate-800 bg-slate-900/70 p-2 text-left transition hover:border-amber-500/40 hover:bg-slate-900"
+                className="flex flex-col rounded-md border border-slate-200 bg-white p-2 text-left transition hover:border-amber-500/50 hover:bg-amber-50/50 dark:border-slate-800 dark:bg-slate-900/70 dark:hover:border-amber-500/40 dark:hover:bg-slate-900"
               >
                 {img ? (
                   <img src={img} alt="" className="mb-1 h-16 w-full rounded object-cover" />
                 ) : (
-                  <div className="mb-1 flex h-16 items-center justify-center rounded bg-slate-950 text-[10px] text-slate-600">
+                  <div className="mb-1 flex h-16 items-center justify-center rounded bg-slate-100 text-[10px] text-slate-500 dark:bg-slate-950 dark:text-slate-600">
                     {item.name.slice(0, 2).toUpperCase()}
                   </div>
                 )}
-                <span className="line-clamp-2 text-[11px] font-medium leading-tight text-slate-100">
-                  {item.featured ? <span className="mr-0.5 text-amber-400">★</span> : null}
+                <span className="line-clamp-2 text-[11px] font-medium leading-tight text-slate-900 dark:text-slate-100">
+                  {item.featured ? <span className="mr-0.5 text-amber-500 dark:text-amber-400">★</span> : null}
                   {item.name}
                 </span>
-                <span className="mt-1 text-[11px] font-semibold text-amber-200/90">
+                <span className="mt-1 text-[11px] font-semibold text-amber-700 dark:text-amber-200/90">
                   {hasPicker ? "From " : ""}
                   {display.toLocaleString()}
                   {original != null && original !== display ? (
-                    <span className="ml-1 font-normal text-slate-500 line-through">
+                    <span className="ml-1 font-normal text-slate-400 line-through dark:text-slate-500">
                       {original.toLocaleString()}
                     </span>
                   ) : null}

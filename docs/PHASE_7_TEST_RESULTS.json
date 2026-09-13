@@ -1,0 +1,218 @@
+{
+  "phase": 7,
+  "runId": "90477101",
+  "prefix": "P7TEST-90477101",
+  "api": "https://backend-system-production-28a3.up.railway.app",
+  "branch": "DIST-HQ",
+  "email": "admin.distribution@pops.demo",
+  "generatedAt": "2026-09-13T09:08:10.877Z",
+  "summary": {
+    "passed": 18,
+    "failed": 0,
+    "total": 18
+  },
+  "timings": [
+    {
+      "label": "delivery.dashboard",
+      "route": "/v1/pharmacy/delivery/dashboard",
+      "method": "GET",
+      "ms": 765,
+      "status": 200
+    },
+    {
+      "label": "delivery.list",
+      "route": "/v1/pharmacy/delivery/orders",
+      "method": "GET",
+      "ms": 706,
+      "status": 200
+    },
+    {
+      "label": "delivery.drivers",
+      "route": "/v1/pharmacy/delivery/drivers",
+      "method": "GET",
+      "ms": 738,
+      "status": 200
+    },
+    {
+      "label": "delivery.vehicles",
+      "route": "/v1/pharmacy/delivery/vehicles",
+      "method": "GET",
+      "ms": 681,
+      "status": 200
+    },
+    {
+      "label": "collections.dashboard",
+      "route": "/v1/pharmacy/collections/dashboard",
+      "method": "GET",
+      "ms": 867,
+      "status": 200
+    },
+    {
+      "label": "collections.aging",
+      "route": "/v1/pharmacy/collections/aging",
+      "method": "GET",
+      "ms": 558,
+      "status": 200
+    },
+    {
+      "label": "collections.recovery",
+      "route": "/v1/pharmacy/collections/recovery",
+      "method": "GET",
+      "ms": 930,
+      "status": 200
+    },
+    {
+      "label": "collections.list",
+      "route": "/v1/pharmacy/collections",
+      "method": "GET",
+      "ms": 685,
+      "status": 200
+    },
+    {
+      "label": "delivery.create",
+      "route": "/v1/pharmacy/delivery/orders",
+      "method": "POST",
+      "ms": 1615,
+      "status": 201
+    },
+    {
+      "label": "delivery.assign",
+      "route": "/v1/pharmacy/delivery/orders/2bfcfaa0-bf74-4455-97ca-81c4780dce08/assign",
+      "method": "POST",
+      "ms": 690,
+      "status": 201
+    },
+    {
+      "label": "delivery.dispatch",
+      "route": "/v1/pharmacy/delivery/orders/dispatch",
+      "method": "POST",
+      "ms": 666,
+      "status": 201
+    },
+    {
+      "label": "delivery.pod",
+      "route": "/v1/pharmacy/delivery/orders/2bfcfaa0-bf74-4455-97ca-81c4780dce08/pod",
+      "method": "POST",
+      "ms": 1464,
+      "status": 201
+    }
+  ],
+  "results": [
+    {
+      "name": "auth.login",
+      "passed": true,
+      "detail": "branch target DIST-HQ"
+    },
+    {
+      "name": "delivery.dashboard.ok",
+      "passed": true,
+      "detail": "{\"ready\":3,\"pendingDispatch\":3,\"dispatched\":0,\"outForDelivery\":0,\"deliveredToday\":0,\"failed\":0,\"podPending\":0,\"totalOpen\":3,\"asOf\":\"2026-09-13T09:07:59.006Z\"}",
+      "expected": "200",
+      "actual": 200
+    },
+    {
+      "name": "delivery.dashboard.hasCounts",
+      "passed": true,
+      "detail": "flat or kpis shape"
+    },
+    {
+      "name": "delivery.orders.list",
+      "passed": true,
+      "detail": "{\"items\":[{\"id\":\"e0902b96-6d05-4aed-b429-da72be88f6eb\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"deliveryNumber\":\"DLV-2026-00007\",\"orde",
+      "expected": "200",
+      "actual": 200
+    },
+    {
+      "name": "delivery.drivers.list",
+      "passed": true,
+      "detail": "{\"items\":[],\"page\":1,\"pageSize\":25,\"total\":0}",
+      "expected": "200|404",
+      "actual": 200
+    },
+    {
+      "name": "delivery.vehicles.list",
+      "passed": true,
+      "detail": "{\"items\":[],\"page\":1,\"pageSize\":25,\"total\":0}",
+      "expected": "200|404",
+      "actual": 200
+    },
+    {
+      "name": "collections.dashboard.ok",
+      "passed": true,
+      "detail": "{\"todayPkr\":0,\"todayCount\":0,\"unallocatedPkr\":66000,\"pendingCheques\":0,\"bouncedCheques\":0,\"asOf\":\"2026-09-13T09:08:02.001Z\"}",
+      "expected": "200",
+      "actual": 200
+    },
+    {
+      "name": "collections.dashboard.shape",
+      "passed": true,
+      "detail": "todayPkr or kpis"
+    },
+    {
+      "name": "collections.aging.ok",
+      "passed": true,
+      "detail": "{\"items\":[{\"tradeCustomerId\":\"0d99c6df-6c85-4193-9bfb-f701a46ab312\",\"customerCode\":\"TC-ZMAUJ-5\",\"customerName\":\"Sheikhupura Chemist ZMAUJ\",\"creditLimitPkr\":5000000,\"creditDays\":30,\"outstandingPkr\":103",
+      "expected": "200",
+      "actual": 200
+    },
+    {
+      "name": "collections.aging.dayBuckets",
+      "passed": true,
+      "detail": "day-bucket payload"
+    },
+    {
+      "name": "collections.recovery.ok",
+      "passed": true,
+      "detail": "{\"items\":[],\"page\":1,\"pageSize\":25,\"total\":0,\"summary\":{\"critical\":0,\"warning\":0,\"info\":0},\"asOf\":\"2026-09-13T09:08:03.488Z\"}",
+      "expected": "200",
+      "actual": 200
+    },
+    {
+      "name": "collections.list.ok",
+      "passed": true,
+      "detail": "{\"items\":[{\"id\":\"e10f2559-1dcb-4c28-8609-16b3bd74123e\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"collectionNumber\":\"COL-2026-00014\",\"tr",
+      "expected": "200",
+      "actual": 200
+    },
+    {
+      "name": "collections.rejectBareAmount",
+      "passed": true,
+      "detail": "SKIPPED: no trade customer available",
+      "expected": "skipped",
+      "actual": "skipped"
+    },
+    {
+      "name": "collections.advance",
+      "passed": true,
+      "detail": "SKIPPED: no trade customer",
+      "expected": "skipped",
+      "actual": "skipped"
+    },
+    {
+      "name": "delivery.create",
+      "passed": true,
+      "detail": "DLV-2026-00008"
+    },
+    {
+      "name": "delivery.assign",
+      "passed": true,
+      "detail": "{\"id\":\"2bfcfaa0-bf74-4455-97ca-81c4780dce08\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"deliveryNumber\":\"DLV-2026-00008\",\"orderId\":\"c309",
+      "expected": "200 or validation",
+      "actual": 201
+    },
+    {
+      "name": "delivery.dispatch",
+      "passed": true,
+      "detail": "{\"items\":[{\"id\":\"2bfcfaa0-bf74-4455-97ca-81c4780dce08\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"deliveryNumber\":\"DLV-2026-00008\",\"orde",
+      "expected": "200 or soft fail",
+      "actual": 201
+    },
+    {
+      "name": "delivery.pod.delivered",
+      "passed": true,
+      "detail": "{\"id\":\"2bfcfaa0-bf74-4455-97ca-81c4780dce08\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"deliveryNumber\":\"DLV-2026-00008\",\"orderId\":\"c309",
+      "expected": "200 or state conflict",
+      "actual": 201
+    }
+  ]
+}

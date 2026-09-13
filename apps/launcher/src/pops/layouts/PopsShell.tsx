@@ -117,6 +117,28 @@ export function PopsShell(): JSX.Element {
     return () => window.removeEventListener(UI_ZOOM_CHANGED_EVENT, onZoomChanged);
   }, []);
 
+  // Lock document scroll so only sidebar + main panes scroll (avoids a 2nd browser scrollbar).
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+      htmlHeight: html.style.height,
+      bodyHeight: body.style.height,
+    };
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    html.style.height = "100%";
+    body.style.height = "100%";
+    return () => {
+      html.style.overflow = prev.htmlOverflow;
+      body.style.overflow = prev.bodyOverflow;
+      html.style.height = prev.htmlHeight;
+      body.style.height = prev.bodyHeight;
+    };
+  }, []);
+
   function signOut(): void {
     // The device stays bound to its installed system, so sign-out returns to
     // this system's role/login screen — never the picker or Super Admin login.
@@ -126,15 +148,25 @@ export function PopsShell(): JSX.Element {
     navigate(roleSelectPath(returnTo), { replace: true });
   }
 
+  // CSS `zoom` scales layout size; compensate so the shell still fits one viewport
+  // (otherwise the browser gets a second scrollbar that moves with the main pane).
+  const shellBox = {
+    zoom: uiZoom,
+    width: `${100 / uiZoom}dvw`,
+    height: `${100 / uiZoom}dvh`,
+    maxWidth: `${100 / uiZoom}dvw`,
+    maxHeight: `${100 / uiZoom}dvh`,
+  } as const;
+
   return (
     <div
-      className="flex min-h-screen bg-[var(--bg)] text-[color:var(--ink)] dark:bg-slate-950 dark:text-slate-100"
-      style={{ zoom: uiZoom }}
+      className="flex overflow-hidden bg-[var(--bg)] text-[color:var(--ink)] dark:bg-slate-950 dark:text-slate-100"
+      style={shellBox}
     >
       <BranchAutoConnect />
       <BranchPrintBootstrap />
       {sidebarOpen ? (
-        <aside className="hidden w-60 shrink-0 flex-col border-r border-[color:var(--sidebar-line,var(--line))] bg-[var(--sidebar,#ffffff)] text-[color:var(--sidebar-fg,var(--ink))] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 md:flex">
+        <aside className="hidden h-full min-h-0 w-60 shrink-0 flex-col overflow-hidden border-r border-[color:var(--sidebar-line,var(--line))] bg-[var(--sidebar,#ffffff)] text-[color:var(--sidebar-fg,var(--ink))] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 md:flex">
           <div className="shrink-0 border-b border-[color:var(--sidebar-line,var(--line))] bg-[var(--sidebar,#ffffff)] px-4 py-4 dark:border-slate-800 dark:bg-slate-800">
             <div className="flex items-start justify-between gap-2">
               <div className="flex min-w-0 items-center gap-3">
@@ -159,7 +191,7 @@ export function PopsShell(): JSX.Element {
               </button>
             </div>
           </div>
-          <nav className="flex-1 overflow-y-auto px-3 py-3">
+          <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
             <PopsSidebarNav />
           </nav>
           <div className="shrink-0 border-t border-[color:var(--sidebar-line,var(--line))] bg-[var(--sidebar,#ffffff)] px-4 py-3 dark:border-slate-800 dark:bg-slate-800">
@@ -179,9 +211,9 @@ export function PopsShell(): JSX.Element {
         </aside>
       ) : null}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {showHeader ? (
-          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--line)] bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900/30 md:px-6">
+          <header className="shrink-0 flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--line)] bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900/30 md:px-6">
             <div className="flex min-w-0 items-center gap-3">
               {!sidebarOpen ? (
                 <button
@@ -225,15 +257,17 @@ export function PopsShell(): JSX.Element {
           </header>
         ) : isPosRoute ? (
           /* POS can hide the full header — keep zoom reachable in a slim strip. */
-          <div className="flex items-center justify-end gap-2 border-b border-[color:var(--line)] bg-white px-3 py-1.5 dark:border-slate-800 dark:bg-slate-900/30">
+          <div className="flex shrink-0 items-center justify-end gap-2 border-b border-[color:var(--line)] bg-white px-3 py-1.5 dark:border-slate-800 dark:bg-slate-900/30">
             <LiveServerBadge compact />
             <UiZoomControls compact />
           </div>
         ) : null}
 
-        <LicencePaymentAlertBanner />
+        <div className="shrink-0">
+          <LicencePaymentAlertBanner />
+        </div>
 
-        <div className="border-b border-[color:var(--line)] bg-[var(--bg)] px-2 py-2 md:hidden dark:border-slate-800 dark:bg-slate-900/50">
+        <div className="shrink-0 border-b border-[color:var(--line)] bg-[var(--bg)] px-2 py-2 md:hidden dark:border-slate-800 dark:bg-slate-900/50">
           <div className="flex gap-1 overflow-x-auto pb-1">
             <PopsMobileNav />
           </div>
@@ -242,11 +276,13 @@ export function PopsShell(): JSX.Element {
         <main
           className={
             isPosRoute
-              ? "flex-1 overflow-y-auto px-0 py-0 md:px-0 md:py-0"
-              : "flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5"
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden px-0 py-0 md:px-0 md:py-0"
+              : "flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-4 md:px-6 md:py-5"
           }
         >
-          <SystemRouteGuard />
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+            <SystemRouteGuard />
+          </div>
         </main>
       </div>
     </div>

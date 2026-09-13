@@ -117,7 +117,10 @@ export type SaleProductHit = {
   barcode?: string | null;
   companyId?: string | null;
   companyName?: string | null;
+  genericName?: string | null;
   pack?: string | null;
+  tabletsPerStrip?: number | null;
+  stripsPerBox?: number | null;
   availableQty?: number | null;
   unitPricePkr?: number | null;
   wholesalePricePkr?: number | null;
@@ -202,9 +205,13 @@ export type SaleBookBody = {
   warehouseId?: string;
   salesmanEmployeeId?: string;
   submit?: boolean;
+  /** Cash = paid sale; Credit = wholesale AR (default). */
+  paymentMethod?: "Cash" | "Credit";
   creditOverride?: boolean;
   creditOverrideReason?: string;
   idempotencyKey?: string;
+  discountPkr?: number;
+  taxPkr?: number;
   lines: SaleBookLineInput[];
   notes?: string;
 };
@@ -243,10 +250,13 @@ function mapMatchToHit(m: {
   sellingPrice?: number | null;
   wholesalePricePkr?: number | null;
   sellingPricePkr?: number | null;
-  currentStock?: number | null;
+  availableQty?: number | null;
   category?: string | null;
   genericName?: string | null;
   brandName?: string | null;
+  tabletsPerStrip?: number | null;
+  stripsPerBox?: number | null;
+  presentation?: string | null;
 }): SaleProductHit {
   return {
     id: m.id,
@@ -255,14 +265,41 @@ function mapMatchToHit(m: {
     barcode: m.barcode ?? null,
     companyId: m.companyId ?? null,
     companyName: m.brandName ?? null,
-    pack: m.category ?? m.genericName ?? null,
-    availableQty: m.currentStock ?? null,
+    genericName: m.genericName ?? null,
+    pack: m.presentation ?? m.category ?? m.genericName ?? null,
+    tabletsPerStrip: m.tabletsPerStrip != null ? Number(m.tabletsPerStrip) : null,
+    stripsPerBox: m.stripsPerBox != null ? Number(m.stripsPerBox) : null,
+    // Never treat masters currentStock as Avail here — attachAvailability fills this.
+    availableQty: m.availableQty != null ? Number(m.availableQty) : null,
     unitPricePkr: Math.round(
       Number(m.wholesalePrice ?? m.wholesalePricePkr ?? m.sellingPrice ?? m.sellingPricePkr ?? 0),
     ),
     wholesalePricePkr: m.wholesalePrice ?? m.wholesalePricePkr ?? null,
     sellingPricePkr: m.sellingPrice ?? m.sellingPricePkr ?? null,
   };
+}
+
+/** Attach StockAvailability availableQty so Sale / Stock / Medicines agree. */
+async function attachAvailability(
+  branchCode: string,
+  warehouseId: string | undefined,
+  hits: SaleProductHit[],
+): Promise<SaleProductHit[]> {
+  if (!hits.length) return hits;
+  try {
+    const result = await inventoryApi.checkAvailability({
+      branchCode,
+      warehouseId,
+      lines: hits.map((h) => ({ medicineId: h.id, quantity: 1 })),
+    });
+    const byId = new Map(result.lines.map((l) => [l.medicineId, Number(l.availableQty ?? 0)]));
+    return hits.map((h) => ({
+      ...h,
+      availableQty: byId.has(h.id) ? byId.get(h.id)! : h.availableQty ?? 0,
+    }));
+  } catch {
+    return hits;
+  }
 }
 
 function normalizeProductList(raw: unknown): SaleProductHit[] {
@@ -276,13 +313,11 @@ function normalizeProductList(raw: unknown): SaleProductHit[] {
         barcode: (r.barcode as string | null | undefined) ?? null,
         companyId: (r.companyId as string | null | undefined) ?? null,
         companyName: (r.companyName as string | null | undefined) ?? null,
+        genericName: (r.genericName as string | null | undefined) ?? null,
         pack: (r.pack as string | null | undefined) ?? (r.presentation as string | null | undefined) ?? null,
-        availableQty:
-          r.availableQty != null
-            ? Number(r.availableQty)
-            : r.currentStock != null
-              ? Number(r.currentStock)
-              : null,
+        tabletsPerStrip: r.tabletsPerStrip != null ? Number(r.tabletsPerStrip) : null,
+        stripsPerBox: r.stripsPerBox != null ? Number(r.stripsPerBox) : null,
+        availableQty: r.availableQty != null ? Number(r.availableQty) : null,
         unitPricePkr:
           r.unitPricePkr != null
             ? Number(r.unitPricePkr)
@@ -339,20 +374,20 @@ export async function searchSaleProducts(params: {
   limit?: number;
 }): Promise<SaleProductHit[]> {
   const q = params.q.trim();
-  if (!q) return [];
 
   if (capability.productSearch) {
     try {
       const raw = await getJson<unknown>(
         `${BASE}/products/search${qs({
           branchCode: params.branchCode,
-          q,
+          q: q || undefined,
           warehouseId: params.warehouseId,
           limit: params.limit ?? 40,
           pageSize: params.limit ?? 40,
         })}`,
       );
-      return normalizeProductList(raw);
+      const rows = normalizeProductList(raw);
+      if (rows.length > 0) return rows;
     } catch (err) {
       if (isRouteMissing(err)) {
         capability.productSearch = false;
@@ -366,12 +401,12 @@ export async function searchSaleProducts(params: {
   try {
     const page = await listMedicinesPaged({
       branchCode: params.branchCode,
-      q,
+      q: q || undefined,
       page: 1,
       pageSize: params.limit ?? 40,
       status: "active",
     });
-    return (page.items ?? []).map((m) =>
+    const hits = (page.items ?? []).map((m) =>
       mapMatchToHit({
         id: m.id,
         name: m.name,
@@ -380,15 +415,18 @@ export async function searchSaleProducts(params: {
         companyId: m.companyId,
         wholesalePricePkr: m.wholesalePricePkr,
         sellingPricePkr: m.sellingPricePkr,
-        currentStock: m.currentStock,
         category: m.category,
         genericName: m.genericName,
         brandName: m.brandName,
+        tabletsPerStrip: m.tabletsPerStrip,
+        stripsPerBox: m.stripsPerBox,
       }),
     );
+    return attachAvailability(params.branchCode, params.warehouseId, hits);
   } catch {
     const matched = await matchPharmacyMedicines(params.branchCode, q);
-    return matched.map(mapMatchToHit).slice(0, params.limit ?? 40);
+    const hits = matched.map(mapMatchToHit).slice(0, params.limit ?? 40);
+    return attachAvailability(params.branchCode, params.warehouseId, hits);
   }
 }
 
@@ -426,7 +464,10 @@ export async function lookupSaleProductBarcode(params: {
 
   try {
     const hit = await lookupPharmacyBarcode(params.branchCode, code);
-    return hit ? mapMatchToHit(hit as Parameters<typeof mapMatchToHit>[0]) : null;
+    if (!hit) return null;
+    const mapped = mapMatchToHit(hit as Parameters<typeof mapMatchToHit>[0]);
+    const [enriched] = await attachAvailability(params.branchCode, params.warehouseId, [mapped]);
+    return enriched ?? mapped;
   } catch {
     return null;
   }
@@ -439,19 +480,21 @@ export async function searchSaleCustomers(params: {
   limit?: number;
 }): Promise<SaleCustomerHit[]> {
   const q = params.q.trim();
-  if (!q) return [];
 
   if (capability.customerSearch) {
     try {
       const raw = await getJson<unknown>(
         `${BASE}/customers/search${qs({
           branchCode: params.branchCode,
-          q,
+          q: q || undefined,
           limit: params.limit ?? 25,
           pageSize: params.limit ?? 25,
         })}`,
       );
-      return normalizeCustomers(raw);
+      const rows = normalizeCustomers(raw);
+      // Sales search can 200 with empty items while trade-customers has data
+      // (seen on live Dist). Fall through to masters list when empty.
+      if (rows.length > 0) return rows;
     } catch (err) {
       if (isRouteMissing(err)) {
         capability.customerSearch = false;
@@ -463,7 +506,7 @@ export async function searchSaleCustomers(params: {
 
   const page = await listTradeCustomersPaged({
     branchCode: params.branchCode,
-    q,
+    q: q || undefined,
     page: 1,
     pageSize: params.limit ?? 25,
     status: "active",
@@ -680,10 +723,18 @@ export async function bookSale(body: SaleBookBody): Promise<SaleBookResult> {
     warehouseId: body.warehouseId,
     salesmanEmployeeId: body.salesmanEmployeeId,
     submit: body.submit !== false,
+    paymentMethod: body.paymentMethod,
     creditOverride: body.creditOverride || undefined,
     creditOverrideReason: body.creditOverrideReason,
     idempotencyKey: body.idempotencyKey,
-    notes: body.notes,
+    discountPkr: body.discountPkr,
+    taxPkr: body.taxPkr,
+    notes:
+      body.paymentMethod === "Cash"
+        ? `[[pm:Cash]]${body.notes ? ` ${body.notes}` : ""}`
+        : body.paymentMethod === "Credit"
+          ? `[[pm:Credit]]${body.notes ? ` ${body.notes}` : ""}`
+          : body.notes,
     lines: body.lines.map((l) => ({
       medicineId: l.medicineId,
       quantity: l.quantity,

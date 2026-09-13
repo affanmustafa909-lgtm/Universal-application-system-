@@ -512,9 +512,6 @@ export function DistributionStockAdjustmentsPage(): JSX.Element {
         onClose={() => setCreateOpen(false)}
         footer={
           <>
-            <DistButton variant="ghost" onClick={() => setCreateOpen(false)}>
-              Cancel
-            </DistButton>
             <DistButton disabled={!createValid || create.isPending} onClick={() => create.mutate()}>
               Create draft
             </DistButton>
@@ -617,6 +614,7 @@ export function DistributionStockAdjustmentsPage(): JSX.Element {
                           value={line.batchId}
                           onChange={(batchId) => patchLine(line.key, { batchId })}
                           required={batchRequired}
+                          stockMode="adjustable"
                         />
                       </div>
                       {batchRequired && !line.batchId ? (

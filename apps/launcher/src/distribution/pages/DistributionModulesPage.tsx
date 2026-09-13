@@ -79,10 +79,10 @@ const MODULES: { title: string; items: Item[] }[] = [
     title: "Finance",
     items: [
       { label: "Finance Dashboard", to: "/pops/distribution/finance" },
+      { label: "Cash session / In-Out", to: "/pops/distribution/cash" },
       { label: "Accounting Hub", to: "/pops/accounting" },
       { label: "Receivables", to: "/pops/accounting/receivable" },
       { label: "Payables", to: "/pops/accounting/payable" },
-      { label: "Cash", to: "/pops/accounting/cash" },
       { label: "Bank", to: "/pops/accounting/bank" },
     ],
   },

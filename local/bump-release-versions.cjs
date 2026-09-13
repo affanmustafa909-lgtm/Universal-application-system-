@@ -44,6 +44,7 @@ const desktopFiles = [
   "apps/launcher/src-tauri/tauri.restaurant.conf.json",
   "apps/launcher/src-tauri/tauri.pharmacy.conf.json",
   "apps/launcher/src-tauri/tauri.general-store.conf.json",
+  "apps/launcher/src-tauri/tauri.distribution.conf.json",
 ];
 
 for (const rel of desktopFiles) {

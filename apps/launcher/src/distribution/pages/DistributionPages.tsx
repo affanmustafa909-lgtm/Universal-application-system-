@@ -63,6 +63,7 @@ export { DistributionSalesmanDetailPage } from "./DistributionSalesmanDetailPage
 
 /** Phase-9 finance — Dist-facing views over the shared accounting engine. */
 export { DistributionFinanceDashboardPage } from "./DistributionFinanceDashboardPage";
+export { DistributionCashSessionPage } from "./DistributionCashSessionPage";
 export { DistributionCustomerLedgerPage } from "./DistributionCustomerLedgerPage";
 export { DistributionSupplierLedgerPage } from "./DistributionSupplierLedgerPage";
 export { DistributionGeneralLedgerPage } from "./DistributionGeneralLedgerPage";

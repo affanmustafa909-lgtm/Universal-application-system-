@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { fieldForceApi } from "../../pharmacy/api/pharmacy-field-force";
 import { fetchPharmacyEmployeesPicker, fetchPharmacyRoutes, fetchPharmacyTradeCustomers } from "../../pharmacy/api/pharmacy-erp";
-import { useInvalidatePharmacy, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
+import { useInvalidatePharmacy, usePharmacyAccess, distLiveListOptions } from "../../pharmacy/hooks/usePharmacy";
 import { DistMasterDrawer } from "../components/DistMasterDrawer";
 import {
   DistButton,
@@ -27,14 +27,18 @@ export function DistributionPjpPage(): JSX.Element {
   const [routeId, setRouteId] = useState("");
   const [from, setFrom] = useState(new Date().toISOString().slice(0, 10));
   const [frequency, setFrequency] = useState("weekly");
-  const [day, setDay] = useState("1");
+  const [day, setDay] = useState(String(new Date().getDay()));
   const [selected, setSelected] = useState<string[]>([]);
   const [genDate, setGenDate] = useState(new Date().toISOString().slice(0, 10));
+  const [info, setInfo] = useState<string | null>(null);
 
   const list = useQuery({
-    queryKey: ["distribution", "field-force", "pjp", branch?.code],
+    queryKey: ["distribution", "field-force", "pjp", branch?.code ?? "org"],
     enabled: Boolean(branch?.code),
-    queryFn: () => fieldForceApi.pjp({ branchCode: branch!.code }),
+    // List org-wide so legacy rows saved without branchId still appear.
+    // Create always stamps the current branch.
+    queryFn: () => fieldForceApi.pjp({}),
+    ...distLiveListOptions,
   });
   const employees = useQuery({ queryKey: ["pharmacy", "employees-picker"], queryFn: fetchPharmacyEmployeesPicker });
   const routes = useQuery({ queryKey: ["pharmacy", "routes"], queryFn: fetchPharmacyRoutes });
@@ -45,9 +49,10 @@ export function DistributionPjpPage(): JSX.Element {
   });
 
   const createMut = useMutation({
-    mutationFn: () =>
-      fieldForceApi.createPjp({
-        branchCode: branch?.code,
+    mutationFn: () => {
+      if (!branch?.code) throw new Error("Select a branch before saving a PJP");
+      return fieldForceApi.createPjp({
+        branchCode: branch.code,
         name,
         employeeId,
         routeId: routeId || undefined,
@@ -59,24 +64,45 @@ export function DistributionPjpPage(): JSX.Element {
           dayOfWeek: Number(day),
           sequenceNo: i + 1,
         })),
-      }),
-    onSuccess: () => {
+      });
+    },
+    onSuccess: async () => {
       setOpen(false);
       setSelected([]);
-      invalidate();
+      setErr(null);
+      await invalidate();
+      await list.refetch();
     },
     onError: (e: Error) => setErr(e.message),
   });
 
   const genMut = useMutation({
-    mutationFn: () => fieldForceApi.generateVisits({ date: genDate, branchCode: branch?.code }),
-    onSuccess: () => invalidate(),
-    onError: (e: Error) => setErr(e.message),
+    mutationFn: () => {
+      if (!branch?.code) throw new Error("Select a branch before generating visits");
+      return fieldForceApi.generateVisits({ date: genDate, branchCode: branch.code }) as Promise<{
+        created?: number;
+        skipped?: number;
+        message?: string;
+      }>;
+    },
+    onSuccess: async (res) => {
+      const msg =
+        res?.message ||
+        `Created ${res?.created ?? 0} visit(s)` +
+          (res?.skipped ? ` (skipped ${res.skipped} duplicate(s))` : "");
+      setInfo(msg);
+      setErr(null);
+      await invalidate();
+    },
+    onError: (e: Error) => {
+      setInfo(null);
+      setErr(e.message);
+    },
   });
 
   return (
     <DistPageShell
-      title="PJP"
+      title="PJP / Sale plan"
       subtitle="Permanent journey plan — versioned templates that generate today's visits."
       breadcrumb={[
         { label: "Distribution", to: `${DIST}/ps` },
@@ -84,15 +110,24 @@ export function DistributionPjpPage(): JSX.Element {
         { label: "PJP" },
       ]}
       actions={<DistButton onClick={() => setOpen(true)}>New PJP</DistButton>}
+      error={!branch ? "Select a branch." : list.isError ? (list.error as Error).message : null}
     >
       {err ? <DistErrorBanner message={err} onRetry={() => setErr(null)} /> : null}
+      {info ? (
+        <p className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-900 dark:border-cyan-900/40 dark:bg-cyan-950/30 dark:text-cyan-100">
+          {info}{" "}
+          <Link to={`${DIST}/visits?date=${genDate}`} className="font-semibold underline">
+            Open visits
+          </Link>
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800">
         <label className="text-xs text-slate-500">
           Generate for
           <DistInput type="date" className="mt-1" value={genDate} onChange={(e) => setGenDate(e.target.value)} />
         </label>
-        <DistButton onClick={() => genMut.mutate()} disabled={genMut.isPending}>
-          Generate today's visits
+        <DistButton onClick={() => genMut.mutate()} disabled={genMut.isPending || !branch?.code}>
+          Generate visits
         </DistButton>
         <Link to={`${DIST}/visits?date=${genDate}`} className="text-sm font-semibold text-cyan-700">
           Open visits →
@@ -102,11 +137,11 @@ export function DistributionPjpPage(): JSX.Element {
         loading={list.isLoading}
         rows={(list.data?.items ?? []) as Record<string, unknown>[]}
         rowKey={(r) => String(r.id)}
-        empty="No journey plans yet"
+        empty={branch?.code ? "No journey plans yet" : "Select a branch to load plans"}
         columns={[
           { key: "pjpNumber", header: "PJP#" },
           { key: "name", header: "Name" },
-          { key: "employeeName", header: "Salesman", render: (r) => String(r.employeeName ?? "") },
+          { key: "employeeName", header: "Salesman", render: (r) => String(r.employeeName ?? "—") },
           { key: "frequency", header: "Frequency" },
           { key: "version", header: "Ver" },
           { key: "status", header: "Status", render: (r) => <DistStatusBadge status={String(r.status)} /> },
@@ -116,6 +151,9 @@ export function DistributionPjpPage(): JSX.Element {
       />
 
       <DistMasterDrawer open={open} title="New PJP" onClose={() => setOpen(false)} widthClass="max-w-lg">
+        {!branch?.code ? (
+          <p className="text-sm text-amber-700 dark:text-amber-300">Select a branch in the header before creating a PJP.</p>
+        ) : null}
         <label className="text-xs text-slate-500">
           Name
           <DistInput className="mt-1" value={name} onChange={(e) => setName(e.target.value)} />
@@ -181,7 +219,11 @@ export function DistributionPjpPage(): JSX.Element {
             </label>
           ))}
         </div>
-        <DistButton className="mt-3" disabled={!name || !employeeId || selected.length === 0 || createMut.isPending} onClick={() => createMut.mutate()}>
+        <DistButton
+          className="mt-3"
+          disabled={!branch?.code || !name || !employeeId || selected.length === 0 || createMut.isPending}
+          onClick={() => createMut.mutate()}
+        >
           Save PJP
         </DistButton>
       </DistMasterDrawer>

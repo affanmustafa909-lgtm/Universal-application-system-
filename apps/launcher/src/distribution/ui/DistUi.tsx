@@ -20,18 +20,19 @@ export function DistStatusBadge({
   status,
   tone,
 }: {
-  status: string;
+  status?: string | null;
   tone?: "neutral" | "success" | "warning" | "danger" | "info";
 }): JSX.Element {
+  const label = String(status ?? "—");
   const resolved =
     tone ??
-    (/(delivered|paid|approved|invoiced|active|complete)/i.test(status)
+    (/(delivered|paid|approved|invoiced|active|complete)/i.test(label)
       ? "success"
-      : /(pending|draft|booked|picking|packed|dispatched|stock_reserved|ready)/i.test(status)
+      : /(pending|draft|booked|picking|packed|dispatched|stock_reserved|ready)/i.test(label)
         ? "warning"
-        : /(cancel|fail|expired|overdue)/i.test(status)
+        : /(cancel|fail|expired|overdue)/i.test(label)
           ? "danger"
-          : /(ready|open)/i.test(status)
+          : /(ready|open)/i.test(label)
             ? "info"
             : "neutral");
   const cls =
@@ -46,7 +47,7 @@ export function DistStatusBadge({
             : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
   return (
     <span className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${cls}`}>
-      {status.replace(/_/g, " ")}
+      {label.replace(/_/g, " ")}
     </span>
   );
 }

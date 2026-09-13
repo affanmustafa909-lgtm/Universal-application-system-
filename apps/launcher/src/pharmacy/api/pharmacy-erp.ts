@@ -1,37 +1,61 @@
 import { authFetch } from "../../lib/authFetch";
 
-async function parseError(res: Response, fallback: string): Promise<never> {
-  let msg = fallback;
-  try {
-    const j = (await res.json()) as { message?: string | string[] };
-    if (typeof j.message === "string") msg = j.message;
-    else if (Array.isArray(j.message)) msg = j.message.join(", ");
-  } catch {
-    // ignore
-  }
-  throw new Error(msg);
-}
-
 function qs(branchCode: string): string {
   return new URLSearchParams({ branchCode }).toString();
 }
 
 async function getJson<T = unknown>(path: string): Promise<T> {
   const res = await authFetch(path);
-  if (!res.ok) await parseError(res, "Request failed");
-  return (await res.json()) as T;
+  const text = await res.text();
+  if (!res.ok) {
+    let msg = "Request failed";
+    try {
+      const j = JSON.parse(text) as { message?: string | string[] };
+      if (typeof j.message === "string") msg = j.message;
+      else if (Array.isArray(j.message)) msg = j.message.join(", ");
+    } catch {
+      if (text.trim()) msg = text.trim();
+    }
+    throw new Error(msg);
+  }
+  if (!text.trim()) return {} as T;
+  return JSON.parse(text) as T;
 }
 
 async function postJson<T = unknown>(path: string, body: unknown): Promise<T> {
   const res = await authFetch(path, { method: "POST", body: JSON.stringify(body) });
-  if (!res.ok) await parseError(res, "Request failed");
-  return (await res.json()) as T;
+  const text = await res.text();
+  if (!res.ok) {
+    let msg = "Request failed";
+    try {
+      const j = JSON.parse(text) as { message?: string | string[] };
+      if (typeof j.message === "string") msg = j.message;
+      else if (Array.isArray(j.message)) msg = j.message.join(", ");
+    } catch {
+      if (text.trim()) msg = text.trim();
+    }
+    throw new Error(msg);
+  }
+  if (!text.trim()) return {} as T;
+  return JSON.parse(text) as T;
 }
 
 async function patchJson<T = unknown>(path: string, body: unknown): Promise<T> {
   const res = await authFetch(path, { method: "PATCH", body: JSON.stringify(body) });
-  if (!res.ok) await parseError(res, "Request failed");
-  return (await res.json()) as T;
+  const text = await res.text();
+  if (!res.ok) {
+    let msg = "Request failed";
+    try {
+      const j = JSON.parse(text) as { message?: string | string[] };
+      if (typeof j.message === "string") msg = j.message;
+      else if (Array.isArray(j.message)) msg = j.message.join(", ");
+    } catch {
+      if (text.trim()) msg = text.trim();
+    }
+    throw new Error(msg);
+  }
+  if (!text.trim()) return {} as T;
+  return JSON.parse(text) as T;
 }
 
 export const fetchPharmacyCompanies = () => getJson<any[]>("/v1/pharmacy/companies");
@@ -55,12 +79,24 @@ export const fetchPharmacyAreas = () => getJson<any[]>("/v1/pharmacy/areas");
 export const createPharmacyArea = (body: unknown) => postJson("/v1/pharmacy/areas", body);
 export const fetchPharmacyGeoTerritories = () => getJson<any[]>("/v1/pharmacy/geo-territories");
 export const createPharmacyGeoTerritory = (body: unknown) => postJson("/v1/pharmacy/geo-territories", body);
-export const fetchPharmacyRoutes = () => getJson<any[]>("/v1/pharmacy/routes");
+function asRowArray<T = Record<string, unknown>>(raw: unknown): T[] {
+  if (Array.isArray(raw)) return raw as T[];
+  if (raw && typeof raw === "object") {
+    const o = raw as { items?: unknown; data?: unknown };
+    if (Array.isArray(o.items)) return o.items as T[];
+    if (Array.isArray(o.data)) return o.data as T[];
+  }
+  return [];
+}
+
+export const fetchPharmacyRoutes = async () => asRowArray(await getJson("/v1/pharmacy/routes"));
 export const createPharmacyRoute = (body: unknown) => postJson("/v1/pharmacy/routes", body);
 
-export const fetchPharmacyTradeCustomers = (branchCode?: string) =>
-  getJson<any[]>(
-    branchCode ? `/v1/pharmacy/trade-customers?${qs(branchCode)}` : "/v1/pharmacy/trade-customers",
+export const fetchPharmacyTradeCustomers = async (branchCode?: string) =>
+  asRowArray(
+    await getJson(
+      branchCode ? `/v1/pharmacy/trade-customers?${qs(branchCode)}` : "/v1/pharmacy/trade-customers",
+    ),
   );
 export const createPharmacyTradeCustomer = (body: unknown) => postJson("/v1/pharmacy/trade-customers", body);
 
@@ -86,13 +122,15 @@ export const createPharmacyPurchaseReturn = (body: unknown) => postJson("/v1/pha
 
 export const fetchPharmacyDistOrders = (branchCode: string) =>
   getJson<any[]>(`/v1/pharmacy/distribution/orders?${qs(branchCode)}`);
+export const fetchPharmacyDistOrder = (id: string) =>
+  getJson<Record<string, unknown>>(`/v1/pharmacy/distribution/orders/${encodeURIComponent(id)}`);
 export const fetchPharmacyDistInvoices = (branchCode: string) =>
   getJson<any[]>(`/v1/pharmacy/distribution/invoices?${qs(branchCode)}`);
 export const createPharmacyDistOrder = (body: unknown) => postJson("/v1/pharmacy/distribution/orders", body);
 export const approvePharmacyDistOrder = (id: string) =>
   postJson(`/v1/pharmacy/distribution/orders/${id}/approve`, {});
-export const invoicePharmacyDistOrder = (id: string) =>
-  postJson(`/v1/pharmacy/distribution/orders/${id}/invoice`, {});
+export const invoicePharmacyDistOrder = (id: string, body?: { paymentMethod?: string }) =>
+  postJson(`/v1/pharmacy/distribution/orders/${id}/invoice`, body ?? {});
 export const advancePharmacyDistOrder = (id: string, status: string) =>
   postJson(`/v1/pharmacy/distribution/orders/${id}/advance`, { status });
 

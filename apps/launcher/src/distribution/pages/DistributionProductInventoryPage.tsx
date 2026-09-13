@@ -23,6 +23,7 @@ import {
   DistPageShell,
   DistStatusBadge,
 } from "../ui/DistUi";
+import { documentReferenceLabel } from "../lib/customerDisplay";
 
 const TABS = ["overview", "batches", "movements", "purchases", "sales"] as const;
 type Tab = (typeof TABS)[number];
@@ -359,7 +360,7 @@ export function DistributionProductInventoryPage(): JSX.Element {
                 {
                   key: "reference",
                   header: "Reference",
-                  render: (r) => (r.referenceType ? `${r.referenceType}${r.referenceId ? ` · ${r.referenceId}` : ""}` : "—"),
+                  render: (r) => documentReferenceLabel(r),
                 },
                 { key: "userName", header: "By", render: (r) => r.userName ?? "—" },
               ]}

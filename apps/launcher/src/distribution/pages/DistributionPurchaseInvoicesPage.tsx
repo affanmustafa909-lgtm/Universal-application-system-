@@ -5,6 +5,7 @@ import { purchaseApi } from "../../pharmacy/api/pharmacy-purchase";
 import { formatPkr, useInvalidatePharmacy, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
 import { DistPagination } from "../components/DistPagination";
 import { errorMessage, formatDate } from "../components/DistInventoryShared";
+import { SupplierInvoiceSuggest } from "../components/SupplierInvoiceSuggest";
 import {
   DistButton,
   DistDataTable,
@@ -113,11 +114,14 @@ export function DistributionPurchaseInvoicesPage(): JSX.Element {
           </label>
           <label className="text-xs text-slate-500">
             Supplier invoice #
-            <DistInput
-              className="mt-1"
-              value={supplierInvoiceNumber}
-              onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
-            />
+            <div className="mt-1">
+              <SupplierInvoiceSuggest
+                branchCode={branchCode}
+                value={supplierInvoiceNumber}
+                onChange={setSupplierInvoiceNumber}
+                supplierId={selectedGrn?.supplierId}
+              />
+            </div>
           </label>
           <label className="text-xs text-slate-500">
             Invoice date

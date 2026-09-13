@@ -1,0 +1,125 @@
+{
+  "phase": 9,
+  "runId": "90514024",
+  "api": "https://backend-system-production-28a3.up.railway.app",
+  "generatedAt": "2026-09-13T09:09:01.400Z",
+  "summary": {
+    "passed": 16,
+    "failed": 0,
+    "total": 16
+  },
+  "results": [
+    {
+      "name": "coa.lists",
+      "passed": true,
+      "detail": "[{\"id\":\"9e7aca1a-c0ba-4d44-b745-99c5c6cb2a6e\",\"code\":\"1101\",\"name\":\"Cash Register\",\"type\":\"asset\",\"subtype\":\"cash\",\"balance\":66995,\"active\":true},{\"id\":\"de2118ac-ca09-438b-9644-87a79b01f025\",\"code\":\"1",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "name": "coa.hasCash",
+      "passed": true,
+      "detail": "1101",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "coa.hasWholesale",
+      "passed": true,
+      "detail": "4111",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "journal.rejectsUnbalanced",
+      "passed": true,
+      "detail": "Journal entry must balance with non-zero amounts",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "name": "journal.acceptsBalanced",
+      "passed": true,
+      "detail": "{\"id\":\"fde32ba1-5f54-4d99-9cb1-bdadbb97d89c\",\"entryRef\":\"JV-MAN-ZLDM66\",\"entryDate\":\"2026-09-13\",\"source\":\"manual\",\"sourceRef\":\"JV-MAN-ZLDM66\",\"description\":\"P9 balanced 90514024\",\"status\":\"posted\",\"c",
+      "expected": 200,
+      "actual": 201
+    },
+    {
+      "name": "journal.reverse",
+      "passed": true,
+      "detail": "{\"id\":\"ece353f7-988d-4a55-92a3-ffe6c87f8266\",\"entryRef\":\"JV-REV-JV-MAN-ZLDM66\",\"entryDate\":\"2026-09-13\",\"source\":\"reversal\",\"sourceRef\":\"JV-MAN-ZLDM66\",\"description\":\"Reversal of JV-MAN-ZLDM66: phase9",
+      "expected": 200,
+      "actual": 201
+    },
+    {
+      "name": "journal.reverse.idempotentReject",
+      "passed": true,
+      "detail": "Journal already reversed",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "name": "gl.paginated",
+      "passed": true,
+      "detail": "{\"items\":[{\"id\":\"ece353f7-988d-4a55-92a3-ffe6c87f8266\",\"entryRef\":\"JV-REV-JV-MAN-ZLDM66\",\"entryDate\":\"2026-09-13\",\"source\":\"reversal\",\"sourceRef\":\"JV-MAN-ZLDM66\",\"description\":\"Reversal of JV-MAN-ZLDM",
+      "expected": "items+total",
+      "actual": "25/69"
+    },
+    {
+      "name": "distFinance.dashboard",
+      "passed": true,
+      "detail": "{\"asOf\":\"2026-09-13T09:08:50.296Z\",\"branchCode\":\"DIST-HQ\",\"kpis\":{\"cashBalance\":66995,\"bankBalance\":0,\"accountsReceivable\":142085,\"accountsPayable\":57965,\"todayReceipts\":0,\"todayPayments\":0,\"monthlyRe",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "name": "distFinance.noFakeGross",
+      "passed": true,
+      "detail": "grossProfit null unless COGS",
+      "expected": null,
+      "actual": null
+    },
+    {
+      "name": "distFinance.recon",
+      "passed": true,
+      "detail": "{\"customer\":{\"outstandingPkr\":138385,\"invoiceDuePkr\":142085,\"glArPkr\":138680,\"differencePkr\":-295},\"supplier\":{\"grnPkr\":64330,\"purchaseReturnPkr\":6365,\"documentNetPkr\":57965,\"glApPkr\":57965,\"differenc",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "name": "period.create",
+      "passed": true,
+      "detail": "{\"id\":\"38e45176-003a-4a11-8d27-821544ba4b84\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"name\":\"P9-90514024\",\"startDate\":\"2026-09-13\",\"en",
+      "expected": 200,
+      "actual": 201
+    },
+    {
+      "name": "period.close",
+      "passed": true,
+      "detail": "{\"id\":\"38e45176-003a-4a11-8d27-821544ba4b84\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"name\":\"P9-90514024\",\"startDate\":\"2026-09-13\",\"en",
+      "expected": "closed",
+      "actual": "closed"
+    },
+    {
+      "name": "period.blocksPosting",
+      "passed": true,
+      "detail": "Period P9-90514024 is closed. Reopen it (audited) before posting.",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "name": "period.reopen",
+      "passed": true,
+      "detail": "{\"id\":\"38e45176-003a-4a11-8d27-821544ba4b84\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"name\":\"P9-90514024\",\"startDate\":\"2026-09-13\",\"en",
+      "expected": "open",
+      "actual": "open"
+    },
+    {
+      "name": "report.trialBalance",
+      "passed": true,
+      "detail": "{\"reportId\":\"trial-balance\",\"title\":\"Trial Balance\",\"generatedAt\":\"2026-09-13T09:08:56.970Z\",\"rows\":[{\"label\":\"1101 — Cash Register\",\"debit\":66995,\"balance\":66995},{\"label\":\"1102 — Bank Accounts\",\"deb",
+      "expected": 200,
+      "actual": 200
+    }
+  ]
+}

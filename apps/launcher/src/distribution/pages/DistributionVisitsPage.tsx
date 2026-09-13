@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { fieldForceApi } from "../../pharmacy/api/pharmacy-field-force";
-import { formatPkr, useInvalidatePharmacy, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
+import { formatPkr, distLiveListOptions, useInvalidatePharmacy, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
 import { DistMasterDrawer } from "../components/DistMasterDrawer";
 import { DistPagination } from "../components/DistPagination";
 import {
@@ -14,8 +14,10 @@ import {
   DistSelect,
   DistStatusBadge,
 } from "../ui/DistUi";
+import { customerDisplayName } from "../lib/customerDisplay";
 
 const DIST = "/pops/distribution";
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const OUTCOMES = [
   ["order_taken", "Order taken"],
   ["collection_received", "Collection received"],
@@ -26,6 +28,11 @@ const OUTCOMES = [
   ["other", "Other"],
 ] as const;
 
+function weekdayLabel(iso: string): string {
+  const d = new Date(`${iso}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : `${DAY_NAMES[d.getDay()]} (${d.getDay()})`;
+}
+
 export function DistributionVisitsPage(): JSX.Element {
   const { branch } = usePharmacyAccess();
   const invalidate = useInvalidatePharmacy([["distribution", "field-force"]]);
@@ -34,6 +41,7 @@ export function DistributionVisitsPage(): JSX.Element {
   const status = sp.get("status") ?? "";
   const [page, setPage] = useState(1);
   const [err, setErr] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [active, setActive] = useState<Record<string, unknown> | null>(null);
   const [outcome, setOutcome] = useState("order_taken");
   const [notes, setNotes] = useState("");
@@ -41,23 +49,53 @@ export function DistributionVisitsPage(): JSX.Element {
   const [reason, setReason] = useState("");
 
   const list = useQuery({
-    queryKey: ["distribution", "field-force", "visits", branch?.code, date, status, page],
+    queryKey: ["distribution", "field-force", "visits", branch?.code ?? "org", date, status, page],
     enabled: Boolean(branch?.code),
+    // Org-wide by date so visits created from null-branch PJPs still appear.
     queryFn: () =>
       fieldForceApi.visits({
-        branchCode: branch!.code,
         date,
         status: status || undefined,
         page,
         pageSize: 25,
       }),
+    ...distLiveListOptions,
   });
 
   const rows = useMemo(() => (list.data?.items ?? []) as Record<string, unknown>[], [list.data]);
 
+  const genMut = useMutation({
+    mutationFn: () => {
+      if (!branch?.code) throw new Error("Select a branch first");
+      return fieldForceApi.generateVisits({ date, branchCode: branch.code }) as Promise<{
+        created?: number;
+        skipped?: number;
+        message?: string;
+        plans?: number;
+      }>;
+    },
+    onSuccess: async (res) => {
+      const msg =
+        res?.message ||
+        `Created ${res?.created ?? 0} visit(s)` +
+          (res?.skipped ? ` (skipped ${res.skipped} duplicate(s))` : "");
+      setInfo(msg);
+      setErr(null);
+      await invalidate();
+      await list.refetch();
+    },
+    onError: (e: Error) => {
+      setInfo(null);
+      setErr(e.message);
+    },
+  });
+
   const startMut = useMutation({
     mutationFn: (id: string) => fieldForceApi.startVisit(id, {}),
-    onSuccess: () => invalidate(),
+    onSuccess: async () => {
+      await invalidate();
+      await list.refetch();
+    },
     onError: (e: Error) => setErr(e.message),
   });
   const completeMut = useMutation({
@@ -68,22 +106,27 @@ export function DistributionVisitsPage(): JSX.Element {
         followUpRequired: outcome === "follow_up_required",
         followUpDate: outcome === "follow_up_required" ? newDate || date : undefined,
       }),
-    onSuccess: () => {
+    onSuccess: async () => {
       setActive(null);
-      invalidate();
+      await invalidate();
+      await list.refetch();
     },
     onError: (e: Error) => setErr(e.message),
   });
   const missMut = useMutation({
     mutationFn: (id: string) => fieldForceApi.missVisit(id, reason || "missed"),
-    onSuccess: () => invalidate(),
+    onSuccess: async () => {
+      await invalidate();
+      await list.refetch();
+    },
     onError: (e: Error) => setErr(e.message),
   });
   const reschedMut = useMutation({
     mutationFn: () => fieldForceApi.rescheduleVisit(String(active!.id), { newDate, reason: reason || "reschedule" }),
-    onSuccess: () => {
+    onSuccess: async () => {
       setActive(null);
-      invalidate();
+      await invalidate();
+      await list.refetch();
     },
     onError: (e: Error) => setErr(e.message),
   });
@@ -91,19 +134,30 @@ export function DistributionVisitsPage(): JSX.Element {
   return (
     <DistPageShell
       title="Visits"
-      subtitle="Today's planned visits and searchable history. Server-filtered — never loads the full archive."
+      subtitle="Planned visits for a date. Generate from active PJPs — weekday must match the PJP visit day."
       breadcrumb={[
         { label: "Distribution", to: `${DIST}/ps` },
         { label: "Field Force", to: `${DIST}/field-force` },
         { label: "Visits" },
       ]}
       actions={
-        <Link to={`${DIST}/pjp`}>
-          <DistButton variant="secondary">Generate from PJP</DistButton>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link to={`${DIST}/pjp`}>
+            <DistButton variant="secondary">PJP / Sale plan</DistButton>
+          </Link>
+          <DistButton disabled={!branch?.code || genMut.isPending} onClick={() => genMut.mutate()}>
+            Generate for date
+          </DistButton>
+        </div>
       }
+      error={!branch ? "Select a branch." : list.isError ? (list.error as Error).message : null}
     >
       {err ? <DistErrorBanner message={err} onRetry={() => setErr(null)} /> : null}
+      {info ? (
+        <p className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-900 dark:border-cyan-900/40 dark:bg-cyan-950/30 dark:text-cyan-100">
+          {info}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950/40">
         <label className="text-xs text-slate-500">
           Date
@@ -116,9 +170,11 @@ export function DistributionVisitsPage(): JSX.Element {
               next.set("date", e.target.value);
               setSp(next, { replace: true });
               setPage(1);
+              setInfo(null);
             }}
           />
         </label>
+        <p className="pb-2 text-xs text-slate-500">Weekday: {weekdayLabel(date)}</p>
         <label className="text-xs text-slate-500">
           Status
           <DistSelect
@@ -146,10 +202,10 @@ export function DistributionVisitsPage(): JSX.Element {
         loading={list.isLoading}
         rows={rows}
         rowKey={(r) => String(r.id)}
-        empty="No visits for this filter"
+        empty={`No visits for ${date} (${weekdayLabel(date)}). Generate from PJP, or pick the PJP visit weekday.`}
         columns={[
           { key: "visitNumber", header: "Visit#" },
-          { key: "customerName", header: "Customer", render: (r) => String(r.customerName ?? "—") },
+          { key: "customerName", header: "Customer", render: (r) => customerDisplayName(r) },
           { key: "employeeName", header: "Salesman", render: (r) => String(r.employeeName ?? "—") },
           { key: "status", header: "Status", render: (r) => <DistStatusBadge status={String(r.status)} /> },
           { key: "outcome", header: "Outcome", render: (r) => String(r.outcome ?? "—").replace(/_/g, " ") },

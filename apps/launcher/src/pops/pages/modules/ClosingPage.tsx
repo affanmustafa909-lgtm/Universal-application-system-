@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@platform/ui";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { ClosingStatus } from "@platform/contracts";
 import { closeCashSession } from "../../api/accounting";
 import {
   closeDay,
@@ -13,6 +14,7 @@ import {
   verifyBackup,
 } from "../../api/closing";
 import { formatPkr, useAccountingAccess } from "../../hooks/useAccounting";
+import { useActiveSystemId } from "../../../hooks/useActiveSystemId";
 import { useSessionStore } from "../../../stores/sessionStore";
 import { PageHeader } from "../../ui/PageHeader";
 
@@ -23,7 +25,58 @@ const STEP_ACTIONS: Record<string, "pause" | "kitchen" | "zreport" | "backup"> =
   s5: "backup",
 };
 
+const DIST_CHECKLIST: Record<string, { label: string; hintDone?: string; hintTodo?: string }> = {
+  s1: {
+    label: "Stop new bookings / handover to night",
+    hintDone: "New Sale Window bookings are paused.",
+    hintTodo: "Pause new bookings before closing.",
+  },
+  s2: {
+    label: "Reconcile cash & collections",
+  },
+  s3: {
+    label: "Confirm warehouse / dispatch queue clear",
+    hintDone: "Dispatch queue clear.",
+    hintTodo: "Confirm packing / dispatch queue is clear.",
+  },
+  s4: {
+    label: "Run Z-report & day sales summary",
+    hintTodo: "Generate today's distribution Z-report.",
+  },
+  s5: {
+    label: "Verify backup completed",
+  },
+};
+
+function adaptClosingForDistribution(status: ClosingStatus): ClosingStatus {
+  return {
+    ...status,
+    checklist: status.checklist.map((s) => {
+      const dist = DIST_CHECKLIST[s.id];
+      if (!dist) return s;
+      const hint =
+        s.done && dist.hintDone
+          ? dist.hintDone
+          : !s.done && dist.hintTodo
+            ? dist.hintTodo
+            : s.hint
+                ?.replace(/kitchen|KOT/gi, "dispatch")
+                .replace(/bill\(s\)/gi, "booking(s)")
+                .replace(/PRA queue flush/gi, "day sales summary");
+      return { ...s, label: dist.label, hint };
+    }),
+    blockers: status.blockers.map((b) =>
+      b
+        .replace(/Pause new orders/gi, "Pause new bookings")
+        .replace(/held\/open bill/gi, "held/open booking")
+        .replace(/kitchen ticket\(s\) still open/gi, "dispatch items still open"),
+    ),
+  };
+}
+
 export function ClosingPage(): JSX.Element {
+  const systemId = useActiveSystemId();
+  const isDist = systemId === "distribution" || systemId === "pharmacy";
   const { branch, canManage } = useAccountingAccess();
   const claims = useSessionStore((s) => s.claims);
   const canClose =
@@ -42,14 +95,21 @@ export function ClosingPage(): JSX.Element {
     refetchInterval: 30_000,
   });
 
-  const status = statusQuery.data;
+  const status = useMemo(() => {
+    const raw = statusQuery.data;
+    if (!raw) return undefined;
+    return isDist ? adaptClosingForDistribution(raw) : raw;
+  }, [statusQuery.data, isDist]);
+
   const ordersPausedForToday = Boolean(status?.ordersPaused);
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["closing"] });
     void queryClient.invalidateQueries({ queryKey: ["accounting"] });
-    void queryClient.invalidateQueries({ queryKey: ["kitchen"] });
-    void queryClient.invalidateQueries({ queryKey: ["orders"] });
+    if (!isDist) {
+      void queryClient.invalidateQueries({ queryKey: ["kitchen"] });
+      void queryClient.invalidateQueries({ queryKey: ["orders"] });
+    }
   };
 
   const actionMutation = useMutation({
@@ -70,13 +130,21 @@ export function ClosingPage(): JSX.Element {
     },
     onSuccess: (_data, action) => {
       setError(null);
-      const labels = {
-        pause: "New orders paused",
-        resume: "New orders resumed — POS can take orders again",
-        kitchen: "Open kitchen tickets closed",
-        zreport: "Z-report generated and PRA queue flushed",
-        backup: "Backup snapshot verified",
-      };
+      const labels = isDist
+        ? {
+            pause: "New bookings paused",
+            resume: "Bookings resumed — Sale Window can take orders again",
+            kitchen: "Dispatch queue confirmed clear",
+            zreport: "Z-report generated — day sales summary ready",
+            backup: "Backup snapshot verified",
+          }
+        : {
+            pause: "New orders paused",
+            resume: "New orders resumed — POS can take orders again",
+            kitchen: "Open kitchen tickets closed",
+            zreport: "Z-report generated and PRA queue flushed",
+            backup: "Backup snapshot verified",
+          };
       setMessage(labels[action]);
       invalidate();
     },
@@ -125,7 +193,11 @@ export function ClosingPage(): JSX.Element {
     <div className="space-y-4">
       <PageHeader
         title="Backup & closing"
-        subtitle="Shift / day-end checklist linked to live accounting and cash sessions."
+        subtitle={
+          isDist
+            ? "Distribution day-end checklist — cash session, sales summary, and backup."
+            : "Shift / day-end checklist linked to live accounting and cash sessions."
+        }
         actions={
           <Link
             to="/pops/accounting/reports"
@@ -139,7 +211,9 @@ export function ClosingPage(): JSX.Element {
       {ordersPausedForToday ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
           <div>
-            New POS and kitchen orders are paused for day closing. Business date: {status?.businessDate}
+            {isDist
+              ? `New Sale Window bookings are paused for day closing. Business date: ${status?.businessDate}`
+              : `New POS and kitchen orders are paused for day closing. Business date: ${status?.businessDate}`}
           </div>
           {canClose ? (
             <Button
@@ -147,7 +221,7 @@ export function ClosingPage(): JSX.Element {
               disabled={actionMutation.isPending}
               onClick={() => actionMutation.mutate("resume")}
             >
-              Resume orders
+              {isDist ? "Resume bookings" : "Resume orders"}
             </Button>
           ) : null}
         </div>
@@ -174,7 +248,9 @@ export function ClosingPage(): JSX.Element {
             <ul className="mt-3 space-y-2">
               {(status?.checklist ?? []).map((s) => {
                 const action = STEP_ACTIONS[s.id];
-                const showAction = canClose && action && !s.done && s.id !== "s2";
+                // Distribution: no kitchen KOT step action
+                const skipKitchen = isDist && action === "kitchen";
+                const showAction = canClose && action && !s.done && s.id !== "s2" && !skipKitchen;
                 return (
                   <li key={s.id}>
                     <div className="flex items-start justify-between gap-3 rounded-md border border-slate-800/80 bg-slate-950/40 px-3 py-2 text-sm text-slate-200">
@@ -194,7 +270,9 @@ export function ClosingPage(): JSX.Element {
                           onClick={() => actionMutation.mutate(action)}
                         >
                           {action === "pause"
-                            ? "Pause orders"
+                            ? isDist
+                              ? "Pause bookings"
+                              : "Pause orders"
                             : action === "kitchen"
                               ? "Close KOTs"
                               : action === "zreport"
@@ -233,7 +311,7 @@ export function ClosingPage(): JSX.Element {
                   <dd className="text-white">{formatPkr(status?.shiftSummary.todaySales ?? 0)}</dd>
                 </div>
                 <div className="flex justify-between text-slate-400">
-                  <dt>Orders completed</dt>
+                  <dt>{isDist ? "Sales booked" : "Orders completed"}</dt>
                   <dd className="text-white">{status?.shiftSummary.orderCount ?? 0}</dd>
                 </div>
                 <div className="flex justify-between text-slate-400">
@@ -258,7 +336,7 @@ export function ClosingPage(): JSX.Element {
               <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-400">
                 <div>Cash sales</div>
                 <div className="text-right text-slate-200">{formatPkr(status.lastZReport.cashSales)}</div>
-                <div>Card sales</div>
+                <div>{isDist ? "Credit / other" : "Card sales"}</div>
                 <div className="text-right text-slate-200">{formatPkr(status.lastZReport.cardSales)}</div>
                 <div>Tax collected</div>
                 <div className="text-right text-slate-200">{formatPkr(status.lastZReport.taxCollected)}</div>

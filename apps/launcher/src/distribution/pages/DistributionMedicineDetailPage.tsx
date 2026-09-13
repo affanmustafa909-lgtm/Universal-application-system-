@@ -17,6 +17,7 @@ import {
   unitsApi,
 } from "../../pharmacy/api/pharmacy-masters";
 import { formatPkr, useInvalidatePharmacy, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
+import { formatPackLabel, medicinePackPrices } from "../lib/medicinePackPricing";
 import {
   DistButton,
   DistPageShell,
@@ -228,7 +229,7 @@ export function DistributionMedicineDetailPage(): JSX.Element {
                       )
                     }
                   />
-                  <Row k="Generic" v={d.genericNameMaster ?? d.genericName} />
+                  <Row k="Formula" v={d.genericNameMaster ?? d.genericName} />
                   <Row k="Brand" v={d.brandNameMaster ?? d.brandName} />
                   <Row k="Category" v={d.categoryNameMaster ?? d.category} />
                   <Row k="Dosage form" v={d.dosageFormName} />
@@ -253,8 +254,21 @@ export function DistributionMedicineDetailPage(): JSX.Element {
                 <Row k="Cost" v={formatPkr(d.costPricePkr ?? 0)} />
                 <Row k="Wholesale" v={formatPkr(d.wholesalePricePkr ?? 0)} />
                 <Row k="Dealer" v={formatPkr(d.dealerPricePkr ?? 0)} />
-                <Row k="Retail" v={formatPkr(d.sellingPricePkr ?? 0)} />
+                <Row k="Retail (1 pata)" v={formatPkr(d.sellingPricePkr ?? 0)} />
                 <Row k="Tax %" v={d.taxPct ?? 0} />
+                <Row k="Pack layout" v={formatPackLabel(d.tabletsPerStrip, d.stripsPerBox)} />
+                {(() => {
+                  const retail = medicinePackPrices(d.sellingPricePkr, d.tabletsPerStrip, d.stripsPerBox);
+                  const ws = medicinePackPrices(d.wholesalePricePkr, d.tabletsPerStrip, d.stripsPerBox);
+                  return (
+                    <>
+                      <Row k="Retail 1 goli" v={formatPkr(retail.goliPkr)} />
+                      <Row k="Retail 1 pack" v={formatPkr(retail.packPkr)} />
+                      <Row k="Wholesale 1 goli" v={formatPkr(ws.goliPkr)} />
+                      <Row k="Wholesale 1 pack" v={formatPkr(ws.packPkr)} />
+                    </>
+                  );
+                })()}
               </dl>
             </DistPanel>
           ) : null}
@@ -265,7 +279,7 @@ export function DistributionMedicineDetailPage(): JSX.Element {
                 <Row k="Current stock" v={d.currentStock} />
                 <Row k="Reorder level" v={d.reorderLevel} />
                 <Row k="Min / Max" v={`${d.minStock ?? 0} / ${d.maxStock ?? 0}`} />
-                <Row k="Pack" v={`${d.tabletsPerStrip ?? 1} tabs × ${d.stripsPerBox ?? 1} strips`} />
+                <Row k="Pack" v={formatPackLabel(d.tabletsPerStrip, d.stripsPerBox)} />
                 <Row k="Batch tracking" v={d.batchTrackingEnabled ? "Yes" : "No"} />
                 <Row k="Expiry tracking" v={d.expiryTrackingEnabled ? "Yes" : "No"} />
                 <Row k="FEFO" v={d.fefoEnabled ? "Yes" : "No"} />

@@ -149,6 +149,7 @@ export const popsNavItems: PopsNavItem[] = [
   { type: "link", path: "security", label: "Security" },
   { type: "link", path: "settings", label: "Settings" },
   { type: "link", path: "printer", label: "Printer" },
+  { type: "link", path: "daily-sheet", label: "Daily Sheet" },
   { type: "link", path: "closing", label: "Closing" },
 ];
 

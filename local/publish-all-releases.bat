@@ -23,8 +23,11 @@ if errorlevel 1 exit /b 1
 
 echo.
 echo All auto-update feeds live:
-echo   Desktop suite:     https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-suite.json
-echo   Desktop restaurant: https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-restaurant.json
-echo   Mobile admin:      https://github.com/basir2353/pops-mobile-updates/releases/latest/download/latest-admin.json
-echo   Mobile staff:      https://github.com/basir2353/pops-mobile-updates/releases/latest/download/latest-staff.json
+echo   Desktop suite:         https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-suite.json
+echo   Desktop restaurant:    https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-restaurant.json
+echo   Desktop general-store: https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-general-store.json
+echo   Desktop pharmacy:      https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-pharmacy.json
+echo   Desktop distribution:  https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-distribution.json
+echo   Mobile admin:          https://github.com/basir2353/pops-mobile-updates/releases/latest/download/latest-admin.json
+echo   Mobile staff:          https://github.com/basir2353/pops-mobile-updates/releases/latest/download/latest-staff.json
 exit /b 0

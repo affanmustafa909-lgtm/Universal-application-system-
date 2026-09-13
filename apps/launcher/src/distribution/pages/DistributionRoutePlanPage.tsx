@@ -2,8 +2,9 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { fieldForceApi } from "../../pharmacy/api/pharmacy-field-force";
 import { fetchPharmacyRoutes, fetchPharmacyTradeCustomers } from "../../pharmacy/api/pharmacy-erp";
-import { formatPkr, useInvalidatePharmacy, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
+import { formatPkr, distLiveListOptions, useInvalidatePharmacy, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
 import { DistButton, DistDataTable, DistErrorBanner, DistPageShell, DistSelect } from "../ui/DistUi";
+import { customerDisplayName } from "../lib/customerDisplay";
 
 const DIST = "/pops/distribution";
 
@@ -14,24 +15,31 @@ export function DistributionRoutePlanPage(): JSX.Element {
   const [customerId, setCustomerId] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
-  const routes = useQuery({ queryKey: ["pharmacy", "routes"], queryFn: fetchPharmacyRoutes });
+  const routes = useQuery({
+    queryKey: ["pharmacy", "routes"],
+    queryFn: fetchPharmacyRoutes,
+    ...distLiveListOptions,
+  });
   const detail = useQuery({
     queryKey: ["distribution", "field-force", "route", routeId],
     enabled: Boolean(routeId),
     queryFn: () => fieldForceApi.route(routeId),
+    ...distLiveListOptions,
   });
   const customers = useQuery({
-    queryKey: ["pharmacy", "trade-customers", branch?.code],
+    queryKey: ["pharmacy", "trade-customers", branch?.code ?? "all"],
     enabled: Boolean(routeId),
     queryFn: () => fetchPharmacyTradeCustomers(branch?.code),
+    ...distLiveListOptions,
   });
 
   const addMut = useMutation({
     mutationFn: () => fieldForceApi.addRouteCustomer(routeId, { tradeCustomerId: customerId }),
-    onSuccess: () => {
+    onSuccess: async () => {
       setCustomerId("");
-      invalidate();
-      void detail.refetch();
+      setErr(null);
+      await detail.refetch();
+      await invalidate();
     },
     onError: (e: Error) => setErr(e.message),
   });
@@ -47,7 +55,7 @@ export function DistributionRoutePlanPage(): JSX.Element {
     ids[j] = tmp;
     try {
       await fieldForceApi.reorderRoute(routeId, ids);
-      void detail.refetch();
+      await detail.refetch();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Reorder failed");
     }
@@ -62,6 +70,7 @@ export function DistributionRoutePlanPage(): JSX.Element {
         { label: "Field Force", to: `${DIST}/field-force` },
         { label: "Routes" },
       ]}
+      error={detail.isError ? (detail.error as Error).message : null}
     >
       {err ? <DistErrorBanner message={err} onRetry={() => setErr(null)} /> : null}
       <div className="flex flex-wrap items-end gap-2">
@@ -92,16 +101,28 @@ export function DistributionRoutePlanPage(): JSX.Element {
         </DistButton>
       </div>
       <DistDataTable
-        loading={detail.isLoading}
+        loading={Boolean(routeId) && detail.isLoading}
         rows={stops}
-        rowKey={(r) => String(r.id)}
+        rowKey={(r) => String(r.id ?? r.tradeCustomerId)}
         empty={routeId ? "No customers on this route" : "Select a route"}
         columns={[
           { key: "sequenceNo", header: "#" },
-          { key: "customerCode", header: "Code" },
-          { key: "customerName", header: "Customer" },
+          {
+            key: "customerCode",
+            header: "Code",
+            render: (r) => String(r.customerCode ?? "—"),
+          },
+          {
+            key: "customerName",
+            header: "Customer",
+            render: (r) => customerDisplayName(r),
+          },
           { key: "priority", header: "Priority" },
-          { key: "outstandingPkr", header: "Outstanding", render: (r) => formatPkr(Number(r.outstandingPkr ?? 0)) },
+          {
+            key: "outstandingPkr",
+            header: "Outstanding",
+            render: (r) => formatPkr(Number(r.outstandingPkr ?? 0)),
+          },
           {
             key: "move",
             header: "Order",

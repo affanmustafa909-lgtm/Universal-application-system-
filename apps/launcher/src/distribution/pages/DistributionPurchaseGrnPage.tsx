@@ -9,6 +9,7 @@ import {
 import { formatPkr, useInvalidatePharmacy, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
 import { DistPagination } from "../components/DistPagination";
 import { WarehouseFilter, errorMessage, formatDate } from "../components/DistInventoryShared";
+import { SupplierInvoiceSuggest } from "../components/SupplierInvoiceSuggest";
 import {
   DistButton,
   DistDataTable,
@@ -18,6 +19,8 @@ import {
   DistSelect,
   DistStatusBadge,
 } from "../ui/DistUi";
+import { printDistDocument } from "../lib/printDistOrder";
+import { replaceUuidsInMessage } from "../lib/customerDisplay";
 
 const DIST = "/pops/distribution";
 
@@ -163,8 +166,14 @@ export function DistributionPurchaseGrnPage(): JSX.Element {
     lines.every((l) => l.batchNumber.trim() && l.expiryDate && l.quantity > 0);
 
   const post = useMutation({
-    mutationFn: () =>
-      purchaseApi.createGrn({
+    mutationFn: () => {
+      const over = lines.find((l) => l.quantity + (l.freeQuantity || 0) > l.pendingQty);
+      if (over) {
+        throw new Error(
+          `Over-receive blocked for ${over.medicineName}: receiving ${over.quantity + (over.freeQuantity || 0)} (qty + free), pending ${over.pendingQty}`,
+        );
+      }
+      return purchaseApi.createGrn({
         branchCode: branchCode!,
         warehouseId,
         purchaseOrderId: poId,
@@ -183,7 +192,8 @@ export function DistributionPurchaseGrnPage(): JSX.Element {
           freeQuantity: l.freeQuantity,
           unitCostPkr: l.unitCostPkr,
         })),
-      }),
+      });
+    },
     onSuccess: () => {
       setActionError(null);
       setLines([]);
@@ -197,7 +207,8 @@ export function DistributionPurchaseGrnPage(): JSX.Element {
     },
     onError: (e) => {
       // Do NOT clear the form on failure — operator keeps batch/expiry/qty.
-      setActionError(errorMessage(e, "GRN post failed"));
+      const nameById = new Map(lines.map((l) => [l.medicineId, l.medicineName]));
+      setActionError(replaceUuidsInMessage(errorMessage(e, "GRN post failed"), nameById));
     },
   });
 
@@ -207,17 +218,48 @@ export function DistributionPurchaseGrnPage(): JSX.Element {
 
   return (
     <DistPageShell
-      title="Goods receipt (GRN)"
-      subtitle="Select PO → batch / mfg / expiry / qty / cost → validate → post. Double-submit protected."
+      title="Receiving (GRN)"
+      subtitle="Select PO → batch / mfg / expiry / qty / cost → validate → post. This is goods receiving."
       breadcrumb={[
         { label: "Distribution", to: `${DIST}/ps` },
         { label: "Purchases", to: `${DIST}/purchase` },
-        { label: "GRN" },
+        { label: "Receiving / GRN" },
       ]}
       actions={
-        <Link to={`${DIST}/purchase-orders`}>
-          <DistButton variant="secondary">Purchase orders</DistButton>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link to={`${DIST}/purchase-orders`}>
+            <DistButton variant="secondary">Purchase orders</DistButton>
+          </Link>
+          {selectedPo.data && lines.length > 0 ? (
+            <DistButton
+              variant="secondary"
+              onClick={() => {
+                const po = selectedPo.data!;
+                void printDistDocument({
+                  title: "Goods receipt (GRN draft)",
+                  documentNumber: String(po.poNumber ?? po.id),
+                  partyLabel: "Supplier",
+                  partyName: String(po.supplierName ?? po.supplierId ?? "—"),
+                  meta: [
+                    { label: "Warehouse", value: warehouseId || "—" },
+                    { label: "Received date", value: receivedDate },
+                  ],
+                  lines: lines.map((l) => ({
+                    label: String(l.medicineName ?? l.medicineId),
+                    qty: Number(l.quantity || 0),
+                    unitPrice: Number(l.unitCostPkr || 0),
+                  })),
+                  totalPkr: lines.reduce(
+                    (s, l) => s + Number(l.quantity || 0) * Number(l.unitCostPkr || 0),
+                    0,
+                  ),
+                }).catch((e) => setActionError(errorMessage(e, "Print failed")));
+              }}
+            >
+              Print draft
+            </DistButton>
+          ) : null}
+        </div>
       }
       error={!branch ? "Select a branch." : null}
     >
@@ -265,11 +307,14 @@ export function DistributionPurchaseGrnPage(): JSX.Element {
           </label>
           <label className="text-xs text-slate-500">
             Supplier invoice #
-            <DistInput
-              className="mt-1"
-              value={supplierInvoiceNumber}
-              onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
-            />
+            <div className="mt-1">
+              <SupplierInvoiceSuggest
+                branchCode={branchCode}
+                value={supplierInvoiceNumber}
+                onChange={setSupplierInvoiceNumber}
+                supplierId={selectedPo.data?.supplierId}
+              />
+            </div>
           </label>
           <label className="text-xs text-slate-500 sm:col-span-2">
             Notes

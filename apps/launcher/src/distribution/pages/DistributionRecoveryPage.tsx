@@ -16,6 +16,7 @@ import {
   DistSelect,
   DistStatusBadge,
 } from "../ui/DistUi";
+import { customerDisplayName } from "../lib/customerDisplay";
 
 const DIST = "/pops/distribution";
 
@@ -162,7 +163,7 @@ export function DistributionRecoveryPage(): JSX.Element {
             header: "Code",
             render: (r) => r.code ?? "—",
           },
-          { key: "name", header: "Customer" },
+          { key: "name", header: "Customer", render: (r) => customerDisplayName(r) },
           {
             key: "amount",
             header: "Amount",

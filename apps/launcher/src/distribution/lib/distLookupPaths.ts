@@ -26,8 +26,11 @@ const MODULE_PATH: Record<string, string> = {
   scheme: "/pops/distribution/pricing",
 };
 
-export function distPathForLookup(module: string, fallbackPath: string): string {
-  return MODULE_PATH[module] ?? fallbackPath.replace("/pops/pharmacy/", "/pops/distribution/");
+export function distPathForLookup(module: string, fallbackPath?: string | null): string {
+  if (MODULE_PATH[module]) return MODULE_PATH[module]!;
+  const path = typeof fallbackPath === "string" ? fallbackPath : "";
+  if (path) return path.replace("/pops/pharmacy/", "/pops/distribution/");
+  return "/pops/distribution";
 }
 
 export function distLookupModuleLabel(module: string): string {

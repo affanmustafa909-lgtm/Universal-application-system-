@@ -143,6 +143,9 @@ const ManufacturingPage = lazy(() =>
 const ContentPage = lazy(() =>
   import("../pops/pages/modules/ContentPage").then((m) => ({ default: m.ContentPage })),
 );
+const IceCreamDailySheetPage = lazy(() =>
+  import("../pops/pages/modules/IceCreamDailySheetPage").then((m) => ({ default: m.IceCreamDailySheetPage })),
+);
 
 /** Restaurant-exclusive routes. Rendered only in restaurant or suite editions. */
 export function restaurantRoutes(): JSX.Element {
@@ -202,6 +205,7 @@ export function restaurantRoutes(): JSX.Element {
       <Route path="reports" element={<ReportsPage />} />
       <Route path="manufacturing" element={<ManufacturingPage />} />
       <Route path="content" element={<ContentPage />} />
+      <Route path="daily-sheet" element={<IceCreamDailySheetPage />} />
     </>
   );
 }

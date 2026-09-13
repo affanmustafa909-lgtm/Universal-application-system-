@@ -44,6 +44,25 @@ const STEPS: { id: Level; label: string }[] = [
 
 type Row = { id: string; code: string; name: string; status?: string; [k: string]: unknown };
 
+/** One card per name (case-insensitive) within the current list scope. */
+function uniqueByName(rows: Row[]): Row[] {
+  const seen = new Map<string, Row>();
+  const byAge = [...rows].sort((a, b) => {
+    const ta = a.createdAt ? new Date(String(a.createdAt)).getTime() : 0;
+    const tb = b.createdAt ? new Date(String(b.createdAt)).getTime() : 0;
+    return ta - tb;
+  });
+  for (const row of byAge) {
+    if (String(row.status ?? "active").toLowerCase() === "inactive") continue;
+    const key = String(row.name ?? "")
+      .trim()
+      .toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.set(key, row);
+  }
+  return [...seen.values()].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+
 export function DistributionGeoPage(): JSX.Element {
   const invalidate = useInvalidatePharmacy([
     ["pharmacy", "provinces"],
@@ -127,20 +146,23 @@ export function DistributionGeoPage(): JSX.Element {
   }, [level]);
 
   const list: Row[] = useMemo(() => {
-    if (level === "province") return (provinces.data ?? []) as Row[];
-    if (level === "division")
-      return ((divisions.data ?? []) as Row[]).filter((r) => !selProvince || r.provinceId === selProvince.id);
-    if (level === "district")
-      return ((districts.data ?? []) as Row[]).filter((r) => !selDivision || r.divisionId === selDivision.id);
-    if (level === "city")
-      return ((cities.data ?? []) as Row[]).filter((r) => !selDistrict || r.districtId === selDistrict.id);
-    if (level === "area")
-      return ((areas.data ?? []) as Row[]).filter((r) => !selCity || r.cityId === selCity.id);
-    if (level === "territory")
-      return ((geoTerritories.data ?? []) as Row[]).filter((r) => !selArea || r.areaId === selArea.id);
-    if (level === "route")
-      return ((routes.data ?? []) as Row[]).filter((r) => !selArea || r.areaId === selArea.id);
-    return (legacy.data ?? []) as Row[];
+    const raw = (() => {
+      if (level === "province") return (provinces.data ?? []) as Row[];
+      if (level === "division")
+        return ((divisions.data ?? []) as Row[]).filter((r) => !selProvince || r.provinceId === selProvince.id);
+      if (level === "district")
+        return ((districts.data ?? []) as Row[]).filter((r) => !selDivision || r.divisionId === selDivision.id);
+      if (level === "city")
+        return ((cities.data ?? []) as Row[]).filter((r) => !selDistrict || r.districtId === selDistrict.id);
+      if (level === "area")
+        return ((areas.data ?? []) as Row[]).filter((r) => !selCity || r.cityId === selCity.id);
+      if (level === "territory")
+        return ((geoTerritories.data ?? []) as Row[]).filter((r) => !selArea || r.areaId === selArea.id);
+      if (level === "route")
+        return ((routes.data ?? []) as Row[]).filter((r) => !selArea || r.areaId === selArea.id);
+      return (legacy.data ?? []) as Row[];
+    })();
+    return uniqueByName(raw);
   }, [
     level,
     provinces.data,
@@ -193,38 +215,59 @@ export function DistributionGeoPage(): JSX.Element {
   async function onAdd(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    const trimmedName = name.trim();
+    const trimmedCode = code.trim();
+    if (!trimmedName || !trimmedCode) {
+      setError("Code and name are required");
+      return;
+    }
+    const nameTaken = list.some((r) => r.name.trim().toLowerCase() === trimmedName.toLowerCase());
+    if (nameTaken) {
+      setError(`"${trimmedName}" already exists — same name only once`);
+      return;
+    }
+    const codeTaken = list.some((r) => r.code.trim().toLowerCase() === trimmedCode.toLowerCase());
+    if (codeTaken) {
+      setError(`Code "${trimmedCode}" already exists — pick a different code`);
+      return;
+    }
     try {
-      if (level === "province") await createPharmacyProvince({ code, name });
+      if (level === "province") await createPharmacyProvince({ code: trimmedCode, name: trimmedName });
       else if (level === "division") {
         if (!selProvince) throw new Error("Tap a province first");
-        await createPharmacyDivision({ provinceId: selProvince.id, code, name });
+        await createPharmacyDivision({ provinceId: selProvince.id, code: trimmedCode, name: trimmedName });
       } else if (level === "district") {
         if (!selDivision) throw new Error("Tap a division first");
-        await createPharmacyDistrict({ divisionId: selDivision.id, code, name });
+        await createPharmacyDistrict({ divisionId: selDivision.id, code: trimmedCode, name: trimmedName });
       } else if (level === "city") {
         await createPharmacyCity({
-          code,
-          name,
+          code: trimmedCode,
+          name: trimmedName,
           districtId: selDistrict?.id,
         });
       } else if (level === "area") {
         if (!selCity) throw new Error("Tap a city first");
-        await createPharmacyArea({ cityId: selCity.id, code, name, isOutstation: outstation });
+        await createPharmacyArea({
+          cityId: selCity.id,
+          code: trimmedCode,
+          name: trimmedName,
+          isOutstation: outstation,
+        });
       } else if (level === "territory") {
         if (!selArea) throw new Error("Tap an area first");
-        await createPharmacyGeoTerritory({ areaId: selArea.id, code, name });
+        await createPharmacyGeoTerritory({ areaId: selArea.id, code: trimmedCode, name: trimmedName });
       } else if (level === "route") {
         if (!selArea) throw new Error("Tap an area first");
         await createPharmacyRoute({
           areaId: selArea.id,
           geoTerritoryId: selTerritory?.id,
-          code,
-          name,
+          code: trimmedCode,
+          name: trimmedName,
           sequenceNo: Number(extra) || 0,
           pjpDayOfWeek: null,
         });
       } else {
-        await createPharmacyTerritory({ code, name, region: extra || undefined });
+        await createPharmacyTerritory({ code: trimmedCode, name: trimmedName, region: extra || undefined });
       }
       invalidate();
       setCode("");
@@ -247,7 +290,9 @@ export function DistributionGeoPage(): JSX.Element {
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Geography masters</h1>
-          <p className="text-sm text-slate-500">Tap to drill Province → Route. Add from the bar below.</p>
+          <p className="text-sm text-slate-500">
+            Tap to drill Province → Route. Same name only once. Add from the bar below.
+          </p>
         </div>
         <div className="flex flex-wrap gap-1.5 text-xs text-slate-600 dark:text-slate-300">
           {selProvince ? <span className="rounded-md bg-slate-100 px-2 py-1 dark:bg-slate-800">{selProvince.name}</span> : null}

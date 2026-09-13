@@ -19,6 +19,8 @@ import {
   DistPageShell,
   DistSelect,
 } from "../ui/DistUi";
+import { printDistDocument } from "../lib/printDistOrder";
+import { customerDisplayName, tradeCustomerNameMap } from "../lib/customerDisplay";
 
 const DIST = "/pops/distribution";
 
@@ -87,9 +89,14 @@ export function DistributionCollectionsPage(): JSX.Element {
 
   const customers = useQuery({
     queryKey: ["pharmacy", "trade-customers", branchCode],
-    enabled: composerOpen,
+    enabled: Boolean(branchCode),
     queryFn: () => fetchPharmacyTradeCustomers(branchCode),
   });
+
+  const custNames = useMemo(
+    () => tradeCustomerNameMap((customers.data ?? []) as { id?: string; name?: string | null; code?: string | null }[]),
+    [customers.data],
+  );
 
   const openInvoices = useQuery({
     queryKey: ["distribution", "collections", "open-invoices", tradeCustomerId],
@@ -242,7 +249,7 @@ export function DistributionCollectionsPage(): JSX.Element {
           {
             key: "customer",
             header: "Customer",
-            render: (r) => r.tradeCustomerName ?? r.tradeCustomerId ?? "—",
+            render: (r) => customerDisplayName(r, custNames),
           },
           {
             key: "amountPkr",
@@ -274,6 +281,53 @@ export function DistributionCollectionsPage(): JSX.Element {
               return d ? new Date(d).toLocaleString() : "—";
             },
           },
+          {
+            key: "actions",
+            header: "Print",
+            render: (r) => (
+              <button
+                type="button"
+                className="text-xs font-semibold text-cyan-700 dark:text-cyan-400"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void printDistDocument({
+                    title: "Collection receipt",
+                    documentNumber: String(r.collectionNumber ?? r.id),
+                    partyLabel: "Customer",
+                    partyName: customerDisplayName(r, custNames),
+                    meta: [
+                      { label: "Method", value: String(r.paymentMethod ?? "—") },
+                      {
+                        label: "When",
+                        value: r.collectedAt || r.createdAt
+                          ? new Date(String(r.collectedAt ?? r.createdAt)).toLocaleString()
+                          : "—",
+                      },
+                      { label: "Reference", value: String(r.referenceNo ?? r.chequeNumber ?? "—") },
+                    ],
+                    lines:
+                      (r.allocations ?? []).length > 0
+                        ? (r.allocations ?? []).map((a) => ({
+                            label: String(a.invoiceNumber ?? a.invoiceId ?? "Invoice"),
+                            qty: 1,
+                            unitPrice: Number(a.amountPkr ?? 0),
+                          }))
+                        : [
+                            {
+                              label: "Receipt amount",
+                              qty: 1,
+                              unitPrice: Number(r.amountPkr ?? 0),
+                            },
+                          ],
+                    totalPkr: Number(r.amountPkr ?? 0),
+                    footerNote: "Official collection receipt — distribution",
+                  }).catch((err) => setActionError(errorMessage(err, "Print failed")));
+                }}
+              >
+                Print
+              </button>
+            ),
+          },
         ]}
       />
 
@@ -304,21 +358,12 @@ export function DistributionCollectionsPage(): JSX.Element {
               {amountPkr > 0 ? ` / ${formatPkr(amountPkr)}` : ""}
               {remainder !== 0 && amountPkr > 0 ? ` · rem ${formatPkr(remainder)}` : ""}
             </div>
-            <div className="flex gap-2">
-              <DistButton
-                variant="secondary"
-                disabled={createMut.isPending}
-                onClick={() => setComposerOpen(false)}
-              >
-                Cancel
-              </DistButton>
-              <DistButton
-                disabled={createMut.isPending || !canSubmit}
-                onClick={() => createMut.mutate()}
-              >
-                {createMut.isPending ? "Posting…" : "Post collection"}
-              </DistButton>
-            </div>
+            <DistButton
+              disabled={createMut.isPending || !canSubmit}
+              onClick={() => createMut.mutate()}
+            >
+              {createMut.isPending ? "Posting…" : "Post collection"}
+            </DistButton>
           </div>
         }
       >

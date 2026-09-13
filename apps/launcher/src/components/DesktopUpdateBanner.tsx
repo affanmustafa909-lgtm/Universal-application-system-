@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
+import { isOnline } from "@platform/connectivity";
 import { isSafeDesktopUpdate } from "../lib/desktopUpdateGuard";
+import {
+  currentSetupChannel,
+  downloadAndOpenSetupExe,
+  setupExeDownloadUrl,
+  setupExeFileName,
+} from "../lib/desktopSetupExe";
 
 type BannerState =
   | { kind: "hidden" }
@@ -23,11 +30,15 @@ function errMessage(err: unknown): string {
 
 /**
  * Top banner: checks GitHub Releases feed on launch and installs signed updates.
+ * Universal / Distribution also get “Open setup EXE” (download to local folder + run).
  * No-op in browser / Vite web preview.
  */
 export function DesktopUpdateBanner(): JSX.Element | null {
   const [state, setState] = useState<BannerState>({ kind: "hidden" });
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
+  const [lastVersion, setLastVersion] = useState<string | null>(null);
+  const [openingExe, setOpeningExe] = useState(false);
+  const channel = currentSetupChannel();
 
   useEffect(() => {
     if (!isTauriShell()) return;
@@ -35,13 +46,22 @@ export function DesktopUpdateBanner(): JSX.Element | null {
     let cancelled = false;
 
     async function runCheck(): Promise<void> {
+      if (!isOnline()) {
+        if (!cancelled) setState({ kind: "hidden" });
+        return;
+      }
       try {
         const { check } = await import("@tauri-apps/plugin-updater");
         const update = await check();
         if (cancelled) return;
         if (!update) {
-          // Already latest — keep quiet unless we were showing an error.
-          setState((prev) => (prev.kind === "error" ? { kind: "hidden" } : prev.kind === "available" || prev.kind === "downloading" ? prev : { kind: "hidden" }));
+          setState((prev) =>
+            prev.kind === "error"
+              ? { kind: "hidden" }
+              : prev.kind === "available" || prev.kind === "downloading"
+                ? prev
+                : { kind: "hidden" },
+          );
           return;
         }
         const notes = (update.body ?? "").trim();
@@ -54,11 +74,20 @@ export function DesktopUpdateBanner(): JSX.Element | null {
           version: update.version,
           notes,
         });
+        setLastVersion(update.version);
       } catch (err) {
         if (cancelled) return;
+        if (!isOnline()) {
+          setState({ kind: "hidden" });
+          return;
+        }
         const message = errMessage(err);
-        // Surface real failures (404 / network) so users aren't stuck silent.
-        if (/404|Not Found|failed|network|timed out|download/i.test(message)) {
+        if (/404|Not Found/i.test(message)) {
+          setState({ kind: "hidden" });
+          console.debug("[updater] feed missing", err);
+          return;
+        }
+        if (/failed|network|timed out|download/i.test(message)) {
           setState({ kind: "error", message });
         } else {
           console.debug("[updater] check skipped", err);
@@ -115,6 +144,31 @@ export function DesktopUpdateBanner(): JSX.Element | null {
     }
   }
 
+  async function openSetupExe(): Promise<void> {
+    if (!channel) return;
+    const version =
+      state.kind === "available"
+        ? state.version
+        : state.kind === "downloading"
+          ? state.version
+          : lastVersion ?? dismissedVersion;
+    if (!version) {
+      setState({ kind: "error", message: "No published version to open yet." });
+      return;
+    }
+    setOpeningExe(true);
+    try {
+      await downloadAndOpenSetupExe({
+        url: setupExeDownloadUrl(channel, version),
+        fileName: setupExeFileName(channel, version),
+      });
+    } catch (err) {
+      setState({ kind: "error", message: errMessage(err) });
+    } finally {
+      setOpeningExe(false);
+    }
+  }
+
   if (state.kind === "hidden") return null;
   if (state.kind === "available" && dismissedVersion === state.version) return null;
 
@@ -147,6 +201,16 @@ export function DesktopUpdateBanner(): JSX.Element | null {
         >
           Retry
         </button>
+        {channel ? (
+          <button
+            type="button"
+            className="rounded bg-slate-800 px-2.5 py-1 text-white hover:bg-slate-900 disabled:opacity-50"
+            disabled={openingExe}
+            onClick={() => void openSetupExe()}
+          >
+            {openingExe ? "Opening…" : "Open setup EXE"}
+          </button>
+        ) : null}
         <button
           type="button"
           className="underline opacity-80"
@@ -174,6 +238,16 @@ export function DesktopUpdateBanner(): JSX.Element | null {
       >
         Update &amp; Restart
       </button>
+      {channel ? (
+        <button
+          type="button"
+          className="rounded bg-slate-800 px-2.5 py-1 text-white hover:bg-slate-900 disabled:opacity-50"
+          disabled={openingExe}
+          onClick={() => void openSetupExe()}
+        >
+          {openingExe ? "Opening…" : "Open setup EXE"}
+        </button>
+      ) : null}
       <button
         type="button"
         className="underline opacity-80"

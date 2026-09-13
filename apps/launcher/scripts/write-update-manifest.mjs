@@ -16,13 +16,20 @@ import { join } from "node:path";
  *   node scripts/write-update-manifest.mjs <edition> [version]
  *
  * Env:
- *   CARGO_TARGET_DIR — defaults to %TEMP%/pops-launcher-cargo-target
+ *   CARGO_TARGET_DIR — defaults to local src-tauri/target when NSIS exists
  *   UPDATE_DOWNLOAD_BASE — GitHub release asset base URL (no trailing slash)
  */
 
 const edition = (process.argv[2] ?? "").trim();
 const versionArg = (process.argv[3] ?? "").trim();
-const VALID = new Set(["suite", "restaurant", "ice-cream-bar", "general-store", "pharmacy"]);
+const VALID = new Set([
+  "suite",
+  "restaurant",
+  "ice-cream-bar",
+  "general-store",
+  "pharmacy",
+  "distribution",
+]);
 if (!VALID.has(edition)) {
   console.error(`Usage: node scripts/write-update-manifest.mjs <${[...VALID].join("|")}> [version]`);
   process.exit(1);
@@ -57,6 +64,7 @@ const productHints = {
   "ice-cream-bar": /scoops|ice\s*cream/i,
   "general-store": /general\s*store|retail/i,
   pharmacy: /pharmacy/i,
+  distribution: /distribution|medical/i,
 };
 const hint = productHints[edition];
 function versionTuple(name) {
@@ -104,12 +112,17 @@ const base =
   `https://github.com/${repo}/releases/download/${tagPrefix}-v${version}`;
 
 const signature = readFileSync(sigPath, "utf8").trim();
+const notesByEdition = {
+  suite: `POPS Universal Management System update ${version}`,
+  restaurant: `Restaurant Management System update ${version}`,
+  "ice-cream-bar": `Scoops Ice Cream Bar update ${version}`,
+  "general-store": `General Store Management System update ${version}`,
+  pharmacy: `Pharmacy Management System update ${version}`,
+  distribution: `Medical Distribution System update ${version}`,
+};
 const manifest = {
   version,
-  notes:
-    edition === "ice-cream-bar"
-      ? `Scoops Ice Cream Bar update ${version}`
-      : `Desktop ${edition} update ${version}`,
+  notes: notesByEdition[edition] ?? `Desktop ${edition} update ${version}`,
   pub_date: new Date().toISOString(),
   platforms: {
     "windows-x86_64": {
@@ -119,13 +132,7 @@ const manifest = {
   },
 };
 
-const outDir = join(
-  process.cwd(),
-  "..",
-  "..",
-  "dist-installers",
-  "updates",
-);
+const outDir = join(process.cwd(), "..", "..", "dist-installers", "updates");
 mkdirSync(outDir, { recursive: true });
 
 const manifestName = `latest-${edition}.json`;

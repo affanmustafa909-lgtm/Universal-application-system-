@@ -60,7 +60,7 @@ export function DistGlobalSearch(): JSX.Element {
 
   const go = useCallback(
     (hit: PharmacyLookupHit) => {
-      pushRecent(hit.code || hit.name);
+      pushRecent(hit.name || hit.code);
       setRecent(loadRecent());
       setOpen(false);
       setQ("");

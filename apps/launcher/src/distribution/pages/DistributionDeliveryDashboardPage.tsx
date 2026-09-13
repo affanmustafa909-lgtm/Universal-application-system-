@@ -108,7 +108,7 @@ export function DistributionDeliveryDashboardPage(): JSX.Element {
             {dashboard.data.byStatus.map((s) => (
               <DistKpiCard
                 key={s.status}
-                label={s.status.replace(/_/g, " ")}
+                label={String(s.status ?? "—").replace(/_/g, " ")}
                 value={s.count}
                 hint={s.collectedPkr ? formatPkr(s.collectedPkr) : undefined}
                 to={`${DIST}/deliveries?status=${encodeURIComponent(s.status)}`}

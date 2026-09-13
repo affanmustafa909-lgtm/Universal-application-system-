@@ -1,0 +1,764 @@
+{
+  "generatedAt": "2026-09-13T09:06:37.779Z",
+  "api": "https://backend-system-production-28a3.up.railway.app",
+  "branch": "DIST-HQ",
+  "runId": "90175824",
+  "summary": {
+    "total": 87,
+    "passed": 78,
+    "failed": 9
+  },
+  "results": [
+    {
+      "name": "Security: unauthenticated request is rejected",
+      "passed": true,
+      "detail": "status 401",
+      "expected": "401 or 403",
+      "actual": 401
+    },
+    {
+      "name": "Security: tampered JWT is rejected",
+      "passed": true,
+      "detail": "status 401",
+      "expected": "401 or 403",
+      "actual": 401
+    },
+    {
+      "name": "Security: unauthorised warehouseId is refused (no data leak)",
+      "passed": true,
+      "detail": "status 404",
+      "expected": "404 or 400",
+      "actual": 404
+    },
+    {
+      "name": "Security: unknown branchCode is refused",
+      "passed": true,
+      "detail": "status 404",
+      "expected": "404 or 400",
+      "actual": 404
+    },
+    {
+      "name": "Security: SQL injection in q is neutralised",
+      "passed": true,
+      "detail": "status 200",
+      "expected": "200 with zero or more rows",
+      "actual": 200
+    },
+    {
+      "name": "Security: medicines table intact after injection attempt",
+      "passed": true,
+      "detail": "status 200",
+      "expected": "200",
+      "actual": 200
+    },
+    {
+      "name": "Validation: absurd pagination is clamped, not fatal",
+      "passed": true,
+      "detail": "status 200, pageSize 100",
+      "expected": "200 and pageSize clamped",
+      "actual": 100
+    },
+    {
+      "name": "Validation: invalid date range does not 500",
+      "passed": true,
+      "detail": "status 400",
+      "expected": "< 500",
+      "actual": 400
+    },
+    {
+      "name": "Validation: unknown medicine id returns 404",
+      "passed": true,
+      "detail": "status 404",
+      "expected": "404",
+      "actual": 404
+    },
+    {
+      "name": "GRN: first receive posts",
+      "passed": true,
+      "detail": "status 201 ",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "GRN: second receive posts",
+      "passed": true,
+      "detail": "status 201 ",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "GRN: third receive posts",
+      "passed": true,
+      "detail": "status 201",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Stock math: available equals sum of received batches",
+      "passed": true,
+      "detail": "availableQty=100",
+      "expected": 100,
+      "actual": 100
+    },
+    {
+      "name": "Stock math: physical equals available when nothing is reserved or damaged",
+      "passed": true,
+      "detail": "physicalQty=100",
+      "expected": 100,
+      "actual": 100
+    },
+    {
+      "name": "Stock math: reserved/damaged/quarantine/blocked all start at zero",
+      "passed": true,
+      "detail": "reserved=0 damaged=0 quarantine=0 blocked=0",
+      "expected": "all 0",
+      "actual": "{\"r\":0,\"d\":0,\"q\":0,\"b\":0}"
+    },
+    {
+      "name": "FEFO: availability endpoint responds",
+      "passed": true,
+      "detail": "status 200",
+      "expected": "200",
+      "actual": 200
+    },
+    {
+      "name": "FEFO: allocation is fulfillable",
+      "passed": true,
+      "detail": "fulfillable=true shortfall=0",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "FEFO: first allocation is the earliest-expiry batch, not the earliest purchase",
+      "passed": true,
+      "detail": "first=B-EARLY-90175824",
+      "expected": "B-EARLY-90175824",
+      "actual": "B-EARLY-90175824"
+    },
+    {
+      "name": "FEFO: allocation splits across batches in expiry order",
+      "passed": true,
+      "detail": "B-EARLY-90175824:30, B-MID-90175824:10",
+      "expected": "B-EARLY:30, B-MID:10",
+      "actual": "B-EARLY-90175824:30, B-MID-90175824:10"
+    },
+    {
+      "name": "Expiry: expired units are reported separately",
+      "passed": false,
+      "detail": "expiredQty=0",
+      "expected": 40,
+      "actual": 0
+    },
+    {
+      "name": "Expiry: expired stock is excluded from available",
+      "passed": true,
+      "detail": "availableQty=10 (physical 10)",
+      "expected": 10,
+      "actual": 10
+    },
+    {
+      "name": "Expiry: expired stock is still counted as physically present",
+      "passed": false,
+      "detail": "physicalQty=10",
+      "expected": 50,
+      "actual": 10
+    },
+    {
+      "name": "FEFO: expired batch is never allocated",
+      "passed": true,
+      "detail": "B-OK-90175824",
+      "expected": "no B-EXP batch",
+      "actual": "B-OK-90175824"
+    },
+    {
+      "name": "FEFO: request beyond unexpired stock is reported short with a reason",
+      "passed": true,
+      "detail": "shortfall=10 reason=Short by 10",
+      "expected": "shortfall 10 with reason",
+      "actual": "10 / Short by 10"
+    },
+    {
+      "name": "Expiry: bucket endpoint responds",
+      "passed": true,
+      "detail": "status 200",
+      "expected": "200",
+      "actual": 200
+    },
+    {
+      "name": "Expiry: expired bucket is separate and non-empty",
+      "passed": true,
+      "detail": "expired.quantity=886",
+      "expected": ">= 40",
+      "actual": 886
+    },
+    {
+      "name": "Negative stock: policy defaults to block",
+      "passed": true,
+      "detail": "policy=block",
+      "expected": "block",
+      "actual": "block"
+    },
+    {
+      "name": "Negative stock: over-request is reported as not fulfillable",
+      "passed": true,
+      "detail": "shortfall=495",
+      "expected": 495,
+      "actual": 495
+    },
+    {
+      "name": "Negative stock: decrease beyond available is refused under block policy",
+      "passed": true,
+      "detail": "approve refused: Insufficient available stock for Phase4 Test NEG (90175824). Short by 495 Piece.",
+      "expected": "refused at some stage",
+      "actual": "approve refused: Insufficient available stock for Phase4 Test NEG (90175824). Short by 495 Piece."
+    },
+    {
+      "name": "Negative stock: available never went below zero",
+      "passed": true,
+      "detail": "availableQty=5",
+      "expected": ">= 0",
+      "actual": 5
+    },
+    {
+      "name": "Adjustment: test batch is listed",
+      "passed": true,
+      "detail": "batchId=8b603602-eb52-4ed1-9fda-f772e868cdeb",
+      "expected": "a batch id",
+      "actual": "8b603602-eb52-4ed1-9fda-f772e868cdeb"
+    },
+    {
+      "name": "Adjustment: a missing reason is refused",
+      "passed": true,
+      "detail": "status 400 A reason is required: stock is never adjusted without one",
+      "expected": "4xx",
+      "actual": 400
+    },
+    {
+      "name": "Adjustment: damage document created",
+      "passed": true,
+      "detail": "{\"id\":\"bf8afef0-a0be-40e8-95a9-21fd159659cc\",\"adjustmentNumber\":\"ADJ-2026-00002\",\"status\":\"draft\",\"adjustmentType\":\"damage\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"9dd6cac4-79",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Adjustment: submit accepted",
+      "passed": true,
+      "detail": "{\"id\":\"bf8afef0-a0be-40e8-95a9-21fd159659cc\",\"adjustmentNumber\":\"ADJ-2026-00002\",\"status\":\"pending_approval\",\"adjustmentType\":\"damage\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Adjustment: approval posts the document",
+      "passed": true,
+      "detail": "{\"id\":\"bf8afef0-a0be-40e8-95a9-21fd159659cc\",\"adjustmentNumber\":\"ADJ-2026-00002\",\"status\":\"posted\",\"adjustmentType\":\"damage\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"9dd6cac4-7",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Adjustment: final status is posted",
+      "passed": true,
+      "detail": "status=posted",
+      "expected": "posted",
+      "actual": "posted"
+    },
+    {
+      "name": "Adjustment: damage reduces available by the adjusted quantity",
+      "passed": true,
+      "detail": "100 -> 90",
+      "expected": 90,
+      "actual": 90
+    },
+    {
+      "name": "Adjustment: damage increases the damaged bucket",
+      "passed": true,
+      "detail": "0 -> 10",
+      "expected": 10,
+      "actual": 10
+    },
+    {
+      "name": "Adjustment: damage leaves physical stock unchanged (reclassified, not destroyed)",
+      "passed": true,
+      "detail": "100 -> 100",
+      "expected": 100,
+      "actual": 100
+    },
+    {
+      "name": "Adjustment: re-approving a posted document is refused",
+      "passed": true,
+      "detail": "status 409 Cannot approve an adjustment that is 'posted'. Allowed statuses: pending_approval, approved.",
+      "expected": "4xx/409",
+      "actual": 409
+    },
+    {
+      "name": "Adjustment: replay did not change stock",
+      "passed": true,
+      "detail": "availableQty=90",
+      "expected": 90,
+      "actual": 90
+    },
+    {
+      "name": "Transfer: source equal to destination is refused",
+      "passed": true,
+      "detail": "status 400 Source and destination warehouse must differ",
+      "expected": "4xx",
+      "actual": 400
+    },
+    {
+      "name": "Transfer: created as draft",
+      "passed": true,
+      "detail": "{\"id\":\"fea4d74d-3165-4265-a6cb-40da35f66cac\",\"transferNumber\":\"TRF-2026-00001\",\"status\":\"draft\",\"transferDate\":\"2026-09-13\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"fromWarehouseId\":\"9dd6cac",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Transfer: initial status is draft",
+      "passed": true,
+      "detail": "status=draft",
+      "expected": "draft",
+      "actual": "draft"
+    },
+    {
+      "name": "Transfer: dispatch before approval is refused",
+      "passed": true,
+      "detail": "status 409 Cannot dispatch a transfer that is 'draft'. Allowed statuses: approved.",
+      "expected": "4xx",
+      "actual": 409
+    },
+    {
+      "name": "Transfer: submit accepted",
+      "passed": true,
+      "detail": "{\"id\":\"fea4d74d-3165-4265-a6cb-40da35f66cac\",\"transferNumber\":\"TRF-2026-00001\",\"status\":\"submitted\",\"transferDate\":\"2026-09-13\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"fromWarehouseId\":\"9dd",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Transfer: approve accepted",
+      "passed": true,
+      "detail": "{\"id\":\"fea4d74d-3165-4265-a6cb-40da35f66cac\",\"transferNumber\":\"TRF-2026-00001\",\"status\":\"approved\",\"transferDate\":\"2026-09-13\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"fromWarehouseId\":\"9dd6",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Transfer: dispatch accepted",
+      "passed": true,
+      "detail": "{\"id\":\"fea4d74d-3165-4265-a6cb-40da35f66cac\",\"transferNumber\":\"TRF-2026-00001\",\"status\":\"dispatched\",\"transferDate\":\"2026-09-13\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"fromWarehouseId\":\"9d",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Transfer: dispatch removes stock from the source warehouse",
+      "passed": true,
+      "detail": "60 -> 35",
+      "expected": 35,
+      "actual": 35
+    },
+    {
+      "name": "Transfer: re-dispatch is refused",
+      "passed": true,
+      "detail": "status 409",
+      "expected": "4xx/409",
+      "actual": 409
+    },
+    {
+      "name": "Transfer: re-dispatch did not double-deduct",
+      "passed": true,
+      "detail": "availableQty=35",
+      "expected": 35,
+      "actual": 35
+    },
+    {
+      "name": "Transfer: receive accepted",
+      "passed": true,
+      "detail": "{\"id\":\"fea4d74d-3165-4265-a6cb-40da35f66cac\",\"transferNumber\":\"TRF-2026-00001\",\"status\":\"completed\",\"transferDate\":\"2026-09-13\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"fromWarehouseId\":\"9dd",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Transfer: receive adds stock at the destination warehouse",
+      "passed": true,
+      "detail": "0 -> 25",
+      "expected": 25,
+      "actual": 25
+    },
+    {
+      "name": "Transfer: branch-wide quantity is conserved",
+      "passed": true,
+      "detail": "60 -> 60",
+      "expected": 60,
+      "actual": 60
+    },
+    {
+      "name": "Stock count: sheet created",
+      "passed": true,
+      "detail": "{\"id\":\"144d32f6-3d89-415f-aced-bc64cafc521d\",\"countNumber\":\"CNT-2026-00001\",\"status\":\"counting\",\"countType\":\"cycle\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"9dd6cac4-7918-4f62-",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Stock count: sheet snapshots the system quantity",
+      "passed": true,
+      "detail": "systemQuantity=80",
+      "expected": 80,
+      "actual": 80
+    },
+    {
+      "name": "Stock count: counted quantity recorded",
+      "passed": true,
+      "detail": "{\"id\":\"144d32f6-3d89-415f-aced-bc64cafc521d\",\"countNumber\":\"CNT-2026-00001\",\"status\":\"review\",\"countType\":\"cycle\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"9dd6cac4-7918-4f62-b6",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Stock count: posted",
+      "passed": true,
+      "detail": "{\"count\":{\"id\":\"144d32f6-3d89-415f-aced-bc64cafc521d\",\"countNumber\":\"CNT-2026-00001\",\"status\":\"posted\",\"countType\":\"cycle\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"9dd6cac4-791",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Stock count: posting produced an adjustment document",
+      "passed": true,
+      "detail": "adjustmentId=098ce12e-560b-4096-9e02-6fe8e7b8337f",
+      "expected": "an adjustment id",
+      "actual": "098ce12e-560b-4096-9e02-6fe8e7b8337f"
+    },
+    {
+      "name": "Stock count: system stock now matches the counted quantity",
+      "passed": true,
+      "detail": "availableQty=75",
+      "expected": 75,
+      "actual": 75
+    },
+    {
+      "name": "Stock count: re-posting is refused",
+      "passed": true,
+      "detail": "status 409",
+      "expected": "4xx/409",
+      "actual": 409
+    },
+    {
+      "name": "Idempotency: keyed GRN posts",
+      "passed": true,
+      "detail": "{\"id\":\"9e859def-8b5e-4a5d-b841-655416949a7b\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"9dd6cac4-7918-4f62-b6aa-81f82c18a8",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Idempotency: retrying the same keyed GRN is accepted",
+      "passed": true,
+      "detail": "status 201 {\"id\":\"9e859def-8b5e-4a5d-b841-655416949a7b\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"9dd6cac4-7918-4f62-b6aa-81f82c18a8",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Idempotency: retry returns the original GRN",
+      "passed": true,
+      "detail": "9e859def-8b5e-4a5d-b841-655416949a7b vs 9e859def-8b5e-4a5d-b841-655416949a7b",
+      "expected": "same id",
+      "actual": "9e859def-8b5e-4a5d-b841-655416949a7b"
+    },
+    {
+      "name": "Idempotency: retry did not double-receive stock",
+      "passed": true,
+      "detail": "35 -> 35",
+      "expected": 35,
+      "actual": 35
+    },
+    {
+      "name": "Concurrency: parallel deductions never drive stock negative",
+      "passed": true,
+      "detail": "10/10 posted, availableQty=0",
+      "expected": ">= 0",
+      "actual": 0
+    },
+    {
+      "name": "Concurrency: stock math reconciles with the number of successful deductions",
+      "passed": true,
+      "detail": "expected 0, got 0 (10 succeeded)",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "name": "Returns: purchase return posts",
+      "passed": true,
+      "detail": "{\"id\":\"91028b5f-3fcf-4518-8ee7-656daac8272d\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"9dd6cac4-7918-4f62-b6aa-81f82c18a8",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Returns: purchase return reduces stock",
+      "passed": true,
+      "detail": "40 -> 25",
+      "expected": 25,
+      "actual": 25
+    },
+    {
+      "name": "Returns: purchase return is recorded as PURCHASE_RETURN, not SALE",
+      "passed": true,
+      "detail": "found 1 PURCHASE_RETURN rows",
+      "expected": ">= 1",
+      "actual": 1
+    },
+    {
+      "name": "Ledger: register responds",
+      "passed": true,
+      "detail": "status 200",
+      "expected": "200",
+      "actual": 200
+    },
+    {
+      "name": "Ledger: every receipt wrote a movement row",
+      "passed": true,
+      "detail": "3 GRN rows",
+      "expected": ">= 3",
+      "actual": 3
+    },
+    {
+      "name": "Ledger: movement rows carry a running balance and a captured cost",
+      "passed": true,
+      "detail": "sample unitCostPkr=105, quantityAfter=20",
+      "expected": "numeric balances and a non-zero cost",
+      "actual": "105 / 20"
+    },
+    {
+      "name": "Ledger: totals endpoint responds",
+      "passed": true,
+      "detail": "status 200",
+      "expected": "200",
+      "actual": 200
+    },
+    {
+      "name": "E2E reconciliation: ledger net movement equals physical stock on hand",
+      "passed": true,
+      "detail": "ledger net=100, physical=100 (in 100, out 0)",
+      "expected": 100,
+      "actual": 100
+    },
+    {
+      "name": "Reconciliation: tool responds",
+      "passed": true,
+      "detail": "status 200",
+      "expected": "200",
+      "actual": 200
+    },
+    {
+      "name": "Reconciliation: a medicine created this run shows no cache drift",
+      "passed": true,
+      "detail": "not listed as drifting",
+      "expected": "no drift",
+      "actual": 0
+    },
+    {
+      "name": "Data quality: tool responds with real checks",
+      "passed": true,
+      "detail": "9 checks",
+      "expected": "> 0 checks",
+      "actual": 9
+    },
+    {
+      "name": "Performance: stock-list median 930ms within 500ms budget",
+      "passed": false,
+      "detail": "status 200, best 928ms / median 930ms / worst 952ms",
+      "expected": "<= 500ms",
+      "actual": "930ms"
+    },
+    {
+      "name": "Performance: product-lookup median 2566ms within 300ms budget",
+      "passed": false,
+      "detail": "status 200, best 2531ms / median 2566ms / worst 2575ms",
+      "expected": "<= 300ms",
+      "actual": "2566ms"
+    },
+    {
+      "name": "Performance: availability median 1109ms within 300ms budget",
+      "passed": false,
+      "detail": "status 200, best 1093ms / median 1109ms / worst 1564ms",
+      "expected": "<= 300ms",
+      "actual": "1109ms"
+    },
+    {
+      "name": "Performance: batch-list median 951ms within 300ms budget",
+      "passed": false,
+      "detail": "status 200, best 947ms / median 951ms / worst 1045ms",
+      "expected": "<= 300ms",
+      "actual": "951ms"
+    },
+    {
+      "name": "Performance: dashboard median 3891ms within 1000ms budget",
+      "passed": false,
+      "detail": "status 200, best 3833ms / median 3891ms / worst 3979ms",
+      "expected": "<= 1000ms",
+      "actual": "3891ms"
+    },
+    {
+      "name": "Performance: ledger median 800ms within 500ms budget",
+      "passed": false,
+      "detail": "status 200, best 768ms / median 800ms / worst 847ms",
+      "expected": "<= 500ms",
+      "actual": "800ms"
+    },
+    {
+      "name": "Performance: expiry-buckets median 945ms within 500ms budget",
+      "passed": false,
+      "detail": "status 200, best 936ms / median 945ms / worst 1333ms",
+      "expected": "<= 500ms",
+      "actual": "945ms"
+    },
+    {
+      "name": "Performance: valuation-summary median 824ms within 1000ms budget",
+      "passed": true,
+      "detail": "status 200, best 813ms / median 824ms / worst 836ms",
+      "expected": "<= 1000ms",
+      "actual": "824ms"
+    },
+    {
+      "name": "Performance: reorder median 984ms within 1000ms budget",
+      "passed": true,
+      "detail": "status 200, best 916ms / median 984ms / worst 993ms",
+      "expected": "<= 1000ms",
+      "actual": "984ms"
+    }
+  ],
+  "performance": [
+    {
+      "label": "stock-list",
+      "status": 200,
+      "best": 928,
+      "median": 930,
+      "worst": 952,
+      "budgetMs": 500
+    },
+    {
+      "label": "product-lookup",
+      "status": 200,
+      "best": 2531,
+      "median": 2566,
+      "worst": 2575,
+      "budgetMs": 300
+    },
+    {
+      "label": "availability",
+      "status": 200,
+      "best": 1093,
+      "median": 1109,
+      "worst": 1564,
+      "budgetMs": 300
+    },
+    {
+      "label": "batch-list",
+      "status": 200,
+      "best": 947,
+      "median": 951,
+      "worst": 1045,
+      "budgetMs": 300
+    },
+    {
+      "label": "dashboard",
+      "status": 200,
+      "best": 3833,
+      "median": 3891,
+      "worst": 3979,
+      "budgetMs": 1000
+    },
+    {
+      "label": "ledger",
+      "status": 200,
+      "best": 768,
+      "median": 800,
+      "worst": 847,
+      "budgetMs": 500
+    },
+    {
+      "label": "expiry-buckets",
+      "status": 200,
+      "best": 936,
+      "median": 945,
+      "worst": 1333,
+      "budgetMs": 500
+    },
+    {
+      "label": "valuation-summary",
+      "status": 200,
+      "best": 813,
+      "median": 824,
+      "worst": 836,
+      "budgetMs": 1000
+    },
+    {
+      "label": "reorder",
+      "status": 200,
+      "best": 916,
+      "median": 984,
+      "worst": 993,
+      "budgetMs": 1000
+    }
+  ],
+  "requestTimings": [
+    {
+      "label": "availability",
+      "route": "/v1/pharmacy/inventory/availability",
+      "ms": 1059,
+      "status": 200
+    },
+    {
+      "label": "availability",
+      "route": "/v1/pharmacy/inventory/availability",
+      "ms": 1061,
+      "status": 200
+    },
+    {
+      "label": "expiry-buckets",
+      "route": "/v1/pharmacy/inventory/expiry/buckets",
+      "ms": 1055,
+      "status": 200
+    },
+    {
+      "label": "availability",
+      "route": "/v1/pharmacy/inventory/availability",
+      "ms": 1075,
+      "status": 200
+    },
+    {
+      "label": "ledger",
+      "route": "/v1/pharmacy/inventory/ledger",
+      "ms": 803,
+      "status": 200
+    },
+    {
+      "label": "ledger-totals",
+      "route": "/v1/pharmacy/inventory/ledger/totals",
+      "ms": 663,
+      "status": 200
+    },
+    {
+      "label": "reconcile",
+      "route": "/v1/pharmacy/inventory/reconcile",
+      "ms": 802,
+      "status": 200
+    },
+    {
+      "label": "data-quality",
+      "route": "/v1/pharmacy/inventory/data-quality",
+      "ms": 2796,
+      "status": 200
+    },
+    {
+      "label": "availability",
+      "route": "/v1/pharmacy/inventory/availability",
+      "ms": 1093,
+      "status": 200
+    },
+    {
+      "label": "availability",
+      "route": "/v1/pharmacy/inventory/availability",
+      "ms": 1564,
+      "status": 200
+    },
+    {
+      "label": "availability",
+      "route": "/v1/pharmacy/inventory/availability",
+      "ms": 1109,
+      "status": 200
+    }
+  ]
+}

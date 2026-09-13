@@ -1,5 +1,6 @@
 import { Button } from "@platform/ui";
 import { AuthClient, isLikelyNetworkFailure } from "@platform/auth-client";
+import { isOnline } from "@platform/connectivity";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { decodeAccessToken, isSuperAdminClaims } from "../lib/jwt";
@@ -43,6 +44,7 @@ import { usePopsStore } from "../stores/popsStore";
 import { findUserIdByPin, isValidPin, loadBranchPinMap } from "../pops/lib/posPinAuth";
 import { isPopsRole } from "../pops/lib/roleAccess";
 import { normalizeMembershipRole } from "../lib/loginRoles";
+import { isLocalDataMode } from "../stores/dataModeStore";
 
 type LoginMode = "password" | "pin";
 
@@ -145,16 +147,24 @@ export function LoginPage(): JSX.Element {
     return <Navigate to={systemId ? roleSelectPath(systemId) : "/"} replace />;
   }
 
-  async function completeLogin(accessToken: string, refreshToken: string): Promise<void> {
+  async function completeLogin(
+    accessToken: string,
+    refreshToken: string,
+    opts?: { offline?: boolean; lastOnlineAt?: string | null },
+  ): Promise<void> {
     const claims = decodeAccessToken(accessToken);
     const loginEmail = email.trim().toLowerCase() || null;
+    const offline = Boolean(opts?.offline);
 
     if (isSuperAdminLogin) {
       if (!isSuperAdminClaims(claims)) {
         clearSession();
         throw new Error("This account is not a Super Admin.");
       }
-      setTokens(accessToken, refreshToken, claims, loginEmail);
+      setTokens(accessToken, refreshToken, claims, loginEmail, {
+        offline,
+        lastOnlineAt: opts?.lastOnlineAt,
+      });
       navigate("/super-admin", { replace: true });
       return;
     }
@@ -192,17 +202,22 @@ export function LoginPage(): JSX.Element {
     // returns here instead of the picker or the Super Admin login.
     recordDeviceInstall(claims.systemType ?? lockedId, lockedId);
     setSystem(lockedId);
-    setTokens(accessToken, refreshToken, claims, loginEmail);
-    if (loginEmail && password) {
-      void rememberOfflineIdentity({
-        email: loginEmail,
-        password,
-        claims,
-        accessToken,
-        refreshToken,
-      }).catch(() => {
+    setTokens(accessToken, refreshToken, claims, loginEmail, {
+      offline,
+      lastOnlineAt: opts?.lastOnlineAt,
+    });
+    if (!offline && loginEmail && password) {
+      try {
+        await rememberOfflineIdentity({
+          email: loginEmail,
+          password,
+          claims,
+          accessToken,
+          refreshToken,
+        });
+      } catch {
         /* SQLite unavailable — online session still works */
-      });
+      }
       void fetch(`${getApiBaseUrl()}/v1/sync/register-device`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
@@ -222,26 +237,45 @@ export function LoginPage(): JSX.Element {
     navigate(getErpEntryPath(lockedId, false));
   }
 
+  async function tryOfflineLogin(): Promise<boolean> {
+    const verified = await verifyOfflinePassword(email, password);
+    if (verified.ok && verified.identity.lastAccessToken && verified.identity.lastRefreshToken) {
+      await completeLogin(verified.identity.lastAccessToken, verified.identity.lastRefreshToken, {
+        offline: true,
+        lastOnlineAt: verified.identity.lastOnlineAt,
+      });
+      return true;
+    }
+    setError(
+      verified.ok
+        ? "Offline profile incomplete hai. Pehle ek baar online sign in karein."
+        : offlineLoginMessage(verified.reason),
+    );
+    return false;
+  }
+
   async function onSubmitPassword(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const client = new AuthClient({ baseUrl: getApiBaseUrl() });
-      const tokens = await client.login(email, password);
-      await completeLogin(tokens.accessToken, tokens.refreshToken);
-    } catch (err) {
-      if (isLikelyNetworkFailure(err)) {
-        const verified = await verifyOfflinePassword(email, password);
-        if (verified.ok && verified.identity.lastAccessToken && verified.identity.lastRefreshToken) {
-          useSessionStore.getState().setOfflineSession(true);
-          await completeLogin(verified.identity.lastAccessToken, verified.identity.lastRefreshToken);
-          useSessionStore.getState().setOfflineSession(true);
-          return;
-        }
-        setError(verified.ok ? "Offline profile is incomplete. Sign in once while online." : offlineLoginMessage(verified.reason));
+      // Prefer local offline profile when browser reports offline or local-only mode.
+      if (!isOnline() || isLocalDataMode()) {
+        await tryOfflineLogin();
         return;
       }
+      try {
+        const client = new AuthClient({ baseUrl: getApiBaseUrl() });
+        const tokens = await client.login(email, password);
+        await completeLogin(tokens.accessToken, tokens.refreshToken);
+      } catch (err) {
+        if (isLikelyNetworkFailure(err)) {
+          await tryOfflineLogin();
+          return;
+        }
+        throw err;
+      }
+    } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);

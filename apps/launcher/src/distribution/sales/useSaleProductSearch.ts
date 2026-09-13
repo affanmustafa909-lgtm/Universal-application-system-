@@ -1,3 +1,4 @@
+import { isOnline } from "@platform/connectivity";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -5,6 +6,10 @@ import {
   searchSaleProducts,
   type SaleProductHit,
 } from "../../pharmacy/api/pharmacy-sales";
+import {
+  cacheDistProducts,
+  searchCachedDistProducts,
+} from "../lib/distOfflineSales";
 
 const DEBOUNCE_MS = 250;
 
@@ -29,7 +34,8 @@ export function useSaleProductSearch(opts: {
     setHighlightIndex(0);
   }, [debounced]);
 
-  const enabled = Boolean(opts.enabled && opts.branchCode && debounced.length >= 1);
+  const enabled = Boolean(opts.enabled && opts.branchCode);
+  const branchCode = opts.branchCode ?? "";
 
   const search = useQuery({
     queryKey: [
@@ -41,15 +47,22 @@ export function useSaleProductSearch(opts: {
       debounced,
     ],
     enabled,
-    queryFn: ({ signal }) => {
-      // TanStack Query aborts via signal when queryKey changes / unmounts.
-      void signal;
-      return searchSaleProducts({
-        branchCode: opts.branchCode!,
-        q: debounced,
-        warehouseId: opts.warehouseId,
-        limit: 40,
-      });
+    queryFn: async () => {
+      if (!isOnline()) {
+        return searchCachedDistProducts(branchCode, debounced);
+      }
+      try {
+        const rows = await searchSaleProducts({
+          branchCode: opts.branchCode!,
+          q: debounced,
+          warehouseId: opts.warehouseId,
+          limit: 40,
+        });
+        if (branchCode) cacheDistProducts(branchCode, rows);
+        return rows;
+      } catch {
+        return searchCachedDistProducts(branchCode, debounced);
+      }
     },
     staleTime: 15_000,
     placeholderData: (prev) => prev,
@@ -64,6 +77,23 @@ export function useSaleProductSearch(opts: {
       setBarcodeError(null);
       setBarcodeNotice(null);
       try {
+        if (!isOnline()) {
+          const local = searchCachedDistProducts(opts.branchCode, code).find(
+            (p) =>
+              p.barcode === code ||
+              p.sku === code ||
+              p.id === code ||
+              (p.name ?? "").toLowerCase() === code.toLowerCase(),
+          );
+          if (!local) {
+            setBarcodeError(`Offline — no cached product for ${code}. Search online once first.`);
+            return null;
+          }
+          setBarcodeNotice(`Offline scan ${local.name}`);
+          setQuery("");
+          setDebounced("");
+          return local;
+        }
         const hit = await lookupSaleProductBarcode({
           branchCode: opts.branchCode,
           code,
@@ -73,11 +103,19 @@ export function useSaleProductSearch(opts: {
           setBarcodeError(`No product for barcode ${code}`);
           return null;
         }
+        cacheDistProducts(opts.branchCode, [hit]);
         setBarcodeNotice(`Scanned ${hit.name}`);
         setQuery("");
         setDebounced("");
         return hit;
       } catch (err) {
+        const local = searchCachedDistProducts(opts.branchCode, code)[0];
+        if (local) {
+          setBarcodeNotice(`Offline scan ${local.name}`);
+          setQuery("");
+          setDebounced("");
+          return local;
+        }
         setBarcodeError(err instanceof Error ? err.message : "Barcode lookup failed");
         return null;
       } finally {
@@ -108,7 +146,7 @@ export function useSaleProductSearch(opts: {
     debounced,
     results,
     isLoading: search.isFetching && enabled,
-    isError: search.isError,
+    isError: search.isError && results.length === 0,
     error: search.error instanceof Error ? search.error.message : null,
     highlightIndex,
     setHighlightIndex,

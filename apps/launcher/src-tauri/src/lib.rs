@@ -698,6 +698,93 @@ fn pra_http_post(url: String, token: String, body: String) -> Result<String, Str
         .map_err(|e| format!("PRA response read failed: {e}"))
 }
 
+/// Download a signed setup EXE to `%LOCALAPPDATA%\POPS\updates\` and open it.
+#[tauri::command]
+fn download_and_open_setup_exe(url: String, file_name: String) -> Result<String, String> {
+    let url = url.trim();
+    if !(url.starts_with("https://github.com/") || url.starts_with("https://objects.githubusercontent.com/")) {
+        return Err("Only GitHub release download URLs are allowed".into());
+    }
+    let safe_name = file_name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    let safe_name = if safe_name.to_ascii_lowercase().ends_with(".exe") {
+        safe_name
+    } else {
+        format!("{safe_name}.exe")
+    };
+    if safe_name.len() < 8 {
+        return Err("Invalid file name".into());
+    }
+
+    let base = std::env::var("LOCALAPPDATA")
+        .or_else(|_| std::env::var("TEMP"))
+        .map_err(|_| "LOCALAPPDATA not set".to_string())?;
+    let dir = std::path::PathBuf::from(base).join("POPS").join("updates");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Create updates folder failed: {e}"))?;
+    let dest = dir.join(&safe_name);
+
+    let resp = ureq::get(url)
+        .set("User-Agent", "POPS-Desktop-Updater")
+        .timeout(std::time::Duration::from_secs(600))
+        .call()
+        .map_err(|e| format!("Download failed: {e}"))?;
+    if !(200..300).contains(&resp.status()) {
+        return Err(format!("Download HTTP {}", resp.status()));
+    }
+    let mut reader = resp.into_reader();
+    let mut file =
+        std::fs::File::create(&dest).map_err(|e| format!("Cannot write {}: {e}", dest.display()))?;
+    std::io::copy(&mut reader, &mut file).map_err(|e| format!("Write failed: {e}"))?;
+    drop(file);
+
+    let path_str = dest.to_string_lossy().to_string();
+    // Open installer (non-blocking). `start` needs an empty title arg when path is quoted.
+    command_no_window("cmd")
+        .args(["/C", "start", "", &path_str])
+        .spawn()
+        .map_err(|e| format!("Could not open installer: {e}"))?;
+
+    Ok(path_str)
+}
+
+/// Reveal `%LOCALAPPDATA%\POPS\updates` in Explorer (creates it if missing).
+#[tauri::command]
+fn open_updates_folder() -> Result<String, String> {
+    let base = std::env::var("LOCALAPPDATA")
+        .or_else(|_| std::env::var("TEMP"))
+        .map_err(|_| "LOCALAPPDATA not set".to_string())?;
+    let dir = std::path::PathBuf::from(base).join("POPS").join("updates");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Create updates folder failed: {e}"))?;
+    let path_str = dir.to_string_lossy().to_string();
+    command_no_window("explorer")
+        .arg(&path_str)
+        .spawn()
+        .map_err(|e| format!("Could not open folder: {e}"))?;
+    Ok(path_str)
+}
+
+/// Reveal a local folder or file in Explorer.
+#[tauri::command]
+fn open_local_path(path: String) -> Result<(), String> {
+    let p = path.trim();
+    if p.is_empty() {
+        return Err("Path is empty".into());
+    }
+    command_no_window("explorer")
+        .arg(p)
+        .spawn()
+        .map_err(|e| format!("Could not open path: {e}"))?;
+    Ok(())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -709,6 +796,9 @@ pub fn run() {
             print_to_printer,
             print_image_to_printer,
             pra_http_post,
+            download_and_open_setup_exe,
+            open_local_path,
+            open_updates_folder,
             printing::start_branch_print_server,
             printing::stop_branch_print_server,
             printing::get_branch_print_server_status,

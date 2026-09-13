@@ -31,50 +31,70 @@ export class PurchaseApiHttpError extends Error {
   }
 }
 
-async function parseErrorBody(res: Response): Promise<{ message: string; details?: unknown }> {
+/** Read body once as text — avoids "body stream already read" on double .json(). */
+async function readBodyText(res: Response): Promise<string> {
   try {
-    const j = (await res.json()) as {
-      message?: string | string[];
-      errors?: unknown;
-      details?: unknown;
-    };
+    return await res.text();
+  } catch {
+    return "";
+  }
+}
+
+function parseJsonSafe(text: string): unknown {
+  if (!text.trim()) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function errorFromBody(text: string, statusText: string): { message: string; details?: unknown } {
+  const j = parseJsonSafe(text) as {
+    message?: string | string[];
+    errors?: unknown;
+    details?: unknown;
+  } | null;
+  if (j && typeof j === "object") {
     const message =
       typeof j.message === "string"
         ? j.message
         : Array.isArray(j.message)
           ? j.message.join(", ")
-          : res.statusText || "Request failed";
+          : statusText || "Request failed";
     return { message, details: j.errors ?? j.details ?? j };
-  } catch {
-    return { message: res.statusText || "Request failed" };
   }
+  return { message: text.trim() || statusText || "Request failed" };
 }
 
 async function getJson<T>(path: string): Promise<T> {
   const res = await authFetch(path);
+  const text = await readBodyText(res);
   if (!res.ok) {
-    const { message, details } = await parseErrorBody(res);
+    const { message, details } = errorFromBody(text, res.statusText);
     throw new PurchaseApiHttpError(res.status, message, details);
   }
-  return (await res.json()) as T;
+  return (parseJsonSafe(text) ?? {}) as T;
 }
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await authFetch(path, { method: "POST", body: JSON.stringify(body) });
+  const text = await readBodyText(res);
   if (!res.ok) {
-    const { message, details } = await parseErrorBody(res);
+    const { message, details } = errorFromBody(text, res.statusText);
     throw new PurchaseApiHttpError(res.status, message, details);
   }
-  return (await res.json()) as T;
+  return (parseJsonSafe(text) ?? {}) as T;
 }
 
 async function patchJson<T>(path: string, body: unknown): Promise<T> {
   const res = await authFetch(path, { method: "PATCH", body: JSON.stringify(body) });
+  const text = await readBodyText(res);
   if (!res.ok) {
-    const { message, details } = await parseErrorBody(res);
+    const { message, details } = errorFromBody(text, res.statusText);
     throw new PurchaseApiHttpError(res.status, message, details);
   }
-  return (await res.json()) as T;
+  return (parseJsonSafe(text) ?? {}) as T;
 }
 
 type QueryValue = string | number | boolean | undefined | null;
@@ -434,10 +454,12 @@ function mapLegacyPo(raw: Record<string, unknown>): PurchaseOrder {
     poNumber: String(raw.poNumber ?? raw.po_number ?? ""),
     status: String(raw.status ?? "draft"),
     supplierId: (raw.supplierId as string) ?? null,
+    supplierName: (raw.supplierName as string) ?? null,
     warehouseId: (raw.warehouseId as string) ?? null,
     orderDate: String(raw.orderDate ?? raw.order_date ?? ""),
     expectedDate: (raw.expectedDate as string) ?? null,
     notes: (raw.notes as string) ?? null,
+    paymentTerms: (raw.paymentTerms as string) ?? null,
     subtotalPkr: Number(raw.subtotalPkr ?? 0),
     taxPkr: Number(raw.taxPkr ?? 0),
     discountPkr: Number(raw.discountPkr ?? 0),
@@ -448,6 +470,8 @@ function mapLegacyPo(raw: Record<string, unknown>): PurchaseOrder {
       ? (raw.lines as Record<string, unknown>[]).map((l) => ({
           id: l.id ? String(l.id) : undefined,
           medicineId: String(l.medicineId),
+          medicineName: (l.medicineName as string) ?? null,
+          medicineSku: (l.medicineSku as string) ?? null,
           quantity: Number(l.quantity ?? 0),
           freeQuantity: Number(l.freeQuantity ?? 0),
           receivedQty: Number(l.receivedQty ?? 0),
@@ -482,6 +506,8 @@ function mapLegacyGrn(raw: Record<string, unknown>): PurchaseGrn {
       ? (raw.lines as Record<string, unknown>[]).map((l) => ({
           id: l.id ? String(l.id) : undefined,
           medicineId: String(l.medicineId),
+          medicineName: (l.medicineName as string) ?? null,
+          medicineSku: (l.medicineSku as string) ?? null,
           purchaseOrderLineId: (l.purchaseOrderLineId as string) ?? null,
           batchNumber: String(l.batchNumber ?? ""),
           manufacturingDate: (l.manufacturingDate as string) ?? null,
@@ -736,7 +762,11 @@ export async function listPurchaseOrders(
   if (capability.orders) {
     try {
       const raw = await getJson<unknown>(`${BASE}/orders${qs(params)}`);
-      return normalizePage<PurchaseOrder>(raw);
+      const page = normalizePage<Record<string, unknown>>(raw);
+      return {
+        ...page,
+        items: page.items.map((row) => mapLegacyPo(row)),
+      };
     } catch (err) {
       if (isRouteMissing(err)) capability.orders = false;
       else throw err;
@@ -748,7 +778,8 @@ export async function listPurchaseOrders(
 export async function getPurchaseOrder(id: string, branchCode?: string): Promise<PurchaseOrder> {
   if (capability.orderGet) {
     try {
-      return await getJson<PurchaseOrder>(`${BASE}/orders/${id}`);
+      const raw = await getJson<Record<string, unknown>>(`${BASE}/orders/${id}`);
+      return mapLegacyPo(raw);
     } catch (err) {
       if (isRouteMissing(err)) capability.orderGet = false;
       else if (!(err instanceof PurchaseApiHttpError && err.status === 404)) throw err;
@@ -768,9 +799,19 @@ export async function getPurchaseOrder(id: string, branchCode?: string): Promise
 }
 
 export async function createPurchaseOrder(body: CreatePoInput): Promise<PurchaseOrder> {
+  const lines = (body.lines ?? []).filter((l) => l.medicineId && Number(l.quantity) >= 1);
+  if (!lines.length) {
+    throw new PurchaseApiHttpError(400, "Add at least one product line before saving");
+  }
+  const payload: CreatePoInput = {
+    ...body,
+    supplierId: body.supplierId?.trim() || undefined,
+    warehouseId: body.warehouseId?.trim() || undefined,
+    lines,
+  };
   if (capability.orders) {
     try {
-      const raw = await postJson<Record<string, unknown>>(`${BASE}/orders`, body);
+      const raw = await postJson<Record<string, unknown>>(`${BASE}/orders`, payload);
       return mapLegacyPo(raw);
     } catch (err) {
       if (isRouteMissing(err)) capability.orders = false;
@@ -778,14 +819,14 @@ export async function createPurchaseOrder(body: CreatePoInput): Promise<Purchase
     }
   }
   const raw = (await createPharmacyPurchaseOrder({
-    branchCode: body.branchCode,
-    supplierId: body.supplierId,
-    orderDate: body.orderDate,
-    expectedDate: body.expectedDate,
-    notes: body.notes,
-    taxPkr: body.taxPkr,
-    discountPkr: body.discountPkr,
-    lines: body.lines.map((l) => ({
+    branchCode: payload.branchCode,
+    supplierId: payload.supplierId,
+    orderDate: payload.orderDate,
+    expectedDate: payload.expectedDate,
+    notes: payload.notes,
+    taxPkr: payload.taxPkr,
+    discountPkr: payload.discountPkr,
+    lines: payload.lines.map((l) => ({
       medicineId: l.medicineId,
       quantity: l.quantity,
       freeQuantity: l.freeQuantity,
@@ -793,7 +834,8 @@ export async function createPurchaseOrder(body: CreatePoInput): Promise<Purchase
     })),
   })) as Record<string, unknown>;
   let po = mapLegacyPo(raw);
-  if (body.submit && po.id) {
+  // Legacy create ignores `submit` — only call submit when still draft.
+  if (payload.submit && po.id && po.status === "draft") {
     try {
       po = await submitPurchaseOrder(po.id);
     } catch {

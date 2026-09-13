@@ -190,7 +190,7 @@ export const fieldForceApi = {
         cap.pjp = false;
       }
     }
-    return { items: [], page: 1, pageSize: 25, total: 0, totalPages: 1 };
+    throw new FieldForceApiHttpError(404, "PJP API is not available on this server");
   },
 
   getPjp(id: string) {

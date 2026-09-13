@@ -351,7 +351,7 @@ function mapCollection(row: Record<string, unknown>): CollectionRow {
     id: String(row.id ?? ""),
     collectionNumber: String(row.collectionNumber ?? row.id ?? ""),
     tradeCustomerId: (row.tradeCustomerId as string) ?? null,
-    tradeCustomerName: (row.tradeCustomerName as string) ?? null,
+    tradeCustomerName: (row.tradeCustomerName as string) ?? (row.customerName as string) ?? null,
     amountPkr: Number(row.amountPkr ?? 0),
     paymentMethod: (row.paymentMethod as string) ?? null,
     invoiceId: (row.invoiceId as string) ?? null,
@@ -813,7 +813,29 @@ export const collectionsOpsApi = {
           })}`,
         );
         const normalized = normalizePage<Record<string, unknown>>(raw);
-        return { ...normalized, items: normalized.items.map(mapCollection) };
+        let items = normalized.items.map(mapCollection);
+        const needNames = items.some((r) => !r.tradeCustomerName && r.tradeCustomerId);
+        if (needNames) {
+          try {
+            const customers = (await fetchPharmacyTradeCustomers(params.branchCode)) as {
+              id?: string;
+              name?: string;
+              code?: string;
+            }[];
+            const byId = new Map(
+              customers.filter((c) => c.id).map((c) => [c.id!, (c.name || c.code || "").trim()]),
+            );
+            items = items.map((r) => ({
+              ...r,
+              tradeCustomerName:
+                r.tradeCustomerName ||
+                (r.tradeCustomerId ? byId.get(r.tradeCustomerId) || null : null),
+            }));
+          } catch {
+            /* best-effort name enrich */
+          }
+        }
+        return { ...normalized, items };
       } catch (err) {
         if (isRouteMissing(err)) capability.collections = false;
         else throw err;
@@ -824,6 +846,28 @@ export const collectionsOpsApi = {
     );
     if (params.tradeCustomerId) {
       rows = rows.filter((r) => r.tradeCustomerId === params.tradeCustomerId);
+    }
+    // Enrich names when API only returned UUIDs (legacy / undeployed backends).
+    const needNames = rows.some((r) => !r.tradeCustomerName && r.tradeCustomerId);
+    if (needNames) {
+      try {
+        const customers = (await fetchPharmacyTradeCustomers(params.branchCode)) as {
+          id?: string;
+          name?: string;
+          code?: string;
+        }[];
+        const byId = new Map(
+          customers.filter((c) => c.id).map((c) => [c.id!, (c.name || c.code || "").trim()]),
+        );
+        rows = rows.map((r) => ({
+          ...r,
+          tradeCustomerName:
+            r.tradeCustomerName ||
+            (r.tradeCustomerId ? byId.get(r.tradeCustomerId) || null : null),
+        }));
+      } catch {
+        /* best-effort */
+      }
     }
     if (params.q) {
       const q = params.q.toLowerCase();

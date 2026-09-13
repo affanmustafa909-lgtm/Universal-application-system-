@@ -778,7 +778,7 @@ export function DistributionPsWindowPage(): JSX.Element {
                       className="rounded-md border border-slate-100 px-3 py-2 text-sm hover:border-cyan-400 dark:border-slate-800"
                     >
                       <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        {row.status.replace(/_/g, " ")}
+                        {String(row.status ?? "—").replace(/_/g, " ")}
                       </div>
                       <div className="mt-0.5 font-semibold tabular-nums text-slate-900 dark:text-slate-100">
                         {row.count}

@@ -48,8 +48,16 @@ import {
 import { authFetch } from "../../lib/authFetch";
 
 async function parseError(res: Response, fallback: string): Promise<never> {
-  const err = (await res.json().catch(() => null)) as { message?: string } | null;
-  throw new Error(err?.message ?? `${fallback}: ${res.status}`);
+  const text = await res.text().catch(() => "");
+  let message = `${fallback}: ${res.status}`;
+  try {
+    const err = JSON.parse(text) as { message?: string | string[] };
+    if (typeof err.message === "string" && err.message.trim()) message = err.message;
+    else if (Array.isArray(err.message) && err.message.length) message = err.message.join(", ");
+  } catch {
+    if (text.trim()) message = text.trim().slice(0, 240);
+  }
+  throw new Error(message);
 }
 
 /** Parse JSON body; returns null for 204 or empty responses (avoids json() parse errors). */

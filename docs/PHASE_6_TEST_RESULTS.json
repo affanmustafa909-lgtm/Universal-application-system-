@@ -1,0 +1,345 @@
+{
+  "generatedAt": "2026-09-13T09:02:15.307Z",
+  "api": "https://backend-system-production-28a3.up.railway.app",
+  "branch": "DIST-HQ",
+  "runId": "90115590",
+  "suite": "phase6-purchase",
+  "honesty": "If this file was produced without a real deployed Phase 6 API, treat results as invalid. Soft timings are never hard pass/fail. Absence of this file means the suite was NOT RUN.",
+  "statusNote": "Suite authoring environment: NOT RUN until deploy. This artefact only appears after an execution attempt.",
+  "summary": {
+    "total": 37,
+    "passed": 35,
+    "failed": 2
+  },
+  "results": [
+    {
+      "name": "Security: unauthenticated supplier search rejected",
+      "passed": true,
+      "detail": "Unauthorized",
+      "expected": "401|403",
+      "actual": 401
+    },
+    {
+      "name": "Security: tampered JWT rejected",
+      "passed": true,
+      "detail": "Unauthorized",
+      "expected": "401|403",
+      "actual": 401
+    },
+    {
+      "name": "Supplier search: 200",
+      "passed": true,
+      "detail": "[{\"id\":\"e52e2b2f-94cc-4895-8f12-936ab48d3691\",\"name\":\"P6TEST-90115590 Supplier\",\"phone\":\"0390115590\",\"email\":null,\"paymentTerms\":\"Net 30\",\"active\":true}]",
+      "expected": "2xx",
+      "actual": 200
+    },
+    {
+      "name": "Supplier search: finds P6TEST supplier",
+      "passed": true,
+      "detail": "n=1",
+      "expected": "hit",
+      "actual": "e52e2b2f-94cc-4895-8f12-936ab48d3691"
+    },
+    {
+      "name": "Supplier search: lean shape has active (not code/status)",
+      "passed": true,
+      "detail": "{\"active\":true,\"keys\":[\"id\",\"name\",\"phone\",\"email\",\"paymentTerms\",\"active\"]}"
+    },
+    {
+      "name": "Requisition: create draft",
+      "passed": true,
+      "detail": "{\"id\":\"ee5ec59a-fbef-4951-be9e-ab99b4dcee0e\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"2e29d1f2-57d8-4f62-971e-0f3cc2c259",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Requisition: status draft",
+      "passed": true,
+      "detail": "draft",
+      "expected": "draft",
+      "actual": "draft"
+    },
+    {
+      "name": "Requisition: submit",
+      "passed": true,
+      "detail": "{\"id\":\"ee5ec59a-fbef-4951-be9e-ab99b4dcee0e\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"2e29d1f2-57d8-4f62-971e-0f3cc2c259",
+      "expected": "submitted",
+      "actual": "submitted"
+    },
+    {
+      "name": "Requisition: approve",
+      "passed": true,
+      "detail": "{\"id\":\"ee5ec59a-fbef-4951-be9e-ab99b4dcee0e\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"2e29d1f2-57d8-4f62-971e-0f3cc2c259",
+      "expected": "approved",
+      "actual": "approved"
+    },
+    {
+      "name": "Convert: rejects without supplierId",
+      "passed": false,
+      "detail": "Internal server error",
+      "expected": "400|422",
+      "actual": 500
+    },
+    {
+      "name": "Convert: with supplierId",
+      "passed": true,
+      "detail": "{\"purchaseOrder\":{\"id\":\"7c81e42a-9364-45a5-bf09-40cfcaed9913\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"2e29d1f2-57d8-4f6",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Convert: requisition converted",
+      "passed": true,
+      "detail": "converted",
+      "expected": "converted|partially_converted",
+      "actual": "converted"
+    },
+    {
+      "name": "Convert: returns draft PO",
+      "passed": true,
+      "detail": "draft",
+      "expected": "draft",
+      "actual": "draft"
+    },
+    {
+      "name": "PO: approve",
+      "passed": true,
+      "detail": "{\"id\":\"7c81e42a-9364-45a5-bf09-40cfcaed9913\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"2e29d1f2-57d8-4f62-971e-0f3cc2c259 (was submitted)",
+      "expected": "approved",
+      "actual": "approved"
+    },
+    {
+      "name": "PO: send",
+      "passed": true,
+      "detail": "{\"id\":\"7c81e42a-9364-45a5-bf09-40cfcaed9913\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"2e29d1f2-57d8-4f62-971e-0f3cc2c259",
+      "expected": "sent",
+      "actual": "sent"
+    },
+    {
+      "name": "PO: confirm",
+      "passed": true,
+      "detail": "{\"id\":\"7c81e42a-9364-45a5-bf09-40cfcaed9913\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"2e29d1f2-57d8-4f62-971e-0f3cc2c259",
+      "expected": "supplier_confirmed",
+      "actual": "supplier_confirmed"
+    },
+    {
+      "name": "GRN: partial receive posts",
+      "passed": true,
+      "detail": "{\"id\":\"a41ee24d-b292-42d4-aeb1-97cd970a3fe5\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"2e29d1f2-57d8-4f62-971e-0f3cc2c259",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "GRN: PO status partial after first receipt",
+      "passed": true,
+      "detail": "partial",
+      "expected": "partial",
+      "actual": "partial"
+    },
+    {
+      "name": "GRN: over-receive blocked",
+      "passed": true,
+      "detail": "Over-receive blocked for medicine 6c02230a-1fcd-4e5e-b179-77de6eb43028: receiving 100, pending 50",
+      "expected": "400 over-receive",
+      "actual": 400
+    },
+    {
+      "name": "GRN: expired batch blocked",
+      "passed": true,
+      "detail": "Expired stock blocked: batch B-EXP-90115590 expired on 2026-08-14",
+      "expected": "400 expired",
+      "actual": 400
+    },
+    {
+      "name": "GRN: remainder receive posts",
+      "passed": true,
+      "detail": "{\"id\":\"ebde3841-9326-4117-971b-cada8a366b8a\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"2e29d1f2-57d8-4f62-971e-0f3cc2c259",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "GRN: duplicate idempotencyKey replays",
+      "passed": false,
+      "detail": "replayed=undefined id=undefined",
+      "expected": "same id / replayed"
+    },
+    {
+      "name": "GRN: PO status received after full",
+      "passed": true,
+      "detail": "received",
+      "expected": "received",
+      "actual": "received"
+    },
+    {
+      "name": "Invoice: create from GRN",
+      "passed": true,
+      "detail": "{\"id\":\"f9034c9e-abdb-4845-8278-f4b013dcb8e0\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"supplierId\":\"e52e2b2f-94cc-4895-8f12-936ab48d369",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Invoice: draft",
+      "passed": true,
+      "detail": "draft",
+      "expected": "draft",
+      "actual": "draft"
+    },
+    {
+      "name": "Invoice: post",
+      "passed": true,
+      "detail": "{\"id\":\"f9034c9e-abdb-4845-8278-f4b013dcb8e0\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"supplierId\":\"e52e2b2f-94cc-4895-8f12-936ab48d369",
+      "expected": "posted",
+      "actual": "posted"
+    },
+    {
+      "name": "Invoice: match summary",
+      "passed": true,
+      "detail": "{\"invoiceId\":\"f9034c9e-abdb-4845-8278-f4b013dcb8e0\",\"invoiceTotalPkr\":5000,\"grnTotalPkr\":5000,\"poTotalPkr\":10000,\"poVsGrnDiffPkr\":-5000,\"invoiceVsGrnDiffPkr\":0,\"matched\":true,\"accountingNote\":\"Documen",
+      "expected": "match object",
+      "actual": 200
+    },
+    {
+      "name": "Dashboard: 200",
+      "passed": true,
+      "detail": "{\"kpis\":[{\"key\":\"purchase_today\",\"label\":\"Purchases today (GRN)\",\"value\":10930,\"to\":\"/v1/pharmacy/purchase/grns?dateFrom=2026-09-13&dateTo=2026-09-13\"},{\"key\":\"purchase_month\",\"label\":\"Purchases this ",
+      "expected": "2xx",
+      "actual": 200
+    },
+    {
+      "name": "Dashboard: kpis is array",
+      "passed": true,
+      "detail": "object",
+      "expected": "array",
+      "actual": 11
+    },
+    {
+      "name": "Dashboard: expected kpi keys present",
+      "passed": true,
+      "detail": "purchase_today,purchase_month,pending_requisitions,pending_pos,pending_approvals,partial_pos,overdue_expected,returns_count"
+    },
+    {
+      "name": "Dashboard: kpi shape {key,label,value}",
+      "passed": true
+    },
+    {
+      "name": "Supplier performance: 200",
+      "passed": true,
+      "detail": "{\"supplierId\":\"e52e2b2f-94cc-4895-8f12-936ab48d3691\",\"supplierName\":\"P6TEST-90115590 Supplier\",\"orderCount\":1,\"receivedCount\":2,\"returnCount\":0,\"purchaseTotalPkr\":10000,\"returnTotalPkr\":0,\"onTimeRate\"",
+      "expected": "2xx",
+      "actual": 200
+    },
+    {
+      "name": "Supplier performance: has formulas echo",
+      "passed": true,
+      "detail": "{\"onTimeRate\":\"GRNs with receivedDate <= PO.expectedDate / GRNs linked to PO with expectedDate\",\"fillRate\":\"sum(receivedQty) / sum(quantity + freeQuantity) across PO lines\",\"returnRate\":\"sum(return totalPkr) / sum(GRN totalPkr)\"}"
+    },
+    {
+      "name": "Supplier performance: rates are number or null (no invented score)",
+      "passed": true,
+      "detail": "{\"onTimeRate\":1,\"fillRate\":1,\"returnRate\":0}"
+    },
+    {
+      "name": "Purchase return: stock OUT posts",
+      "passed": true,
+      "detail": "{\"id\":\"a16d0735-2543-4484-ab13-1453f3ca6135\",\"organizationId\":\"7b47c716-0425-4b0f-b7c1-4919cbeb8ec4\",\"branchId\":\"4340deb9-fb81-4ec6-9cf6-0ee25129e9fd\",\"warehouseId\":\"2e29d1f2-57d8-4f62-971e-0f3cc2c259",
+      "expected": "2xx",
+      "actual": 201
+    },
+    {
+      "name": "Purchase return: has returnNumber",
+      "passed": true,
+      "detail": "PRN-2026-00004"
+    },
+    {
+      "name": "Performance: soft timings recorded (not hard-fail)",
+      "passed": true,
+      "detail": "4 probes — budgets are soft only; do not cite as measured until suite has been run",
+      "expected": "recorded",
+      "actual": "recorded"
+    }
+  ],
+  "softPerformance": [
+    {
+      "label": "supplier-search",
+      "samples": [
+        547
+      ],
+      "median": 547,
+      "best": 547,
+      "worst": 547,
+      "budgetMs": 500,
+      "withinBudget": false,
+      "hardAssert": false,
+      "note": "soft timing only — not a pass/fail gate; NOT measured until this suite actually runs"
+    },
+    {
+      "label": "grn-partial",
+      "samples": [
+        437
+      ],
+      "median": 437,
+      "best": 437,
+      "worst": 437,
+      "budgetMs": 2000,
+      "withinBudget": true,
+      "hardAssert": false,
+      "note": "soft timing only — not a pass/fail gate; NOT measured until this suite actually runs"
+    },
+    {
+      "label": "grn-full",
+      "samples": [
+        445
+      ],
+      "median": 445,
+      "best": 445,
+      "worst": 445,
+      "budgetMs": 2000,
+      "withinBudget": true,
+      "hardAssert": false,
+      "note": "soft timing only — not a pass/fail gate; NOT measured until this suite actually runs"
+    },
+    {
+      "label": "dashboard",
+      "samples": [
+        332
+      ],
+      "median": 332,
+      "best": 332,
+      "worst": 332,
+      "budgetMs": 800,
+      "withinBudget": true,
+      "hardAssert": false,
+      "note": "soft timing only — not a pass/fail gate; NOT measured until this suite actually runs"
+    }
+  ],
+  "timings": [
+    {
+      "label": "supplier-search",
+      "route": "/v1/pharmacy/purchase/suppliers/search",
+      "method": "GET",
+      "ms": 547,
+      "status": 200
+    },
+    {
+      "label": "grn-partial",
+      "route": "/v1/pharmacy/purchase/grns",
+      "method": "POST",
+      "ms": 437,
+      "status": 201
+    },
+    {
+      "label": "grn-full",
+      "route": "/v1/pharmacy/purchase/grns",
+      "method": "POST",
+      "ms": 445,
+      "status": 201
+    },
+    {
+      "label": "dashboard",
+      "route": "/v1/pharmacy/purchase/dashboard",
+      "method": "GET",
+      "ms": 332,
+      "status": 200
+    }
+  ]
+}

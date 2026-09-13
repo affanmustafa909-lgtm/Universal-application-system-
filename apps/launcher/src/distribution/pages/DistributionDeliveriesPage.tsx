@@ -10,6 +10,7 @@ import {
   fetchPharmacyDistInvoices,
   fetchPharmacyDistOrders,
   fetchPharmacyRoutes,
+  fetchPharmacyTradeCustomers,
 } from "../../pharmacy/api/pharmacy-erp";
 import { formatPkr, useInvalidatePharmacy, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
 import { DistMasterDrawer } from "../components/DistMasterDrawer";
@@ -24,6 +25,8 @@ import {
   DistSelect,
   DistStatusBadge,
 } from "../ui/DistUi";
+import { printDistDocument } from "../lib/printDistOrder";
+import { customerDisplayName, looksLikeUuid, tradeCustomerNameMap } from "../lib/customerDisplay";
 
 const DIST = "/pops/distribution";
 
@@ -77,6 +80,7 @@ export function DistributionDeliveriesPage(): JSX.Element {
   const [orderId, setOrderId] = useState("");
   const [invoiceId, setInvoiceId] = useState("");
   const [riderName, setRiderName] = useState("");
+  const [driverId, setDriverId] = useState("");
   const [routeId, setRouteId] = useState("");
 
   const [assignRow, setAssignRow] = useState<DeliveryOrder | null>(null);
@@ -84,6 +88,11 @@ export function DistributionDeliveriesPage(): JSX.Element {
   const [assignVehicle, setAssignVehicle] = useState("");
   const [assignRoute, setAssignRoute] = useState("");
   const [assignRider, setAssignRider] = useState("");
+  const [newDriverName, setNewDriverName] = useState("");
+  const [newDriverPhone, setNewDriverPhone] = useState("");
+  const [newVehicleLabel, setNewVehicleLabel] = useState("");
+  const [newVehiclePlate, setNewVehiclePlate] = useState("");
+  const [registerBusy, setRegisterBusy] = useState(false);
 
   const [podRow, setPodRow] = useState<DeliveryOrder | null>(null);
   const [podStatus, setPodStatus] = useState<PodOutcome>("delivered");
@@ -117,49 +126,63 @@ export function DistributionDeliveriesPage(): JSX.Element {
 
   const orders = useQuery({
     queryKey: ["pharmacy", "dist-orders", branchCode],
-    enabled: Boolean(branchCode) && composerOpen,
+    enabled: Boolean(branchCode),
     queryFn: () => fetchPharmacyDistOrders(branchCode!),
+    staleTime: 60_000,
   });
 
   const invoices = useQuery({
     queryKey: ["pharmacy", "dist-invoices", branchCode],
-    enabled: Boolean(branchCode) && composerOpen && sourceType === "invoice",
+    enabled: Boolean(branchCode),
     queryFn: () => fetchPharmacyDistInvoices(branchCode!),
+    staleTime: 60_000,
   });
 
   const routes = useQuery({
     queryKey: ["pharmacy", "routes"],
-    enabled: composerOpen || Boolean(assignRow),
+    enabled: Boolean(branchCode),
     queryFn: fetchPharmacyRoutes,
+    staleTime: 120_000,
+  });
+
+  const customers = useQuery({
+    queryKey: ["pharmacy", "trade-customers", branchCode],
+    enabled: Boolean(branchCode),
+    queryFn: () => fetchPharmacyTradeCustomers(branchCode),
+    staleTime: 120_000,
   });
 
   const drivers = useQuery({
     queryKey: ["distribution", "delivery", "drivers", branchCode],
-    enabled: Boolean(assignRow),
+    enabled: Boolean(branchCode) && (composerOpen || Boolean(assignRow)),
     queryFn: () => deliveryApi.listDrivers({ branchCode }),
   });
 
   const vehicles = useQuery({
     queryKey: ["distribution", "delivery", "vehicles", branchCode],
-    enabled: Boolean(assignRow),
+    enabled: Boolean(branchCode) && (composerOpen || Boolean(assignRow)),
     queryFn: () => deliveryApi.listVehicles({ branchCode }),
   });
 
   const createMut = useMutation({
-    mutationFn: () =>
-      deliveryApi.createOrder({
+    mutationFn: () => {
+      const selectedDriver = (drivers.data ?? []).find((d) => d.id === driverId);
+      return deliveryApi.createOrder({
         branchCode: branchCode!,
         orderId: sourceType === "order" ? orderId || undefined : undefined,
         invoiceId: sourceType === "invoice" ? invoiceId || undefined : undefined,
-        riderName: riderName || undefined,
+        driverId: driverId || undefined,
+        riderName: selectedDriver?.name || riderName || undefined,
         routeId: routeId || undefined,
-      }),
+      });
+    },
     onSuccess: () => {
       setActionError(null);
       setComposerOpen(false);
       setOrderId("");
       setInvoiceId("");
       setRiderName("");
+      setDriverId("");
       setRouteId("");
       invalidate();
       void list.refetch();
@@ -168,21 +191,70 @@ export function DistributionDeliveriesPage(): JSX.Element {
   });
 
   const assignMut = useMutation({
-    mutationFn: () =>
-      deliveryApi.assign(assignRow!.id, {
+    mutationFn: () => {
+      const selectedDriver = (drivers.data ?? []).find((d) => d.id === assignDriver);
+      return deliveryApi.assign(assignRow!.id, {
         driverId: assignDriver || undefined,
         vehicleId: assignVehicle || undefined,
         routeId: assignRoute || undefined,
-        riderName: assignRider || undefined,
-      }),
+        riderName: selectedDriver?.name || assignRider || undefined,
+      });
+    },
     onSuccess: () => {
       setActionError(null);
       setAssignRow(null);
+      setNewDriverName("");
+      setNewDriverPhone("");
+      setNewVehicleLabel("");
+      setNewVehiclePlate("");
       invalidate();
       void list.refetch();
     },
     onError: (err) => setActionError(errorMessage(err)),
   });
+
+  const registerDriver = async () => {
+    if (!branchCode || !newDriverName.trim()) return;
+    setRegisterBusy(true);
+    setActionError(null);
+    try {
+      const created = await deliveryApi.createDriver({
+        branchCode,
+        name: newDriverName.trim(),
+        phone: newDriverPhone.trim() || undefined,
+      });
+      await drivers.refetch();
+      setAssignDriver(created.id);
+      setAssignRider(created.name);
+      setNewDriverName("");
+      setNewDriverPhone("");
+    } catch (err) {
+      setActionError(errorMessage(err));
+    } finally {
+      setRegisterBusy(false);
+    }
+  };
+
+  const registerVehicle = async () => {
+    if (!branchCode || !newVehicleLabel.trim()) return;
+    setRegisterBusy(true);
+    setActionError(null);
+    try {
+      const created = await deliveryApi.createVehicle({
+        branchCode,
+        label: newVehicleLabel.trim(),
+        plateNumber: newVehiclePlate.trim() || undefined,
+      });
+      await vehicles.refetch();
+      setAssignVehicle(created.id);
+      setNewVehicleLabel("");
+      setNewVehiclePlate("");
+    } catch (err) {
+      setActionError(errorMessage(err));
+    } finally {
+      setRegisterBusy(false);
+    }
+  };
 
   const dispatchMut = useMutation({
     mutationFn: (row: DeliveryOrder) =>
@@ -223,7 +295,73 @@ export function DistributionDeliveriesPage(): JSX.Element {
     onError: (err) => setActionError(errorMessage(err)),
   });
 
-  const rows = list.data?.items ?? [];
+  const rows = useMemo(() => {
+    const items = list.data?.items ?? [];
+    const orderById = new Map(
+      ((orders.data ?? []) as { id: string; orderNumber?: string; tradeCustomerId?: string; totalPkr?: number }[]).map(
+        (o) => [o.id, o],
+      ),
+    );
+    const invById = new Map(
+      ((invoices.data ?? []) as {
+        id: string;
+        invoiceNumber?: string;
+        orderId?: string;
+        tradeCustomerId?: string;
+        totalPkr?: number;
+      }[]).map((i) => [i.id, i]),
+    );
+    const routeById = new Map(
+      ((routes.data ?? []) as { id: string; name?: string; code?: string }[]).map((r) => [r.id, r]),
+    );
+    const custNames = tradeCustomerNameMap(
+      (customers.data ?? []) as { id?: string; name?: string | null; code?: string | null }[],
+    );
+    const custById = new Map(
+      ((customers.data ?? []) as { id: string; name?: string; code?: string; phone?: string }[]).map((c) => [
+        c.id,
+        c,
+      ]),
+    );
+
+    const clean = (v?: string | null) => {
+      const s = String(v ?? "").trim();
+      return s && !looksLikeUuid(s) ? s : "";
+    };
+
+    return items.map((r) => {
+      const order = r.orderId ? orderById.get(r.orderId) : undefined;
+      const inv = r.invoiceId ? invById.get(r.invoiceId) : undefined;
+      const route = r.routeId ? routeById.get(r.routeId) : undefined;
+      const customerId =
+        r.tradeCustomerId || order?.tradeCustomerId || inv?.tradeCustomerId || undefined;
+      const cust = customerId ? custById.get(customerId) : undefined;
+
+      const orderNumber = clean(r.orderNumber) || clean(order?.orderNumber) || null;
+      const invoiceNumber = clean(r.invoiceNumber) || clean(inv?.invoiceNumber) || null;
+      const routeName =
+        clean(r.routeName) || clean(route?.name) || clean(route?.code) || clean(r.routeCode) || null;
+      const tradeCustomerName =
+        clean(r.tradeCustomerName) ||
+        clean(r.contactName) ||
+        (customerId ? custNames.get(customerId) : undefined) ||
+        clean(cust?.name) ||
+        null;
+      const tradeCustomerCode = clean(r.tradeCustomerCode) || clean(cust?.code) || null;
+
+      return {
+        ...r,
+        orderNumber,
+        invoiceNumber,
+        routeName,
+        tradeCustomerId: customerId ?? r.tradeCustomerId,
+        tradeCustomerName,
+        tradeCustomerCode,
+        orderTotalPkr: r.orderTotalPkr ?? order?.totalPkr ?? null,
+        invoiceTotalPkr: r.invoiceTotalPkr ?? inv?.totalPkr ?? null,
+      };
+    });
+  }, [list.data?.items, orders.data, invoices.data, routes.data, customers.data]);
 
   const readyOrders = useMemo(() => {
     const all = (orders.data ?? []) as { id: string; orderNumber?: string; status?: string }[];
@@ -312,27 +450,57 @@ export function DistributionDeliveriesPage(): JSX.Element {
           {
             key: "source",
             header: "Order / Invoice",
-            render: (r) => r.orderNumber ?? r.invoiceNumber ?? r.orderId ?? r.invoiceId ?? "—",
+            render: (r) => {
+              const order = r.orderNumber && !looksLikeUuid(r.orderNumber) ? r.orderNumber : null;
+              const inv = r.invoiceNumber && !looksLikeUuid(r.invoiceNumber) ? r.invoiceNumber : null;
+              if (order && inv) return `${order} · ${inv}`;
+              return order ?? inv ?? "—";
+            },
           },
           {
             key: "customer",
             header: "Customer",
-            render: (r) => r.tradeCustomerName ?? "—",
+            render: (r) => {
+              const name = customerDisplayName(r);
+              const code =
+                r.tradeCustomerCode && !looksLikeUuid(r.tradeCustomerCode)
+                  ? String(r.tradeCustomerCode)
+                  : "";
+              if (name === "—" && !code) return "—";
+              return code && name !== "—" ? `${name} (${code})` : name !== "—" ? name : code;
+            },
           },
           {
             key: "rider",
             header: "Rider / Driver",
-            render: (r) => r.driverName ?? r.riderName ?? "—",
+            render: (r) => {
+              const name = r.driverName ?? r.riderName;
+              return name && !looksLikeUuid(name) ? name : "—";
+            },
           },
           {
             key: "route",
             header: "Route",
-            render: (r) => r.routeName ?? r.routeId ?? "—",
+            render: (r) => {
+              const name = r.routeName ?? r.routeCode;
+              return name && !looksLikeUuid(name) ? name : "—";
+            },
           },
           {
             key: "collected",
             header: "Collected",
-            render: (r) => (r.collectedPkr ? formatPkr(Number(r.collectedPkr)) : "—"),
+            render: (r) => {
+              const collected = Number(r.collectedPkr ?? 0);
+              if (collected > 0) return formatPkr(collected);
+              const due = Number(r.invoiceTotalPkr ?? r.orderTotalPkr ?? 0);
+              return due > 0 ? (
+                <span className="text-slate-400" title="Invoice / order total">
+                  Due {formatPkr(due)}
+                </span>
+              ) : (
+                "—"
+              );
+            },
           },
           {
             key: "actions",
@@ -382,6 +550,70 @@ export function DistributionDeliveriesPage(): JSX.Element {
                 ) : (
                   <span className="text-xs text-slate-400">Done</span>
                 )}
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+                  onClick={() => {
+                    void (async () => {
+                      try {
+                        const detail = await deliveryApi.getOrder(r.id);
+                        const label = (v?: string | null) =>
+                          v && String(v).trim() && !looksLikeUuid(v) ? String(v).trim() : "—";
+                        const customer = customerDisplayName(detail);
+                        const rider = label(detail.driverName ?? detail.riderName);
+                        const route = label(detail.routeName);
+                        const orderNo = label(detail.orderNumber);
+                        const invNo = label(detail.invoiceNumber);
+                        const printLines = (detail.lines ?? []).map((l) => {
+                          const name =
+                            (l.medicineName && !looksLikeUuid(l.medicineName) ? l.medicineName : null) ||
+                            (l.productLabel && !looksLikeUuid(l.productLabel) ? l.productLabel : null) ||
+                            "Item";
+                          const sku = l.medicineSku && !looksLikeUuid(l.medicineSku) ? l.medicineSku : "";
+                          const batch = l.batchNumber && !looksLikeUuid(l.batchNumber) ? l.batchNumber : "";
+                          return {
+                            label: name,
+                            qty: Number(l.quantity ?? 0),
+                            unitPrice: Number(l.unitPricePkr ?? 0),
+                            note: [sku, batch ? `Batch ${batch}` : ""].filter(Boolean).join(" · ") || undefined,
+                          };
+                        });
+                        const lineTotal = printLines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+                        const total =
+                          Number(detail.invoiceTotalPkr ?? 0) ||
+                          Number(detail.orderTotalPkr ?? 0) ||
+                          lineTotal ||
+                          0;
+                        await printDistDocument({
+                          title: "Delivery note",
+                          documentNumber: String(detail.deliveryNumber ?? r.deliveryNumber ?? r.id),
+                          partyLabel: "Customer",
+                          partyName: customer,
+                          branchName: label(detail.branchName) !== "—" ? detail.branchName ?? undefined : undefined,
+                          branchCode: label(detail.branchCode) !== "—" ? detail.branchCode ?? undefined : undefined,
+                          meta: [
+                            { label: "Status", value: String(detail.status ?? r.status ?? "") },
+                            { label: "Rider", value: rider },
+                            { label: "Route", value: route },
+                            ...(orderNo !== "—" ? [{ label: "Order", value: orderNo }] : []),
+                            ...(invNo !== "—" ? [{ label: "Invoice", value: invNo }] : []),
+                            ...(detail.vehicleLabel && !looksLikeUuid(detail.vehicleLabel)
+                              ? [{ label: "Vehicle", value: String(detail.vehicleLabel) }]
+                              : []),
+                          ],
+                          lines: printLines,
+                          subtotalPkr: lineTotal || total,
+                          totalPkr: total,
+                          footerNote: "Delivery note — quantities as dispatched",
+                        });
+                      } catch (e) {
+                        setActionError(errorMessage(e, "Print failed"));
+                      }
+                    })();
+                  }}
+                >
+                  Print
+                </button>
               </div>
             ),
           },
@@ -407,20 +639,15 @@ export function DistributionDeliveriesPage(): JSX.Element {
         title="New delivery"
         onClose={() => !createMut.isPending && setComposerOpen(false)}
         footer={
-          <div className="flex justify-end gap-2">
-            <DistButton variant="secondary" disabled={createMut.isPending} onClick={() => setComposerOpen(false)}>
-              Cancel
-            </DistButton>
-            <DistButton
-              disabled={
-                createMut.isPending ||
-                (sourceType === "order" ? !orderId : !invoiceId)
-              }
-              onClick={() => createMut.mutate()}
-            >
-              {createMut.isPending ? "Creating…" : "Create delivery"}
-            </DistButton>
-          </div>
+          <DistButton
+            disabled={
+              createMut.isPending ||
+              (sourceType === "order" ? !orderId : !invoiceId)
+            }
+            onClick={() => createMut.mutate()}
+          >
+            {createMut.isPending ? "Creating…" : "Create delivery"}
+          </DistButton>
         }
       >
         <div className="space-y-3">
@@ -456,9 +683,43 @@ export function DistributionDeliveriesPage(): JSX.Element {
               </DistSelect>
             </Field>
           )}
-          <Field label="Rider name">
-            <DistInput value={riderName} onChange={(e) => setRiderName(e.target.value)} placeholder="Optional" />
+          <Field label="Rider / Driver">
+            <DistSelect
+              value={driverId}
+              onChange={(e) => {
+                const next = e.target.value;
+                setDriverId(next);
+                const hit = (drivers.data ?? []).find((d) => d.id === next);
+                setRiderName(hit?.name ?? "");
+              }}
+            >
+              <option value="">Select rider</option>
+              {(drivers.data ?? []).map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                  {d.code ? ` (${d.code})` : ""}
+                  {d.phone ? ` · ${d.phone}` : ""}
+                </option>
+              ))}
+            </DistSelect>
+            {drivers.isLoading ? (
+              <span className="mt-1 block text-[11px] text-slate-500">Loading riders…</span>
+            ) : null}
+            {!drivers.isLoading && (drivers.data?.length ?? 0) === 0 ? (
+              <span className="mt-1 block text-[11px] text-amber-700 dark:text-amber-300">
+                No riders yet — add under Sales force / Delivery drivers, or type a name below.
+              </span>
+            ) : null}
           </Field>
+          {!driverId ? (
+            <Field label="Rider name (optional free text)">
+              <DistInput
+                value={riderName}
+                onChange={(e) => setRiderName(e.target.value)}
+                placeholder="If rider not in list"
+              />
+            </Field>
+          ) : null}
           <Field label="Route">
             <DistSelect value={routeId} onChange={(e) => setRouteId(e.target.value)}>
               <option value="">No route</option>
@@ -477,30 +738,73 @@ export function DistributionDeliveriesPage(): JSX.Element {
         title={`Assign — ${assignRow?.deliveryNumber ?? ""}`}
         onClose={() => !assignMut.isPending && setAssignRow(null)}
         footer={
-          <div className="flex justify-end gap-2">
-            <DistButton variant="secondary" disabled={assignMut.isPending} onClick={() => setAssignRow(null)}>
-              Cancel
-            </DistButton>
-            <DistButton disabled={assignMut.isPending} onClick={() => assignMut.mutate()}>
-              {assignMut.isPending ? "Saving…" : "Save assignment"}
-            </DistButton>
-          </div>
+          <DistButton disabled={assignMut.isPending} onClick={() => assignMut.mutate()}>
+            {assignMut.isPending ? "Saving…" : "Save assignment"}
+          </DistButton>
         }
       >
         <div className="space-y-3">
-          <Field label="Rider name">
-            <DistInput value={assignRider} onChange={(e) => setAssignRider(e.target.value)} />
-          </Field>
-          <Field label="Driver">
-            <DistSelect value={assignDriver} onChange={(e) => setAssignDriver(e.target.value)}>
-              <option value="">None / text rider</option>
+          <Field label="Driver / Rider">
+            <DistSelect
+              value={assignDriver}
+              onChange={(e) => {
+                const next = e.target.value;
+                setAssignDriver(next);
+                const hit = (drivers.data ?? []).find((d) => d.id === next);
+                if (hit) setAssignRider(hit.name);
+              }}
+            >
+              <option value="">Select registered rider</option>
               {(drivers.data ?? []).map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
+                  {d.code ? ` (${d.code})` : ""}
+                  {d.phone ? ` · ${d.phone}` : ""}
                 </option>
               ))}
             </DistSelect>
+            {drivers.isLoading ? (
+              <span className="mt-1 block text-[11px] text-slate-500">Loading riders…</span>
+            ) : null}
           </Field>
+
+          <div className="rounded-md border border-dashed border-slate-300 p-2 dark:border-slate-700">
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Register new rider
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <DistInput
+                value={newDriverName}
+                onChange={(e) => setNewDriverName(e.target.value)}
+                placeholder="Name *"
+              />
+              <DistInput
+                value={newDriverPhone}
+                onChange={(e) => setNewDriverPhone(e.target.value)}
+                placeholder="Phone (optional)"
+              />
+            </div>
+            <DistButton
+              type="button"
+              variant="secondary"
+              className="mt-2 !py-1 text-xs"
+              disabled={registerBusy || !newDriverName.trim()}
+              onClick={() => void registerDriver()}
+            >
+              {registerBusy ? "Saving…" : "Register & select"}
+            </DistButton>
+          </div>
+
+          {!assignDriver ? (
+            <Field label="Rider name (one-time text only)">
+              <DistInput
+                value={assignRider}
+                onChange={(e) => setAssignRider(e.target.value)}
+                placeholder="Only if not registering a driver"
+              />
+            </Field>
+          ) : null}
+
           <Field label="Vehicle">
             <DistSelect value={assignVehicle} onChange={(e) => setAssignVehicle(e.target.value)}>
               <option value="">None</option>
@@ -512,6 +816,34 @@ export function DistributionDeliveriesPage(): JSX.Element {
               ))}
             </DistSelect>
           </Field>
+
+          <div className="rounded-md border border-dashed border-slate-300 p-2 dark:border-slate-700">
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Register new vehicle
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <DistInput
+                value={newVehicleLabel}
+                onChange={(e) => setNewVehicleLabel(e.target.value)}
+                placeholder="Code / label *"
+              />
+              <DistInput
+                value={newVehiclePlate}
+                onChange={(e) => setNewVehiclePlate(e.target.value)}
+                placeholder="Plate no."
+              />
+            </div>
+            <DistButton
+              type="button"
+              variant="secondary"
+              className="mt-2 !py-1 text-xs"
+              disabled={registerBusy || !newVehicleLabel.trim()}
+              onClick={() => void registerVehicle()}
+            >
+              {registerBusy ? "Saving…" : "Register & select"}
+            </DistButton>
+          </div>
+
           <Field label="Route">
             <DistSelect value={assignRoute} onChange={(e) => setAssignRoute(e.target.value)}>
               <option value="">No route</option>
@@ -530,20 +862,15 @@ export function DistributionDeliveriesPage(): JSX.Element {
         title={`POD — ${podRow?.deliveryNumber ?? ""}`}
         onClose={() => !podMut.isPending && setPodRow(null)}
         footer={
-          <div className="flex justify-end gap-2">
-            <DistButton variant="secondary" disabled={podMut.isPending} onClick={() => setPodRow(null)}>
-              Cancel
-            </DistButton>
-            <DistButton
-              disabled={
-                podMut.isPending ||
-                ((podStatus === "failed" || podStatus === "refused") && !podReason.trim())
-              }
-              onClick={() => podMut.mutate()}
-            >
-              {podMut.isPending ? "Posting…" : "Post POD"}
-            </DistButton>
-          </div>
+          <DistButton
+            disabled={
+              podMut.isPending ||
+              ((podStatus === "failed" || podStatus === "refused") && !podReason.trim())
+            }
+            onClick={() => podMut.mutate()}
+          >
+            {podMut.isPending ? "Posting…" : "Post POD"}
+          </DistButton>
         }
       >
         <div className="space-y-3">

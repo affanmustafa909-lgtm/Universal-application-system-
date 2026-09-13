@@ -14,6 +14,7 @@ import {
   exportRowsToCsv,
 } from "../ui/DistUi";
 import { printDistDocument, printDistReportDocument } from "../lib/printDistOrder";
+import { customerDisplayName, tradeCustomerNameMap } from "../lib/customerDisplay";
 
 export function DistributionInvoicesPage(): JSX.Element {
   const { branch } = usePharmacyAccess();
@@ -30,11 +31,10 @@ export function DistributionInvoicesPage(): JSX.Element {
     queryFn: () => fetchPharmacyTradeCustomers(branch?.code),
   });
 
-  const custName = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const c of customers.data ?? []) m.set(c.id, c.name);
-    return m;
-  }, [customers.data]);
+  const custName = useMemo(
+    () => tradeCustomerNameMap(customers.data ?? []),
+    [customers.data],
+  );
 
   const rows = useMemo(() => {
     let list = invoices.data ?? [];
@@ -45,7 +45,7 @@ export function DistributionInvoicesPage(): JSX.Element {
       list = list.filter(
         (r) =>
           String(r.invoiceNumber ?? "").toLowerCase().includes(q) ||
-          (custName.get(r.tradeCustomerId) ?? "").toLowerCase().includes(q),
+          (customerDisplayName(r, custName) ?? "").toLowerCase().includes(q),
       );
     }
     return list;
@@ -73,7 +73,7 @@ export function DistributionInvoicesPage(): JSX.Element {
   const csvCols = ["invoiceNumber", "customer", "date", "total", "due", "status"] as const;
   const toCsvRow = (r: (typeof rows)[number]) => [
     r.invoiceNumber,
-    custName.get(r.tradeCustomerId) ?? "",
+    customerDisplayName(r, custName),
     r.invoiceDate,
     r.totalPkr,
     r.amountDuePkr,
@@ -131,7 +131,7 @@ export function DistributionInvoicesPage(): JSX.Element {
               columns: ["invoiceNumber", "customer", "invoiceDate", "totalPkr", "amountDuePkr", "status"],
               rows: selectedRows.map((r) => ({
                 invoiceNumber: r.invoiceNumber,
-                customer: custName.get(r.tradeCustomerId) ?? "",
+                customer: customerDisplayName(r, custName),
                 invoiceDate: r.invoiceDate,
                 totalPkr: r.totalPkr,
                 amountDuePkr: r.amountDuePkr,
@@ -160,7 +160,7 @@ export function DistributionInvoicesPage(): JSX.Element {
           {
             key: "customer",
             header: "Customer",
-            render: (r) => custName.get(r.tradeCustomerId) ?? "—",
+            render: (r) => customerDisplayName(r, custName),
           },
           { key: "invoiceDate", header: "Date" },
           {
@@ -186,7 +186,7 @@ export function DistributionInvoicesPage(): JSX.Element {
                     title: "Wholesale invoice",
                     documentNumber: r.invoiceNumber,
                     partyLabel: "Customer",
-                    partyName: custName.get(r.tradeCustomerId) ?? "Customer",
+                    partyName: customerDisplayName(r, custName),
                     meta: [
                       { label: "Date", value: String(r.invoiceDate ?? "") },
                       { label: "Status", value: String(r.status ?? "") },

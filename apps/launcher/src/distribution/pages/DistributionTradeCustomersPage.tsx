@@ -15,6 +15,7 @@ import {
 } from "../../pharmacy/api/pharmacy-masters";
 import { formatPkr, useInvalidatePharmacy, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
 import { DistDrawerField, DistMasterDrawer } from "../components/DistMasterDrawer";
+import { DistBulkCustomerCreate } from "../components/DistBulkCreate";
 import { DistPagination } from "../components/DistPagination";
 import {
   DistButton,
@@ -79,6 +80,7 @@ export function DistributionTradeCustomersPage(): JSX.Element {
   const [drawer, setDrawer] = useState<TradeCustomerRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   const list = useQuery({
     queryKey: ["pharmacy", "trade-customers-paged", page, pageSize, q, status],
@@ -131,6 +133,38 @@ export function DistributionTradeCustomersPage(): JSX.Element {
     onError: (e: Error) => setError(e.message),
   });
 
+  const bulkSave = useMutation({
+    mutationFn: async (
+      rows: Array<{ code: string; name: string; phone: string; creditLimitPkr: string }>,
+    ) => {
+      const errors: string[] = [];
+      for (const r of rows) {
+        try {
+          await createPharmacyTradeCustomer({
+            code: r.code.trim(),
+            name: r.name.trim(),
+            phone: r.phone.trim() || undefined,
+            creditLimitPkr: Number(r.creditLimitPkr) || 0,
+            priceLevel: "wholesale",
+            customerType: "Retailer",
+            status: "active",
+            branchCode: branch?.code,
+          });
+        } catch (e) {
+          errors.push(`${r.code}: ${e instanceof Error ? e.message : "failed"}`);
+        }
+      }
+      if (errors.length) throw new Error(errors.slice(0, 5).join("; "));
+    },
+    onSuccess: () => {
+      setBulkOpen(false);
+      setError(null);
+      invalidate();
+      void list.refetch();
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
   return (
     <DistPageShell
       title="Trade customers"
@@ -141,18 +175,41 @@ export function DistributionTradeCustomersPage(): JSX.Element {
         { label: "Customers" },
       ]}
       actions={
-        <DistButton
-          onClick={() => {
-            setEditing(null);
-            setForm(emptyForm());
-            setShowForm(true);
-          }}
-        >
-          + Add customer
-        </DistButton>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/pops/distribution/import">
+            <DistButton variant="secondary">Import / template</DistButton>
+          </Link>
+          <DistButton
+            variant="secondary"
+            onClick={() => {
+              setBulkOpen(true);
+              setShowForm(false);
+            }}
+          >
+            + Add multiple
+          </DistButton>
+          <DistButton
+            onClick={() => {
+              setEditing(null);
+              setForm(emptyForm());
+              setShowForm(true);
+            }}
+          >
+            + Add customer
+          </DistButton>
+        </div>
       }
       error={error}
     >
+      {bulkOpen ? (
+        <DistBulkCustomerCreate
+          busy={bulkSave.isPending}
+          onClose={() => setBulkOpen(false)}
+          onSave={async (rows) => {
+            await bulkSave.mutateAsync(rows);
+          }}
+        />
+      ) : null}
       {showForm ? (
         <DistPanel
           title={editing ? "Edit customer" : "Add customer"}

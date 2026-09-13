@@ -27,7 +27,8 @@ export function decodeJwtPayload<T = unknown>(token: string): T {
   return JSON.parse(json) as T;
 }
 
-function base64UrlToString(value: string): string {
+function base64UrlToString(value: string | undefined): string {
+  if (!value) throw new Error("Invalid JWT");
   const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((value.length + 3) % 4);
   const binary = atob(padded);
   const bytes = new Uint8Array(binary.length);

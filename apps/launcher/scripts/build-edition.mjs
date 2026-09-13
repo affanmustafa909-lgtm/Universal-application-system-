@@ -7,11 +7,15 @@ import { fileURLToPath } from "node:url";
 function withSigningEnv(baseEnv) {
   const env = { ...baseEnv };
   if (!(env.TAURI_SIGNING_PRIVATE_KEY ?? "").trim()) {
-    const iceCreamKey = join(dirname(fileURLToPath(import.meta.url)), "..", "src-tauri", "keys", "ice-cream-update.key");
-    const keyPath =
-      (env.TAURI_SIGNING_PRIVATE_KEY_PATH ?? "").trim() ||
-      (existsSync(iceCreamKey) ? iceCreamKey : "");
-    if (keyPath && existsSync(keyPath)) {
+    const home = process.env.USERPROFILE || process.env.HOME || "";
+    const candidates = [
+      (env.TAURI_SIGNING_PRIVATE_KEY_PATH ?? "").trim(),
+      join(dirname(fileURLToPath(import.meta.url)), "..", "src-tauri", "keys", "ice-cream-update.key"),
+      join(home, ".tauri", "pops-updater.key"),
+      join(home, ".tauri", "pops.key"),
+    ].filter(Boolean);
+    const keyPath = candidates.find((p) => existsSync(p));
+    if (keyPath) {
       env.TAURI_SIGNING_PRIVATE_KEY = readFileSync(keyPath, "utf8");
       env.TAURI_SIGNING_PRIVATE_KEY_PATH = keyPath;
     }
@@ -129,4 +133,29 @@ const result = spawnSync("pnpm", args, {
   shell: process.platform === "win32",
 });
 
-process.exit(result.status ?? 1);
+if ((result.status ?? 1) !== 0) {
+  process.exit(result.status ?? 1);
+}
+
+// Every signed edition build also emits latest-{edition}.json for GitHub Releases.
+const manifest = spawnSync("node", ["./scripts/write-update-manifest.mjs", edition], {
+  cwd: join(__dirname, ".."),
+  stdio: "inherit",
+  env: process.env,
+  shell: process.platform === "win32",
+});
+if ((manifest.status ?? 1) !== 0) {
+  console.warn(
+    `[build-edition] Installer built, but update manifest failed. Fix signing/.sig then run:\n` +
+      `  node apps/launcher/scripts/write-update-manifest.mjs ${edition}`,
+  );
+  process.exit(manifest.status ?? 1);
+}
+
+console.log(
+  `[build-edition] Done. Publish with:\n` +
+    (edition === "ice-cream-bar"
+      ? `  node apps/launcher/scripts/publish-ice-cream-update.mjs`
+      : `  node apps/launcher/scripts/publish-desktop-update.mjs ${edition}`),
+);
+process.exit(0);

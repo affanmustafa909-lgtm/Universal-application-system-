@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { ledgerApi } from "../../pharmacy/api/pharmacy-inventory";
 import { formatPkr, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
@@ -20,8 +21,12 @@ import {
   DistStatusBadge,
   exportRowsToCsv,
 } from "../ui/DistUi";
+import { documentReferenceLabel } from "../lib/customerDisplay";
+
+const DIST = "/pops/distribution";
 
 export function DistributionStockLedgerPage(): JSX.Element {
+  const navigate = useNavigate();
   const { branch } = usePharmacyAccess();
   const branchCode = branch?.code;
 
@@ -66,6 +71,15 @@ export function DistributionStockLedgerPage(): JSX.Element {
 
   const rows = list.data?.items ?? [];
 
+  const openPurchaseForRow = (r: (typeof rows)[number]) => {
+    const params = new URLSearchParams();
+    params.set("focus", "new");
+    if (r.medicineId) params.set("medicineId", r.medicineId);
+    if (r.medicineSku) params.set("sku", r.medicineSku);
+    if (r.medicineName) params.set("q", r.medicineName);
+    navigate(`${DIST}/purchase-orders?${params.toString()}`);
+  };
+
   const exportPage = () =>
     exportRowsToCsv(
       `stock-ledger-page-${page}.csv`,
@@ -84,8 +98,7 @@ export function DistributionStockLedgerPage(): JSX.Element {
         "Qty after",
         "Unit cost PKR",
         "Value PKR",
-        "Reference type",
-        "Reference id",
+        "Reference",
         "Notes",
         "By",
       ],
@@ -104,8 +117,7 @@ export function DistributionStockLedgerPage(): JSX.Element {
         r.quantityAfter,
         r.unitCostPkr,
         r.valuePkr,
-        r.referenceType ?? "",
-        r.referenceId ?? "",
+        documentReferenceLabel(r),
         r.notes ?? "",
         r.userName ?? "",
       ]),
@@ -231,10 +243,10 @@ export function DistributionStockLedgerPage(): JSX.Element {
           />
         </label>
         <label className="text-xs text-slate-500">
-          Reference id
+          Reference
           <DistInput
             className="mt-1 min-w-[11rem]"
-            placeholder="Exact document id"
+            placeholder="Document # or id"
             value={referenceId}
             onChange={(e) => {
               setReferenceId(e.target.value);
@@ -270,7 +282,27 @@ export function DistributionStockLedgerPage(): JSX.Element {
             ),
           },
           { key: "medicineSku", header: "SKU", className: "font-mono text-xs", render: (r) => r.medicineSku ?? "—" },
-          { key: "medicineName", header: "Product", render: (r) => r.medicineName ?? "—" },
+          {
+            key: "medicineName",
+            header: "Product",
+            render: (r) => {
+              const zero = Number(r.quantityAfter) <= 0;
+              if (!zero) return r.medicineName ?? "—";
+              return (
+                <button
+                  type="button"
+                  className="text-left font-medium text-red-700 underline-offset-2 hover:underline dark:text-red-300"
+                  title="Out of stock — open Purchase Orders"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openPurchaseForRow(r);
+                  }}
+                >
+                  {r.medicineName ?? "—"}
+                </button>
+              );
+            },
+          },
           { key: "batchNumber", header: "Batch", className: "font-mono text-xs", render: (r) => r.batchNumber ?? "—" },
           { key: "warehouseName", header: "Warehouse", render: (r) => r.warehouseName ?? "—" },
           { key: "stockState", header: "Bucket", render: (r) => r.stockState },
@@ -284,7 +316,24 @@ export function DistributionStockLedgerPage(): JSX.Element {
             key: "quantityAfter",
             header: "Balance",
             className: "text-right tabular-nums",
-            render: (r) => formatQty(r.quantityAfter),
+            render: (r) => {
+              const zero = Number(r.quantityAfter) <= 0;
+              const label = formatQty(r.quantityAfter);
+              if (!zero) return label;
+              return (
+                <button
+                  type="button"
+                  className="font-semibold text-red-700 hover:underline dark:text-red-300"
+                  title="Out of stock — open Purchase Orders"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openPurchaseForRow(r);
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            },
           },
           {
             key: "valuePkr",
@@ -295,8 +344,7 @@ export function DistributionStockLedgerPage(): JSX.Element {
           {
             key: "reference",
             header: "Reference",
-            render: (r) =>
-              r.referenceType ? `${r.referenceType}${r.referenceId ? ` · ${r.referenceId}` : ""}` : "—",
+            render: (r) => documentReferenceLabel(r),
           },
           { key: "userName", header: "By", render: (r) => r.userName ?? "—" },
         ]}

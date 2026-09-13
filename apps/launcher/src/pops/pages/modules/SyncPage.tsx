@@ -61,6 +61,7 @@ export function SyncPage(): JSX.Element {
   const pending = pendingQuery.data;
   const pendingTotal =
     (pending?.sales ?? 0) +
+    (pending?.distSales ?? 0) +
     (pending?.popsOrders ?? 0) +
     (pending?.cash ?? 0) +
     (pending?.payroll ?? 0) +
@@ -89,10 +90,19 @@ export function SyncPage(): JSX.Element {
     mutationFn: run,
     onSuccess: (summary, kind) => {
       const uploaded = summary
-        ? summary.salesSynced + summary.popsOrdersSynced + summary.cashSynced + summary.payrollSynced + summary.outboxPushed
+        ? summary.salesSynced +
+          summary.distSalesSynced +
+          summary.popsOrdersSynced +
+          summary.cashSynced +
+          summary.payrollSynced +
+          summary.outboxPushed
         : 0;
       const failed = summary
-        ? summary.salesFailed + summary.popsOrdersFailed + summary.cashFailed + summary.payrollFailed
+        ? summary.salesFailed +
+          summary.distSalesFailed +
+          summary.popsOrdersFailed +
+          summary.cashFailed +
+          summary.payrollFailed
         : 0;
       setNotice(
         kind === "pull"
@@ -193,6 +203,7 @@ export function SyncPage(): JSX.Element {
           <p className="break-all text-xs text-slate-500">{getApiBaseUrl()}</p>
           <ul className="text-xs text-slate-300">
             <li>Sales queue: {pending?.sales ?? 0}</li>
+            <li>Dist Sale Window: {pending?.distSales ?? 0}</li>
             <li>POS orders: {pending?.popsOrders ?? 0}</li>
             <li>Cash / payroll: {(pending?.cash ?? 0) + (pending?.payroll ?? 0)}</li>
             <li>Durable outbox: {pending?.outbox ?? 0}</li>

@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   TRANSFER_STATUSES,
   transfersApi,
@@ -29,6 +30,8 @@ import {
   DistStatusBadge,
 } from "../ui/DistUi";
 
+const DIST = "/pops/distribution";
+
 /**
  * Server-enforced transitions. Only actions the backend would accept for the
  * current status are rendered.
@@ -51,6 +54,9 @@ type DraftLine = {
   batchId: string;
   quantity: string;
   notes: string;
+  /** false = no usable batch / zero stock at source */
+  hasStock?: boolean;
+  availableQty?: number;
 };
 
 const STATUS_TONES: Record<string, "neutral" | "success" | "warning" | "danger" | "info"> = {
@@ -64,6 +70,7 @@ const STATUS_TONES: Record<string, "neutral" | "success" | "warning" | "danger" 
 };
 
 export function DistributionStockTransfersPage(): JSX.Element {
+  const navigate = useNavigate();
   const { branch } = usePharmacyAccess();
   const branchCode = branch?.code;
   const invalidate = useInvalidatePharmacy([
@@ -84,6 +91,7 @@ export function DistributionStockTransfersPage(): JSX.Element {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const [createFrom, setCreateFrom] = useState("");
   const [createTo, setCreateTo] = useState("");
@@ -143,6 +151,12 @@ export function DistributionStockTransfersPage(): JSX.Element {
 
   const create = useMutation({
     mutationFn: () => {
+      const bad = lines.filter((l) => l.hasStock === false);
+      if (bad.length) {
+        throw new Error(
+          `Cannot transfer out-of-stock / expired lines: ${bad.map((l) => l.medicine.name).join(", ")}. Remove them or purchase stock first.`,
+        );
+      }
       const payload: TransferLineInput[] = lines.map((l) => ({
         medicineId: l.medicine.id,
         batchId: l.batchId || undefined,
@@ -163,10 +177,15 @@ export function DistributionStockTransfersPage(): JSX.Element {
       setLines([]);
       setCreateReason("");
       setCreateNotes("");
+      setCreateError(null);
       setDetailId(created.id);
       afterMutation();
     },
-    onError: onMutationError("Failed to create the transfer"),
+    onError: (e: unknown) => {
+      const msg = errorMessage(e, "Failed to create the transfer");
+      setCreateError(msg);
+      setActionError(msg);
+    },
   });
 
   const submit = useMutation({
@@ -218,13 +237,43 @@ export function DistributionStockTransfersPage(): JSX.Element {
     Boolean(createTo) &&
     createFrom !== createTo &&
     lines.length > 0 &&
-    lines.every((l) => Number(l.quantity) > 0 && Number.isInteger(Number(l.quantity)));
+    lines.every(
+      (l) =>
+        l.hasStock !== false &&
+        Number(l.quantity) > 0 &&
+        Number.isInteger(Number(l.quantity)) &&
+        (l.availableQty == null || Number(l.quantity) <= Number(l.availableQty)),
+    );
 
-  const addLine = (medicine: PickedMedicine) =>
+  const openPurchase = (medicine: PickedMedicine) => {
+    const params = new URLSearchParams();
+    params.set("focus", "new");
+    params.set("medicineId", medicine.id);
+    if (medicine.sku) params.set("sku", medicine.sku);
+    params.set("q", medicine.name);
+    setCreateError(`${medicine.name} has no stock — opening Purchase Orders`);
+    navigate(`${DIST}/purchase-orders?${params.toString()}`);
+  };
+
+  const addLine = (medicine: PickedMedicine) => {
+    if (medicine.availableQty != null && Number(medicine.availableQty) <= 0) {
+      openPurchase(medicine);
+      return;
+    }
     setLines((prev) => [
       ...prev,
-      { key: `${medicine.id}-${prev.length}-${Date.now()}`, medicine, batchId: "", quantity: "1", notes: "" },
+      {
+        key: `${medicine.id}-${prev.length}-${Date.now()}`,
+        medicine,
+        batchId: "",
+        quantity: "1",
+        notes: "",
+        hasStock: medicine.availableQty == null ? undefined : Number(medicine.availableQty) > 0,
+        availableQty: medicine.availableQty ?? undefined,
+      },
     ]);
+    setCreateError(null);
+  };
   const addLines = (medicines: PickedMedicine[]) => medicines.forEach(addLine);
 
   const patchLine = (key: string, patch: Partial<DraftLine>) =>
@@ -244,6 +293,7 @@ export function DistributionStockTransfersPage(): JSX.Element {
           disabled={!branchCode}
           onClick={() => {
             setActionError(null);
+            setCreateError(null);
             setCreateOpen(true);
           }}
         >
@@ -463,6 +513,7 @@ export function DistributionStockTransfersPage(): JSX.Element {
           <p className="text-sm text-slate-500">Loading…</p>
         ) : transfer ? (
           <div className="space-y-4">
+            {actionError ? <DistErrorBanner message={actionError} /> : null}
             <dl>
               <DistDrawerField
                 label="Status"
@@ -621,12 +672,12 @@ export function DistributionStockTransfersPage(): JSX.Element {
         title="New stock transfer"
         subtitle="Created as a draft. Stock only moves on dispatch."
         widthClass="max-w-3xl"
-        onClose={() => setCreateOpen(false)}
+        onClose={() => {
+          setCreateOpen(false);
+          setCreateError(null);
+        }}
         footer={
           <>
-            <DistButton variant="ghost" onClick={() => setCreateOpen(false)}>
-              Cancel
-            </DistButton>
             <DistButton disabled={!createValid || create.isPending} onClick={() => create.mutate()}>
               Create draft
             </DistButton>
@@ -634,8 +685,10 @@ export function DistributionStockTransfersPage(): JSX.Element {
         }
       >
         <div className="space-y-4">
-          {create.isError ? (
-            <DistErrorBanner message={errorMessage(create.error, "Failed to create the transfer")} />
+          {createError || create.isError ? (
+            <DistErrorBanner
+              message={createError ?? errorMessage(create.error, "Failed to create the transfer")}
+            />
           ) : null}
 
           <div className="grid gap-2 sm:grid-cols-2">
@@ -644,7 +697,11 @@ export function DistributionStockTransfersPage(): JSX.Element {
               <WarehouseFilter
                 branchCode={branchCode}
                 value={createFrom}
-                onChange={setCreateFrom}
+                onChange={(id) => {
+                  setCreateFrom(id);
+                  setLines([]);
+                  setCreateError(null);
+                }}
                 includeAll={false}
                 className="mt-1"
               />
@@ -677,9 +734,21 @@ export function DistributionStockTransfersPage(): JSX.Element {
 
           <section className="space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Add products</h3>
-            <MedicineMultiPicker branchCode={branchCode} onAdd={addLines} />
+            <MedicineMultiPicker
+              branchCode={branchCode}
+              warehouseId={createFrom || undefined}
+              blockZeroStock
+              onBlockedPick={openPurchase}
+              onAdd={addLines}
+            />
             <p className="text-[11px] text-slate-500">Or add one at a time:</p>
-            <MedicinePicker branchCode={branchCode} onPick={addLine} />
+            <MedicinePicker
+              branchCode={branchCode}
+              warehouseId={createFrom || undefined}
+              blockZeroStock
+              onBlockedPick={openPurchase}
+              onPick={addLine}
+            />
           </section>
 
           {lines.length === 0 ? (
@@ -688,58 +757,91 @@ export function DistributionStockTransfersPage(): JSX.Element {
             </p>
           ) : (
             <div className="space-y-3">
-              {lines.map((line) => (
-                <div
-                  key={line.key}
-                  className="space-y-2 rounded-md border border-slate-200 p-2 dark:border-slate-800"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-xs">
-                      <div className="font-medium text-slate-800 dark:text-slate-200">{line.medicine.name}</div>
-                      <div className="font-mono text-slate-500">{line.medicine.sku}</div>
-                    </div>
-                    <DistButton
-                      variant="ghost"
-                      className="px-2 py-1 text-xs"
-                      onClick={() => setLines((prev) => prev.filter((l) => l.key !== line.key))}
-                    >
-                      Remove
-                    </DistButton>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <label className="text-xs text-slate-500">
-                      Batch (optional — FEFO when blank)
-                      <div className="mt-1">
-                        <BatchPicker
-                          branchCode={branchCode}
-                          medicineId={line.medicine.id}
-                          warehouseId={createFrom || undefined}
-                          value={line.batchId}
-                          onChange={(batchId) => patchLine(line.key, { batchId })}
-                        />
+              {lines.map((line) => {
+                const blocked = line.hasStock === false;
+                return (
+                  <div
+                    key={line.key}
+                    className={`space-y-2 rounded-md border p-2 ${
+                      blocked
+                        ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/40"
+                        : "border-slate-200 dark:border-slate-800"
+                    }`}
+                  >
+                    {blocked ? (
+                      <button
+                        type="button"
+                        className="w-full rounded-md border border-red-300 bg-red-100 px-2 py-1.5 text-left text-xs font-semibold text-red-900 dark:border-red-800 dark:bg-red-900/40 dark:text-red-100"
+                        onClick={() => openPurchase(line.medicine)}
+                      >
+                        Out of stock / expired — cannot transfer. Click to open Purchase Orders.
+                      </button>
+                    ) : null}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-xs">
+                        <div
+                          className={`font-medium ${
+                            blocked ? "text-red-800 dark:text-red-200" : "text-slate-800 dark:text-slate-200"
+                          }`}
+                        >
+                          {line.medicine.name}
+                          {blocked ? " · No stock" : ""}
+                        </div>
+                        <div className="font-mono text-slate-500">{line.medicine.sku}</div>
+                        {line.availableQty != null ? (
+                          <div className={`text-[11px] ${blocked ? "font-semibold text-red-700" : "text-slate-500"}`}>
+                            Available: {line.availableQty}
+                          </div>
+                        ) : null}
                       </div>
-                    </label>
-                    <label className="text-xs text-slate-500">
-                      Quantity
-                      <DistInput
-                        className="mt-1"
-                        type="number"
-                        min={1}
-                        value={line.quantity}
-                        onChange={(e) => patchLine(line.key, { quantity: e.target.value })}
-                      />
-                    </label>
-                    <label className="text-xs text-slate-500">
-                      Line notes
-                      <DistInput
-                        className="mt-1"
-                        value={line.notes}
-                        onChange={(e) => patchLine(line.key, { notes: e.target.value })}
-                      />
-                    </label>
+                      <DistButton
+                        variant="ghost"
+                        className="px-2 py-1 text-xs"
+                        onClick={() => setLines((prev) => prev.filter((l) => l.key !== line.key))}
+                      >
+                        Remove
+                      </DistButton>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <label className="text-xs text-slate-500">
+                        Batch (optional — FEFO when blank)
+                        <div className="mt-1">
+                          <BatchPicker
+                            branchCode={branchCode}
+                            medicineId={line.medicine.id}
+                            warehouseId={createFrom || undefined}
+                            value={line.batchId}
+                            onChange={(batchId) => patchLine(line.key, { batchId })}
+                            onAvailabilityChange={({ hasStock, availableQty }) =>
+                              patchLine(line.key, { hasStock, availableQty })
+                            }
+                          />
+                        </div>
+                      </label>
+                      <label className="text-xs text-slate-500">
+                        Quantity
+                        <DistInput
+                          className="mt-1"
+                          type="number"
+                          min={1}
+                          disabled={blocked}
+                          value={line.quantity}
+                          onChange={(e) => patchLine(line.key, { quantity: e.target.value })}
+                        />
+                      </label>
+                      <label className="text-xs text-slate-500">
+                        Line notes
+                        <DistInput
+                          className="mt-1"
+                          disabled={blocked}
+                          value={line.notes}
+                          onChange={(e) => patchLine(line.key, { notes: e.target.value })}
+                        />
+                      </label>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

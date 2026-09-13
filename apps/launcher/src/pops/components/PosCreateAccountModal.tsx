@@ -11,12 +11,18 @@ type AccountKind = "supplier" | "expense";
 type Props = {
   onClose: () => void;
   onSuccess?: (message: string) => void;
+  /** Open on Expense tab (Sale Window “Add expense”). */
+  initialKind?: AccountKind;
 };
 
-export function PosCreateAccountModal({ onClose, onSuccess }: Props): JSX.Element {
+export function PosCreateAccountModal({
+  onClose,
+  onSuccess,
+  initialKind = "supplier",
+}: Props): JSX.Element {
   const branch = usePopsStore((s) => s.branch);
   const queryClient = useQueryClient();
-  const [kind, setKind] = useState<AccountKind>("supplier");
+  const [kind, setKind] = useState<AccountKind>(initialKind);
   const [error, setError] = useState<string | null>(null);
 
   const [supplierName, setSupplierName] = useState("");

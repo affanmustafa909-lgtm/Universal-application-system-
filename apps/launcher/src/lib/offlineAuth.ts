@@ -5,7 +5,8 @@ import { getOrCreateDeviceId } from "./deviceId";
 import { getRuntimeDb, persistRuntimeDb } from "./runtimeDb";
 
 const PBKDF2_ITERATIONS = 120_000;
-const OFFLINE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** Offline login stays valid for 30 days after last successful online sign-in. */
+const OFFLINE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 function toHex(bytes: ArrayBuffer | Uint8Array): string {
   const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
@@ -131,16 +132,28 @@ export async function verifyOfflinePassword(email: string, password: string): Pr
   if (!row) return { ok: false, reason: "never" };
   if (row.status !== "active") return { ok: false, reason: "revoked" };
   if (Date.parse(row.offlineExpiresAt) <= Date.now()) return { ok: false, reason: "expired" };
-  if (row.deviceId !== getOrCreateDeviceId()) return { ok: false, reason: "device" };
+
   const hash = await derivePasswordVerifier(password, fromHex(row.verifierSaltHex));
   if (hash !== row.verifierHashHex) return { ok: false, reason: "mismatch" };
+
+  const currentDeviceId = getOrCreateDeviceId();
+  // Password matched — rebind to this device if localStorage device id was reset.
+  if (row.deviceId !== currentDeviceId) {
+    const now = new Date().toISOString();
+    await db
+      .update(offlineIdentities)
+      .set({ deviceId: currentDeviceId, updatedAt: now })
+      .where(eq(offlineIdentities.email, row.email));
+    await persistRuntimeDb();
+  }
+
   return {
     ok: true,
     identity: {
       email: row.email,
       organizationId: row.organizationId,
       userId: row.userId,
-      deviceId: row.deviceId,
+      deviceId: currentDeviceId,
       claims: JSON.parse(row.claimsJson) as AccessTokenClaims,
       lastAccessToken: row.lastAccessToken,
       lastRefreshToken: row.lastRefreshToken,
@@ -152,9 +165,21 @@ export async function verifyOfflinePassword(email: string, password: string): Pr
 }
 
 export function offlineLoginMessage(reason: "never" | "expired" | "mismatch" | "revoked" | "device"): string {
-  if (reason === "never") return "This device has never signed this user in online. First login requires internet.";
-  if (reason === "expired") return "Offline authorization expired (7 days). Connect to the internet and sign in again.";
+  if (reason === "never") {
+    return "Is device pe pehle online login zaroori hai — ek baar internet se sign in karein taake offline profile save ho.";
+  }
+  if (reason === "expired") {
+    return "Offline authorization expire ho gayi (30 days). Internet connect karke dubara sign in karein.";
+  }
   if (reason === "revoked") return "This device is no longer authorized. Sign in online.";
   if (reason === "device") return "This login belongs to a different device profile.";
-  return "Email or password does not match the offline profile on this device.";
+  return "Email or password offline profile se match nahi hota.";
+}
+
+/** True when this email already has a usable offline profile on this device. */
+export async function hasOfflineIdentity(email: string): Promise<boolean> {
+  const id = await loadOfflineIdentity(email);
+  if (!id || id.status !== "active") return false;
+  if (Date.parse(id.offlineExpiresAt) <= Date.now()) return false;
+  return Boolean(id.lastAccessToken && id.lastRefreshToken);
 }

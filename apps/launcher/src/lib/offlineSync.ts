@@ -33,11 +33,19 @@ import {
 } from "../pops/lib/offlineCashQueue";
 import { recordCashMovement } from "../pops/api/accounting";
 import { createHrPayrollRun } from "../pops/api/hr";
+import { bookSale } from "../pharmacy/api/pharmacy-sales";
+import {
+  bumpDistOfflineSaleAttempt,
+  loadDistOfflineSales,
+  removeDistOfflineSale,
+} from "../distribution/lib/distOfflineSales";
 
 export type SyncSummary = {
   outboxPushed: number;
   salesSynced: number;
   salesFailed: number;
+  distSalesSynced: number;
+  distSalesFailed: number;
   popsOrdersSynced: number;
   popsOrdersFailed: number;
   cashSynced: number;
@@ -48,12 +56,14 @@ export type SyncSummary = {
   conflicts: number;
 };
 
-/** Push outbox rows and replay queued store POS + restaurant POS orders to the hosted API. */
+/** Push outbox rows and replay queued store / Dist / restaurant POS work to the hosted API. */
 export async function flushAllOfflineData(accessToken: string): Promise<SyncSummary> {
   const summary: SyncSummary = {
     outboxPushed: 0,
     salesSynced: 0,
     salesFailed: 0,
+    distSalesSynced: 0,
+    distSalesFailed: 0,
     popsOrdersSynced: 0,
     popsOrdersFailed: 0,
     cashSynced: 0,
@@ -91,6 +101,18 @@ export async function flushAllOfflineData(accessToken: string): Promise<SyncSumm
     } catch {
       bumpOfflineAttempt(entry.id);
       summary.salesFailed += 1;
+    }
+  }
+
+  for (const entry of loadDistOfflineSales()) {
+    try {
+      const { customerName: _n, totalPkr: _t, ...body } = entry.payload;
+      await bookSale(body);
+      removeDistOfflineSale(entry.id);
+      summary.distSalesSynced += 1;
+    } catch {
+      bumpDistOfflineSaleAttempt(entry.id);
+      summary.distSalesFailed += 1;
     }
   }
 
@@ -155,6 +177,7 @@ export async function flushAllOfflineData(accessToken: string): Promise<SyncSumm
 
   if (
     summary.salesSynced > 0 ||
+    summary.distSalesSynced > 0 ||
     summary.outboxPushed > 0 ||
     summary.popsOrdersSynced > 0 ||
     summary.cashSynced > 0 ||
@@ -172,9 +195,20 @@ export async function flushAllOfflineData(accessToken: string): Promise<SyncSumm
     await engine.recordHistory(db, {
       organizationId: "local",
       kind: "push",
-      uploaded: summary.salesSynced + summary.popsOrdersSynced + summary.cashSynced + summary.payrollSynced + summary.outboxPushed,
+      uploaded:
+        summary.salesSynced +
+        summary.distSalesSynced +
+        summary.popsOrdersSynced +
+        summary.cashSynced +
+        summary.payrollSynced +
+        summary.outboxPushed,
       downloaded: 0,
-      failed: summary.salesFailed + summary.popsOrdersFailed + summary.cashFailed + summary.payrollFailed,
+      failed:
+        summary.salesFailed +
+        summary.distSalesFailed +
+        summary.popsOrdersFailed +
+        summary.cashFailed +
+        summary.payrollFailed,
       conflicts: summary.conflicts,
       durationMs: 0,
     });
@@ -223,6 +257,7 @@ export async function countPendingOutbox(): Promise<number> {
 
 export async function countAllPending(): Promise<{
   sales: number;
+  distSales: number;
   popsOrders: number;
   cash: number;
   payroll: number;
@@ -239,6 +274,7 @@ export async function countAllPending(): Promise<{
   }
   return {
     sales: loadOfflineQueue().length,
+    distSales: loadDistOfflineSales().length,
     popsOrders: loadOfflineBillEntries().length + loadOfflineKotEntries().length,
     cash: loadOfflineCashMovements().length,
     payroll: loadOfflinePayrollRuns().length,

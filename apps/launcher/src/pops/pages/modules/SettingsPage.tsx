@@ -61,6 +61,11 @@ import {
 } from "../../hooks/useTaxAuthorityFeatures";
 import { ThemeToggle } from "../../../components/ThemeToggle";
 import { useThemeStore } from "../../../stores/themeStore";
+import {
+  loadDistSaleWindowSettings,
+  saveDistSaleWindowSettings,
+  type DistSaleWindowSettings,
+} from "../../../distribution/lib/distSaleWindowSettings";
 
 type OrderTypeChargeKey = {
   service: keyof PosSettings;
@@ -234,6 +239,9 @@ export function SettingsPage(): JSX.Element {
   const [modeVisibilityDraft, setModeVisibilityDraft] = useState<PosOrderModeVisibility>(
     DEFAULT_POS_ORDER_MODE_VISIBILITY,
   );
+  const [distSaleDraft, setDistSaleDraft] = useState<DistSaleWindowSettings>(() =>
+    loadDistSaleWindowSettings(),
+  );
   const [orderNumDraft, setOrderNumDraft] = useState<OrderNumberSettings>(() =>
     defaultOrderNumberSettings(),
   );
@@ -371,6 +379,9 @@ export function SettingsPage(): JSX.Element {
       const nextVisibility = normalizePosOrderModeVisibility(modeVisibilityDraft);
       savePosOrderModeVisibility(branch.code, nextVisibility);
       setModeVisibilityDraft(nextVisibility);
+      if (systemId === "distribution") {
+        saveDistSaleWindowSettings(distSaleDraft);
+      }
       if (syncedToCloud) {
         setTaxError(null);
         setNotice(
@@ -701,6 +712,7 @@ export function SettingsPage(): JSX.Element {
           </label>
         </div>
 
+        {systemId !== "distribution" ? (
         <div className="mt-4 rounded-lg border border-slate-700/60 bg-slate-950/40 p-3">
           <div className="text-xs font-medium text-slate-300">Charges by order type</div>
           <p className="mt-1 text-[10px] text-slate-500">
@@ -770,6 +782,65 @@ export function SettingsPage(): JSX.Element {
             </table>
           </div>
         </div>
+        ) : null}
+
+        {systemId === "distribution" ? (
+          <div className="mt-4 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-3">
+            <div className="text-xs font-medium text-cyan-200">Sale Window · Sell / Held / Orders</div>
+            <p className="mt-1 text-[10px] text-slate-500">
+              Control paid status, history, and zero-stock behaviour on Distribution Sale Window tabs.
+            </p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[320px] text-left text-xs text-slate-400">
+                <thead>
+                  <tr className="border-b border-slate-700/80 text-[10px] uppercase tracking-wide text-slate-500">
+                    <th className="pb-2 pr-2 font-medium">Panel</th>
+                    <th className="pb-2 px-2 font-medium text-center">Show</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(
+                    [
+                      {
+                        key: "showHeldPayment" as const,
+                        label: "Held — payment / not-paid badge",
+                      },
+                      {
+                        key: "showOrdersPayment" as const,
+                        label: "Orders — Paid / Credit badge",
+                      },
+                      {
+                        key: "showOrdersHistory" as const,
+                        label: "Orders — status history line",
+                      },
+                      {
+                        key: "blockZeroStockAdd" as const,
+                        label: "Sell — block zero stock (red → Purchase)",
+                      },
+                    ] as const
+                  ).map((row) => (
+                    <tr key={row.key} className="border-b border-slate-800/80 last:border-0">
+                      <td className="py-2 pr-2 text-slate-300">{row.label}</td>
+                      <td className="py-2 px-2 text-center">
+                        <input
+                          type="checkbox"
+                          aria-label={row.label}
+                          checked={Boolean(distSaleDraft[row.key])}
+                          onChange={(e) =>
+                            setDistSaleDraft((prev) => ({
+                              ...prev,
+                              [row.key]: e.target.checked,
+                            }))
+                          }
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="block text-xs text-slate-400">

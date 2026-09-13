@@ -32,8 +32,8 @@ for /f "delims=" %%J in ('node -e "console.log(require('./apps/waiter-mobile/pac
 echo   Desktop: v%DESKTOP_VER%  Mobile: v%MOBILE_VER%
 
 echo.
-echo [2/6] Build Universal + Restaurant EXE (signed, auto-update)...
-call "%REPO%\local\build-suite-and-restaurant.bat"
+echo [2/6] Build all desktop EXEs (signed, auto-update)...
+call "%REPO%\local\build-all-desktop.bat"
 if errorlevel 1 (
   echo EXE build failed.
   exit /b 1
@@ -61,6 +61,9 @@ echo.
 echo [5/6] Release artifacts ready:
 echo   dist-installers\updates\latest-suite.json
 echo   dist-installers\updates\latest-restaurant.json
+echo   dist-installers\updates\latest-general-store.json
+echo   dist-installers\updates\latest-pharmacy.json
+echo   dist-installers\updates\latest-distribution.json
 echo   dist-installers\mobile-updates\latest-admin.json
 echo   dist-installers\mobile-updates\latest-staff.json
 

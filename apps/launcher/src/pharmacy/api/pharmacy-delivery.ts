@@ -169,12 +169,19 @@ export type DeliveryOrder = {
   deliveryNumber: string;
   status: DeliveryStatus;
   branchCode?: string | null;
+  branchName?: string | null;
   orderId?: string | null;
   orderNumber?: string | null;
   invoiceId?: string | null;
   invoiceNumber?: string | null;
+  orderTotalPkr?: number | null;
+  invoiceTotalPkr?: number | null;
   tradeCustomerId?: string | null;
   tradeCustomerName?: string | null;
+  tradeCustomerCode?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  address?: string | null;
   riderName?: string | null;
   driverId?: string | null;
   driverName?: string | null;
@@ -182,6 +189,7 @@ export type DeliveryOrder = {
   vehicleLabel?: string | null;
   routeId?: string | null;
   routeName?: string | null;
+  routeCode?: string | null;
   collectedPkr?: number | null;
   podNotes?: string | null;
   failedReason?: string | null;
@@ -190,6 +198,20 @@ export type DeliveryOrder = {
   dispatchedAt?: string | null;
   deliveredAt?: string | null;
   createdAt?: string | null;
+  lines?: DeliveryLine[];
+};
+
+export type DeliveryLine = {
+  id?: string;
+  medicineId?: string | null;
+  productLabel?: string | null;
+  medicineName?: string | null;
+  medicineSku?: string | null;
+  batchNumber?: string | null;
+  quantity?: number;
+  deliveredQty?: number;
+  returnedQty?: number;
+  unitPricePkr?: number;
 };
 
 export type DeliveryDashboard = {
@@ -266,33 +288,70 @@ export type PodDeliveryInput = {
   signatureText?: string;
 };
 
+function pickStr(...vals: unknown[]): string | null {
+  for (const v of vals) {
+    if (v == null) continue;
+    const s = String(v).trim();
+    if (s) return s;
+  }
+  return null;
+}
+
 function mapLegacyDelivery(row: Record<string, unknown>): DeliveryOrder {
+  const linesRaw = Array.isArray(row.lines) ? (row.lines as Record<string, unknown>[]) : undefined;
+  const tradeCustomerName = pickStr(
+    row.tradeCustomerName,
+    row.customerName,
+    row.contactName,
+    row.trade_customer_name,
+  );
+  const routeName = pickStr(row.routeName, row.route_name, row.routeCode, row.route_code);
   return {
     id: String(row.id ?? ""),
     deliveryNumber: String(row.deliveryNumber ?? row.id ?? ""),
     status: String(row.status ?? "pending"),
-    branchCode: (row.branchCode as string) ?? null,
-    orderId: (row.orderId as string) ?? null,
-    orderNumber: (row.orderNumber as string) ?? null,
-    invoiceId: (row.invoiceId as string) ?? null,
-    invoiceNumber: (row.invoiceNumber as string) ?? null,
-    tradeCustomerId: (row.tradeCustomerId as string) ?? null,
-    tradeCustomerName: (row.tradeCustomerName as string) ?? null,
-    riderName: (row.riderName as string) ?? null,
-    driverId: (row.driverId as string) ?? null,
-    driverName: (row.driverName as string) ?? null,
-    vehicleId: (row.vehicleId as string) ?? null,
-    vehicleLabel: (row.vehicleLabel as string) ?? null,
-    routeId: (row.routeId as string) ?? null,
-    routeName: (row.routeName as string) ?? null,
+    branchCode: pickStr(row.branchCode, row.branch_code),
+    branchName: pickStr(row.branchName, row.branch_name),
+    orderId: pickStr(row.orderId, row.order_id),
+    orderNumber: pickStr(row.orderNumber, row.order_number),
+    invoiceId: pickStr(row.invoiceId, row.invoice_id),
+    invoiceNumber: pickStr(row.invoiceNumber, row.invoice_number),
+    orderTotalPkr: row.orderTotalPkr != null ? Number(row.orderTotalPkr) : null,
+    invoiceTotalPkr: row.invoiceTotalPkr != null ? Number(row.invoiceTotalPkr) : null,
+    tradeCustomerId: pickStr(row.tradeCustomerId, row.trade_customer_id),
+    tradeCustomerName,
+    tradeCustomerCode: pickStr(row.tradeCustomerCode, row.customerCode, row.trade_customer_code),
+    contactName: pickStr(row.contactName, row.contact_name),
+    contactPhone: pickStr(row.contactPhone, row.contact_phone),
+    address: pickStr(row.address),
+    riderName: pickStr(row.riderName, row.rider_name),
+    driverId: pickStr(row.driverId, row.driver_id),
+    driverName: pickStr(row.driverName, row.driver_name),
+    vehicleId: pickStr(row.vehicleId, row.vehicle_id),
+    vehicleLabel: pickStr(row.vehicleLabel, row.vehicle_label),
+    routeId: pickStr(row.routeId, row.route_id),
+    routeName,
+    routeCode: pickStr(row.routeCode, row.route_code),
     collectedPkr: row.collectedPkr != null ? Number(row.collectedPkr) : null,
-    podNotes: (row.podNotes as string) ?? null,
-    failedReason: (row.failedReason as string) ?? null,
-    receiverName: (row.receiverName as string) ?? null,
-    signatureText: (row.signatureText as string) ?? null,
+    podNotes: pickStr(row.podNotes, row.pod_notes),
+    failedReason: pickStr(row.failedReason, row.failed_reason),
+    receiverName: pickStr(row.receiverName, row.receiver_name),
+    signatureText: pickStr(row.signatureText, row.signature_text),
     dispatchedAt: (row.dispatchedAt as string) ?? null,
     deliveredAt: (row.deliveredAt as string) ?? null,
     createdAt: (row.createdAt as string) ?? null,
+    lines: linesRaw?.map((l) => ({
+      id: l.id != null ? String(l.id) : undefined,
+      medicineId: (l.medicineId as string) ?? null,
+      productLabel: (l.productLabel as string) ?? null,
+      medicineName: (l.medicineName as string) ?? null,
+      medicineSku: (l.medicineSku as string) ?? null,
+      batchNumber: (l.batchNumber as string) ?? null,
+      quantity: Number(l.quantity ?? 0),
+      deliveredQty: Number(l.deliveredQty ?? 0),
+      returnedQty: Number(l.returnedQty ?? 0),
+      unitPricePkr: Number(l.unitPricePkr ?? 0),
+    })),
   };
 }
 
@@ -501,6 +560,19 @@ export const deliveryApi = {
     return asPage(mapped, page, pageSize);
   },
 
+  async getOrder(id: string): Promise<DeliveryOrder> {
+    if (capability.orders) {
+      try {
+        const raw = await getJson<Record<string, unknown>>(`${BASE}/orders/${encodeURIComponent(id)}`);
+        return mapLegacyDelivery(raw);
+      } catch (err) {
+        if (isRouteMissing(err)) capability.orders = false;
+        else throw err;
+      }
+    }
+    throw new DeliveryApiHttpError(404, "Delivery detail API not available");
+  },
+
   async createOrder(body: CreateDeliveryInput): Promise<DeliveryOrder> {
     if (capability.orderMutations) {
       try {
@@ -576,13 +648,24 @@ export const deliveryApi = {
     if (!capability.drivers) return [];
     try {
       const raw = await getJson<unknown>(
-        `${BASE}/drivers${qs({ branchCode: params.branchCode, q: params.q })}`,
+        `${BASE}/drivers${qs({ branchCode: params.branchCode, q: params.q, pageSize: 100 })}`,
       );
-      if (Array.isArray(raw)) return raw as DeliveryDriver[];
-      if (raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown }).items)) {
-        return (raw as { items: DeliveryDriver[] }).items;
-      }
-      return [];
+      const rows = Array.isArray(raw)
+        ? raw
+        : raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown }).items)
+          ? (raw as { items: Record<string, unknown>[] }).items
+          : [];
+      return rows.map((r) => {
+        const row = r as Record<string, unknown>;
+        return {
+          id: String(row.id ?? ""),
+          name: String(row.name ?? ""),
+          code: (row.code as string) ?? null,
+          phone: (row.phone as string) ?? null,
+          status: (row.status as string) ?? null,
+          vehicleId: (row.vehicleId as string) ?? null,
+        };
+      }).filter((d) => d.id && d.name);
     } catch (err) {
       if (isRouteMissing(err)) {
         capability.drivers = false;
@@ -603,7 +686,29 @@ export const deliveryApi = {
       throw new DeliveryApiHttpError(404, "Drivers API not available");
     }
     try {
-      return await postJson<DeliveryDriver>(`${BASE}/drivers`, body);
+      const code =
+        body.code?.trim() ||
+        `DRV-${body.name
+          .trim()
+          .toUpperCase()
+          .replace(/[^A-Z0-9]+/g, "")
+          .slice(0, 8) || Date.now().toString(36).toUpperCase()}`;
+      const raw = await postJson<Record<string, unknown>>(`${BASE}/drivers`, {
+        branchCode: body.branchCode,
+        name: body.name.trim(),
+        code,
+        phone: body.phone,
+        vehicleId: body.vehicleId,
+        status: "active",
+      });
+      return {
+        id: String(raw.id ?? ""),
+        name: String(raw.name ?? body.name),
+        code: (raw.code as string) ?? code,
+        phone: (raw.phone as string) ?? body.phone ?? null,
+        status: (raw.status as string) ?? "active",
+        vehicleId: (raw.vehicleId as string) ?? body.vehicleId ?? null,
+      };
     } catch (err) {
       if (isRouteMissing(err)) {
         capability.drivers = false;
@@ -617,13 +722,24 @@ export const deliveryApi = {
     if (!capability.vehicles) return [];
     try {
       const raw = await getJson<unknown>(
-        `${BASE}/vehicles${qs({ branchCode: params.branchCode, q: params.q })}`,
+        `${BASE}/vehicles${qs({ branchCode: params.branchCode, q: params.q, pageSize: 100 })}`,
       );
-      if (Array.isArray(raw)) return raw as DeliveryVehicle[];
-      if (raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown }).items)) {
-        return (raw as { items: DeliveryVehicle[] }).items;
-      }
-      return [];
+      const rows = Array.isArray(raw)
+        ? raw
+        : raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown }).items)
+          ? (raw as { items: Record<string, unknown>[] }).items
+          : [];
+      return rows.map((r) => {
+        const row = r as Record<string, unknown>;
+        const code = String(row.code ?? "");
+        const plate = String(row.registrationNo ?? row.plateNumber ?? "");
+        return {
+          id: String(row.id ?? ""),
+          label: code || plate || String(row.label ?? "Vehicle"),
+          plateNumber: plate || null,
+          status: (row.status as string) ?? null,
+        };
+      }).filter((v) => v.id);
     } catch (err) {
       if (isRouteMissing(err)) {
         capability.vehicles = false;
@@ -642,7 +758,26 @@ export const deliveryApi = {
       throw new DeliveryApiHttpError(404, "Vehicles API not available");
     }
     try {
-      return await postJson<DeliveryVehicle>(`${BASE}/vehicles`, body);
+      const label = body.label.trim();
+      const plate = (body.plateNumber ?? label).trim();
+      const code =
+        label
+          .toUpperCase()
+          .replace(/[^A-Z0-9]+/g, "-")
+          .replace(/^-|-$/g, "")
+          .slice(0, 16) || `VEH-${Date.now().toString(36).toUpperCase()}`;
+      const raw = await postJson<Record<string, unknown>>(`${BASE}/vehicles`, {
+        branchCode: body.branchCode,
+        code,
+        registrationNo: plate || code,
+        status: "available",
+      });
+      return {
+        id: String(raw.id ?? ""),
+        label: String(raw.code ?? code),
+        plateNumber: (raw.registrationNo as string) ?? plate,
+        status: (raw.status as string) ?? "available",
+      };
     } catch (err) {
       if (isRouteMissing(err)) {
         capability.vehicles = false;
