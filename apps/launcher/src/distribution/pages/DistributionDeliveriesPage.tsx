@@ -575,7 +575,8 @@ export function DistributionDeliveriesPage(): JSX.Element {
                             label: name,
                             qty: Number(l.quantity ?? 0),
                             unitPrice: Number(l.unitPricePkr ?? 0),
-                            note: [sku, batch ? `Batch ${batch}` : ""].filter(Boolean).join(" · ") || undefined,
+                            batch: batch || undefined,
+                            note: sku || undefined,
                           };
                         });
                         const lineTotal = printLines.reduce((s, l) => s + l.qty * l.unitPrice, 0);

@@ -22,7 +22,6 @@ import { generalStoreRoutes } from "./routes/generalStoreRoutes";
 import { sharedRoutes } from "./routes/sharedRoutes";
 import { HistoryNavBar } from "./components/HistoryNavBar";
 import { ConnectivityBanner } from "./components/ConnectivityBanner";
-import { SyncStatusChip } from "./components/SyncStatusChip";
 import { MaintenanceBanner } from "./components/MaintenanceBanner";
 import { DesktopUpdateBanner } from "./components/DesktopUpdateBanner";
 import { useOfflineSync } from "./hooks/useOfflineSync";
@@ -112,7 +111,6 @@ export function App(): JSX.Element {
           <DesktopUpdateBanner />
           <MaintenanceBanner />
           <ConnectivityBanner />
-          <SyncStatusChip />
           <RootErrorBoundary>
           <Routes>
           <Route path="/role" element={<RoleSelectPage />} />

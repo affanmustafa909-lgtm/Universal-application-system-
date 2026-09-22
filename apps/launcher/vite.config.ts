@@ -72,10 +72,12 @@ export default defineConfig(({ mode }) => {
       {
         name: "fix-sql-wasm-spa-fallback",
         configureServer(server) {
-          // Any mistaken /pos/sql-wasm.wasm (or nested) request → real public wasm.
+          // Any mistaken /pos/sql-wasm*.wasm (or nested) request → real public wasm.
           server.middlewares.use((req, _res, next) => {
             const url = req.url ?? "";
-            if (url.includes("sql-wasm.wasm") && !url.startsWith("/sql-wasm.wasm")) {
+            if (url.includes("sql-wasm-browser.wasm") && !url.startsWith("/sql-wasm-browser.wasm")) {
+              req.url = "/sql-wasm-browser.wasm";
+            } else if (url.includes("sql-wasm.wasm") && !url.startsWith("/sql-wasm.wasm")) {
               req.url = "/sql-wasm.wasm";
             }
             next();

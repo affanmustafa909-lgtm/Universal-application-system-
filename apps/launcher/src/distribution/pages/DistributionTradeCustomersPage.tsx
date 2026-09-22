@@ -3,6 +3,8 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   createPharmacyTradeCustomer,
+  fetchPharmacyAreas,
+  fetchPharmacyCities,
   fetchPharmacyEmployeesPicker,
   fetchPharmacyRoutes,
   fetchPharmacyTradeCustomerLedger,
@@ -18,6 +20,14 @@ import { DistDrawerField, DistMasterDrawer } from "../components/DistMasterDrawe
 import { DistBulkCustomerCreate } from "../components/DistBulkCreate";
 import { DistPagination } from "../components/DistPagination";
 import {
+  emptyTradeCustomerForm,
+  rowToTradeCustomerForm,
+  TradeCustomerFormFields,
+  tradeCustomerFormPayload,
+  type TradeCustomerForm,
+  type TradeCustomerFormTab,
+} from "../components/TradeCustomerFormFields";
+import {
   DistButton,
   DistDataTable,
   DistInput,
@@ -27,47 +37,6 @@ import {
   DistStatusBadge,
 } from "../ui/DistUi";
 
-type FormState = {
-  code: string;
-  name: string;
-  businessName: string;
-  customerType: string;
-  phone: string;
-  creditLimitPkr: string;
-  routeId: string;
-  salesmanEmployeeId: string;
-  priceLevel: string;
-  status: string;
-};
-
-const emptyForm = (): FormState => ({
-  code: "",
-  name: "",
-  businessName: "",
-  customerType: "Retailer",
-  phone: "",
-  creditLimitPkr: "0",
-  routeId: "",
-  salesmanEmployeeId: "",
-  priceLevel: "wholesale",
-  status: "active",
-});
-
-function rowToForm(r: TradeCustomerRow): FormState {
-  return {
-    code: r.code ?? "",
-    name: r.name ?? "",
-    businessName: r.businessName ?? "",
-    customerType: r.customerType ?? "Retailer",
-    phone: r.phone ?? "",
-    creditLimitPkr: String(r.creditLimitPkr ?? 0),
-    routeId: r.routeId ?? "",
-    salesmanEmployeeId: r.salesmanEmployeeId ?? "",
-    priceLevel: r.priceLevel ?? "wholesale",
-    status: r.status ?? "active",
-  };
-}
-
 export function DistributionTradeCustomersPage(): JSX.Element {
   const { branch } = usePharmacyAccess();
   const invalidate = useInvalidatePharmacy([["pharmacy", "trade-customers-paged"]]);
@@ -75,7 +44,8 @@ export function DistributionTradeCustomersPage(): JSX.Element {
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [form, setForm] = useState<FormState>(emptyForm());
+  const [form, setForm] = useState<TradeCustomerForm>(emptyTradeCustomerForm());
+  const [formTab, setFormTab] = useState<TradeCustomerFormTab>("coaClient");
   const [editing, setEditing] = useState<TradeCustomerRow | null>(null);
   const [drawer, setDrawer] = useState<TradeCustomerRow | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -93,22 +63,20 @@ export function DistributionTradeCustomersPage(): JSX.Element {
     queryFn: fetchPharmacyEmployeesPicker,
     staleTime: 60_000,
   });
+  const cities = useQuery({
+    queryKey: ["pharmacy", "cities"],
+    queryFn: fetchPharmacyCities,
+    staleTime: 60_000,
+  });
+  const areas = useQuery({
+    queryKey: ["pharmacy", "areas"],
+    queryFn: fetchPharmacyAreas,
+    staleTime: 60_000,
+  });
 
   const save = useMutation({
     mutationFn: async () => {
-      const body = {
-        code: form.code.trim(),
-        name: form.name.trim(),
-        businessName: form.businessName.trim() || undefined,
-        customerType: form.customerType,
-        phone: form.phone.trim() || undefined,
-        creditLimitPkr: Number(form.creditLimitPkr) || 0,
-        routeId: form.routeId || undefined,
-        salesmanEmployeeId: form.salesmanEmployeeId || undefined,
-        priceLevel: form.priceLevel,
-        status: form.status,
-        branchCode: branch?.code,
-      };
+      const body = tradeCustomerFormPayload(form, branch?.code);
       if (editing) return updateTradeCustomer(editing.id, body);
       return createPharmacyTradeCustomer(body);
     },
@@ -116,7 +84,8 @@ export function DistributionTradeCustomersPage(): JSX.Element {
       invalidate();
       setError(null);
       setEditing(null);
-      setForm(emptyForm());
+      setForm(emptyTradeCustomerForm());
+      setFormTab("coaClient");
       setShowForm(false);
       void list.refetch();
     },
@@ -165,10 +134,27 @@ export function DistributionTradeCustomersPage(): JSX.Element {
     onError: (e: Error) => setError(e.message),
   });
 
+  const lookups = {
+    routes: (routes.data ?? []).map((r) => ({ id: r.id, code: r.code, name: r.name })),
+    employees: (employees.data ?? []).map((e) => ({
+      id: e.id,
+      employeeCode: e.employeeCode,
+      name: e.name,
+    })),
+    cities: (cities.data ?? []).map((c: { id: string; name: string }) => ({
+      id: c.id,
+      name: c.name,
+    })),
+    areas: (areas.data ?? []).map((a: { id: string; name: string }) => ({
+      id: a.id,
+      name: a.name,
+    })),
+  };
+
   return (
     <DistPageShell
       title="Trade customers"
-      subtitle="Paged customer master with credit summary."
+      subtitle="Full customer master — Information, policies, licenses, location (legacy Company form parity)."
       breadcrumb={[
         { label: "Distribution", to: "/pops/distribution/ps" },
         { label: "Masters", to: "/pops/distribution/masters" },
@@ -191,7 +177,8 @@ export function DistributionTradeCustomersPage(): JSX.Element {
           <DistButton
             onClick={() => {
               setEditing(null);
-              setForm(emptyForm());
+              setForm(emptyTradeCustomerForm());
+              setFormTab("coaClient");
               setShowForm(true);
             }}
           >
@@ -211,111 +198,22 @@ export function DistributionTradeCustomersPage(): JSX.Element {
         />
       ) : null}
       {showForm ? (
-        <DistPanel
-          title={editing ? "Edit customer" : "Add customer"}
-          action={
-            <DistButton variant="ghost" onClick={() => setShowForm(false)}>
-              Close
-            </DistButton>
-          }
-        >
-          <form
-            className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              save.mutate();
+        <DistPanel title={editing ? "Edit customer" : "Customer Information"}>
+          <TradeCustomerFormFields
+            form={form}
+            setForm={setForm}
+            tab={formTab}
+            setTab={setFormTab}
+            lookups={lookups}
+            busy={save.isPending}
+            editingId={editing?.id}
+            onSave={() => save.mutate()}
+            onClear={() => {
+              setForm(emptyTradeCustomerForm());
+              setFormTab("coaClient");
             }}
-          >
-            <label className="text-xs text-slate-500">
-              Code
-              <DistInput className="mt-1" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required />
-            </label>
-            <label className="text-xs text-slate-500">
-              Name
-              <DistInput className="mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-            </label>
-            <label className="text-xs text-slate-500">
-              Business name
-              <DistInput
-                className="mt-1"
-                value={form.businessName}
-                onChange={(e) => setForm({ ...form, businessName: e.target.value })}
-              />
-            </label>
-            <label className="text-xs text-slate-500">
-              Type
-              <DistSelect
-                className="mt-1"
-                value={form.customerType}
-                onChange={(e) => setForm({ ...form, customerType: e.target.value })}
-              >
-                <option>Retailer</option>
-                <option>Wholesaler</option>
-                <option>Hospital</option>
-                <option>Pharmacy</option>
-              </DistSelect>
-            </label>
-            <label className="text-xs text-slate-500">
-              Phone
-              <DistInput className="mt-1" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            </label>
-            <label className="text-xs text-slate-500">
-              Credit limit
-              <DistInput
-                className="mt-1"
-                type="number"
-                value={form.creditLimitPkr}
-                onChange={(e) => setForm({ ...form, creditLimitPkr: e.target.value })}
-              />
-            </label>
-            <label className="text-xs text-slate-500">
-              Route
-              <DistSelect
-                className="mt-1"
-                value={form.routeId}
-                onChange={(e) => setForm({ ...form, routeId: e.target.value })}
-              >
-                <option value="">—</option>
-                {(routes.data ?? []).map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.code} — {r.name}
-                  </option>
-                ))}
-              </DistSelect>
-            </label>
-            <label className="text-xs text-slate-500">
-              Salesman
-              <DistSelect
-                className="mt-1"
-                value={form.salesmanEmployeeId}
-                onChange={(e) => setForm({ ...form, salesmanEmployeeId: e.target.value })}
-              >
-                <option value="">—</option>
-                {(employees.data ?? []).map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.employeeCode} — {e.name}
-                  </option>
-                ))}
-              </DistSelect>
-            </label>
-            <label className="text-xs text-slate-500">
-              Price level
-              <DistSelect
-                className="mt-1"
-                value={form.priceLevel}
-                onChange={(e) => setForm({ ...form, priceLevel: e.target.value })}
-              >
-                <option value="retail">Retail</option>
-                <option value="wholesale">Wholesale</option>
-                <option value="dealer">Dealer</option>
-              </DistSelect>
-            </label>
-            <div className="flex items-end gap-2 sm:col-span-2">
-              <DistButton type="submit" disabled={save.isPending}>
-                Save
-              </DistButton>
-            </div>
-          </form>
+            onClose={() => setShowForm(false)}
+          />
         </DistPanel>
       ) : null}
 
@@ -355,14 +253,85 @@ export function DistributionTradeCustomersPage(): JSX.Element {
         onRowClick={(r) => setDrawer(r)}
         rows={list.data?.items ?? []}
         columns={[
-          { key: "code", header: "Code", className: "font-mono text-xs" },
-          { key: "name", header: "Name" },
-          { key: "customerType", header: "Type", render: (r) => r.customerType ?? "—" },
-          { key: "phone", header: "Phone", render: (r) => r.phone ?? "—" },
+          { key: "accountType", header: "Acct Type", render: (r) => r.accountType ?? "—" },
+          { key: "code", header: "Code", className: "font-mono text-xs whitespace-nowrap" },
+          { key: "companyCode", header: "Cmp_Code", render: (r) => r.companyCode ?? "—", className: "font-mono text-xs" },
+          { key: "name", header: "Name", className: "min-w-[10rem]" },
+          { key: "uniqueName", header: "Unique Name", render: (r) => r.uniqueName ?? "—", className: "min-w-[8rem]" },
           {
-            key: "credit",
-            header: "Credit / Out",
-            render: (r) => `${formatPkr(r.creditLimitPkr ?? 0)} / ${formatPkr(r.outstandingPkr ?? 0)}`,
+            key: "address",
+            header: "Address",
+            render: (r) => r.address ?? r.detailedAddress ?? "—",
+            className: "min-w-[10rem] max-w-[14rem] truncate",
+          },
+          {
+            key: "postalAddress",
+            header: "Postal Address",
+            render: (r) => r.postalAddress ?? "—",
+            className: "min-w-[10rem] max-w-[14rem] truncate",
+          },
+          { key: "province", header: "Province", render: (r) => r.province ?? "—" },
+          { key: "email", header: "Email", render: (r) => r.email ?? "—" },
+          { key: "landLine", header: "Phone", render: (r) => r.landLine ?? "—" },
+          { key: "phone", header: "Mobile", render: (r) => r.phone ?? "—" },
+          { key: "fax", header: "Fax", render: (r) => r.fax ?? "—" },
+          {
+            key: "creditLimitPkr",
+            header: "Credit Limit",
+            render: (r) => formatPkr(r.creditLimitPkr ?? 0),
+            className: "whitespace-nowrap",
+          },
+          { key: "partyMode", header: "Party Mod", render: (r) => r.partyMode ?? "—" },
+          { key: "stxNo", header: "Stx No", render: (r) => r.stxNo ?? "—" },
+          { key: "ntnNumber", header: "NTN #", render: (r) => r.ntnNumber ?? "—" },
+          { key: "nicNumber", header: "CNIC #", render: (r) => r.nicNumber ?? "—" },
+          { key: "sector", header: "Sector", render: (r) => r.sector ?? "—" },
+          {
+            key: "areaId",
+            header: "Area",
+            render: (r) => {
+              const hit = lookups.areas.find((a) => a.id === r.areaId);
+              return hit?.name ?? r.cityName ?? "—";
+            },
+          },
+          { key: "licenceNo", header: "Licence #", render: (r) => r.licenceNo ?? "—" },
+          {
+            key: "licenceExpiry",
+            header: "Licence Exp",
+            render: (r) => (r.licenceExpiry ? String(r.licenceExpiry).slice(0, 10) : "—"),
+            className: "whitespace-nowrap",
+          },
+          { key: "partyType", header: "Party Type", render: (r) => r.partyType ?? r.customerType ?? "—" },
+          {
+            key: "activeTaxPayer",
+            header: "Active Tax",
+            render: (r) => (r.activeTaxPayer ? "Yes" : "—"),
+          },
+          {
+            key: "incomeTaxExempt",
+            header: "Tax Exempt",
+            render: (r) => (r.incomeTaxExempt ? "Yes" : "—"),
+          },
+          {
+            key: "advanceTaxSummary",
+            header: "Adv Tax",
+            render: (r) => (r.advanceTaxSummary ? "Yes" : "—"),
+          },
+          {
+            key: "invoiceWarranty",
+            header: "Inv Warranty",
+            render: (r) => (r.invoiceWarranty ? "Yes" : "—"),
+          },
+          {
+            key: "dead",
+            header: "Dead",
+            render: (r) => (r.status !== "active" ? "Yes" : "—"),
+          },
+          {
+            key: "outstanding",
+            header: "Outstanding",
+            render: (r) => formatPkr(r.outstandingPkr ?? 0),
+            className: "whitespace-nowrap",
           },
           { key: "status", header: "Status", render: (r) => <DistStatusBadge status={r.status} /> },
           {
@@ -375,7 +344,8 @@ export function DistributionTradeCustomersPage(): JSX.Element {
                   className="px-2 py-1 text-xs"
                   onClick={() => {
                     setEditing(r);
-                    setForm(rowToForm(r));
+                    setForm(rowToTradeCustomerForm(r));
+                    setFormTab("coaClient");
                     setShowForm(true);
                   }}
                 >
@@ -421,16 +391,35 @@ export function DistributionTradeCustomersPage(): JSX.Element {
       >
         {drawer ? (
           <dl>
-            <DistDrawerField label="Type" value={drawer.customerType} />
-            <DistDrawerField label="Phone" value={drawer.phone} />
-            <DistDrawerField label="Business" value={drawer.businessName} />
+            <DistDrawerField label="Account Type" value={drawer.accountType} />
+            <DistDrawerField label="Code" value={drawer.code} />
+            <DistDrawerField label="Cmp_Code" value={drawer.companyCode} />
+            <DistDrawerField label="Unique Name" value={drawer.uniqueName} />
+            <DistDrawerField label="Address" value={drawer.address} />
+            <DistDrawerField label="Postal Address" value={drawer.postalAddress} />
+            <DistDrawerField label="Province" value={drawer.province} />
+            <DistDrawerField label="Email" value={drawer.email} />
+            <DistDrawerField label="Phone" value={drawer.landLine} />
+            <DistDrawerField label="Mobile" value={drawer.phone} />
+            <DistDrawerField label="Fax" value={drawer.fax} />
             <DistDrawerField label="Credit limit" value={formatPkr(drawer.creditLimitPkr ?? 0)} />
             <DistDrawerField label="Outstanding" value={formatPkr(drawer.outstandingPkr ?? 0)} />
+            <DistDrawerField label="Party Mod" value={drawer.partyMode} />
+            <DistDrawerField label="Party Type" value={drawer.partyType ?? drawer.customerType} />
+            <DistDrawerField label="Stx No" value={drawer.stxNo} />
+            <DistDrawerField label="NTN #" value={drawer.ntnNumber} />
+            <DistDrawerField label="CNIC #" value={drawer.nicNumber} />
+            <DistDrawerField label="Sector" value={drawer.sector} />
+            <DistDrawerField label="Licence #" value={drawer.licenceNo} />
             <DistDrawerField
-              label="Available"
-              value={formatPkr(Math.max(0, (drawer.creditLimitPkr ?? 0) - (drawer.outstandingPkr ?? 0)))}
+              label="Licence Exp"
+              value={drawer.licenceExpiry ? String(drawer.licenceExpiry).slice(0, 10) : null}
             />
-            <DistDrawerField label="Price level" value={drawer.priceLevel} />
+            <DistDrawerField label="Active Tax Payer" value={drawer.activeTaxPayer ? "Yes" : "No"} />
+            <DistDrawerField label="Income Tax Exempt" value={drawer.incomeTaxExempt ? "Yes" : "No"} />
+            <DistDrawerField label="Advance Tax Summary" value={drawer.advanceTaxSummary ? "Yes" : "No"} />
+            <DistDrawerField label="Invoice Warranty" value={drawer.invoiceWarranty ? "Yes" : "No"} />
+            <DistDrawerField label="Dead" value={drawer.status !== "active" ? "Yes" : "No"} />
             <DistDrawerField label="Status" value={<DistStatusBadge status={drawer.status} />} />
           </dl>
         ) : null}

@@ -26,6 +26,8 @@ import {
   POS_HEADER_VISIBLE_EVENT,
 } from "../lib/posTopExperience";
 import { DistGlobalSearch } from "../../distribution/components/DistGlobalSearch";
+import { useConnectivity } from "../../hooks/useConnectivity";
+import { useDataModeStore } from "../../stores/dataModeStore";
 import { PopsMobileNav, PopsSidebarNav } from "./PopsNavMenu";
 
 const SIDEBAR_STORAGE_KEY = "pops-sidebar-visible";
@@ -76,6 +78,11 @@ export function PopsShell(): JSX.Element {
   const clearBranch = usePopsStore((s) => s.clearBranch);
   const branch = usePopsStore((s) => s.branch);
   const displayRole = usePopsStore((s) => s.displayRole);
+  const offlineSession = useSessionStore((s) => s.offlineSession);
+  const connectionMode = useDataModeStore((s) => s.connectionMode);
+  const online = useConnectivity();
+  const showOffline =
+    !online || offlineSession || connectionMode === "local_only";
   const systemId = useActiveSystemId();
   const system = getBusinessSystem(systemId);
   const assignedSystemId = businessSystemIdFromSystemType(claims?.systemType);
@@ -195,18 +202,35 @@ export function PopsShell(): JSX.Element {
             <PopsSidebarNav />
           </nav>
           <div className="shrink-0 border-t border-[color:var(--sidebar-line,var(--line))] bg-[var(--sidebar,#ffffff)] px-4 py-3 dark:border-slate-800 dark:bg-slate-800">
-            <div className="rounded-lg border border-[color:var(--sidebar-line,var(--line))] bg-[var(--card,#ffffff)] px-3 py-2 dark:border-slate-600 dark:bg-slate-700">
+            <button
+              type="button"
+              onClick={() => navigate("/pops/sync")}
+              className="w-full rounded-lg border border-[color:var(--sidebar-line,var(--line))] bg-[var(--card,#ffffff)] px-3 py-2 text-left transition hover:border-[color:var(--brand)] dark:border-slate-600 dark:bg-slate-700"
+              title="Open Connection & Sync"
+            >
               <div className="flex items-center gap-2">
                 <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--success)] opacity-40" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--success)]" />
+                  {showOffline ? null : (
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--success)] opacity-40" />
+                  )}
+                  <span
+                    className={`relative inline-flex h-2 w-2 rounded-full ${
+                      showOffline ? "bg-amber-500" : "bg-[var(--success)]"
+                    }`}
+                  />
                 </span>
-                <span className="text-[11px] font-semibold text-[color:var(--ink)] dark:text-slate-100">Offline-ready</span>
+                <span className="text-[11px] font-semibold text-[color:var(--ink)] dark:text-slate-100">
+                  {showOffline ? "Offline" : "Online"}
+                </span>
               </div>
               <p className="mt-1 text-[10px] font-medium leading-relaxed text-[color:var(--muted)] dark:text-slate-300">
-                SQLite · sync outbox
+                {showOffline
+                  ? connectionMode === "local_only"
+                    ? "Local only · SQLite queue"
+                    : "SQLite · sync when online"
+                  : "SQLite · sync outbox"}
               </p>
-            </div>
+            </button>
           </div>
         </aside>
       ) : null}

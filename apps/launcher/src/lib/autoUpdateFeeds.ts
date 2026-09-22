@@ -9,7 +9,7 @@ export type UpdateFeedInfo = {
 };
 
 const DESKTOP_REPO = "basir2353/pops-desktop-updates";
-const ICE_CREAM_REPO = "affanmustafa909-lgtm/ice-cream-bar-updates";
+const ICE_CREAM_REPO = "basir2353/ice-cream-bar-updates";
 const MOBILE_REPO = "basir2353/pops-mobile-updates";
 
 const DESKTOP_FEEDS = {

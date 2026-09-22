@@ -6,6 +6,7 @@ import { formatPkr, useInvalidatePharmacy, usePharmacyAccess } from "../../pharm
 import {
   advancePharmacyDistOrder,
   approvePharmacyDistOrder,
+  cashSettlePharmacyDistOrder,
   createPharmacyCollection,
   fetchPharmacyDistOrder,
   fetchPharmacyDistOrders,
@@ -18,9 +19,7 @@ import {
   checkSaleAvailability,
   deleteHeldSale,
   fetchHeldSales,
-  formatSaleValidateErrors,
   quoteSalePricing,
-  validateSale,
   type SaleCustomerHit,
   type SaleProductHit,
 } from "../../pharmacy/api/pharmacy-sales";
@@ -46,8 +45,20 @@ import {
   DistStatusBadge,
   distInputClass,
 } from "../ui/DistUi";
+import { DistPayModal, type DistPayConfirmPayload } from "../components/DistPayModal";
 import { printDistBookingSlip, printDistOrderReceipt } from "../lib/printDistOrder";
-import { formatPackLabel, medicinePackPrices } from "../lib/medicinePackPricing";
+import {
+  DIST_SALE_UNITS,
+  distConvertSaleQty,
+  distSaleUnitHint,
+  distSaleUnitLabel,
+  distToStripQty,
+  distUnitPrice,
+  formatPackLabel,
+  medicinePackPrices,
+  parseDistSaleUnit,
+  type DistSaleUnit,
+} from "../lib/medicinePackPricing";
 import {
   DIST_SALE_WINDOW_SETTINGS_CHANGED,
   loadDistSaleWindowSettings,
@@ -69,31 +80,91 @@ import {
 const HOLD_KEY = "dist-sales-hold-v1";
 const DIST = "/pops/distribution";
 
+function normalizeCartLine(
+  l: Partial<SaleCartLine> & { medicineId: string; name?: string; qty?: number; unitPricePkr?: number },
+): SaleCartLine {
+  const saleUnit = parseDistSaleUnit(l.saleUnit);
+  const unitPricePkr = Math.max(0, Math.round(Number(l.unitPricePkr ?? 0)));
+  const stripPricePkr = Math.max(
+    0,
+    Math.round(Number(l.stripPricePkr ?? (saleUnit === "pata" ? unitPricePkr : unitPricePkr))),
+  );
+  return {
+    key: l.key ?? `${l.medicineId}-${crypto.randomUUID().slice(0, 8)}`,
+    medicineId: l.medicineId,
+    name: l.name ?? l.medicineId,
+    sku: l.sku,
+    qty: Math.max(1, Math.round(Number(l.qty ?? 1))),
+    freeQty: Math.max(0, Math.round(Number(l.freeQty ?? 0))),
+    unitPricePkr,
+    stripPricePkr,
+    saleUnit,
+    priceSource: l.priceSource ?? null,
+    discountPkr: Math.max(0, Number(l.discountPkr ?? 0)),
+    taxPkr: Math.max(0, Number(l.taxPkr ?? 0)),
+    schemeName: l.schemeName ?? null,
+    allocations: l.allocations,
+    availableQty: l.availableQty ?? null,
+    shortfall: l.shortfall ?? null,
+    fulfillable: l.fulfillable ?? null,
+    companyName: l.companyName ?? null,
+    pack: l.pack ?? null,
+    genericName: l.genericName ?? null,
+    tabletsPerStrip: l.tabletsPerStrip ?? null,
+    stripsPerBox: l.stripsPerBox ?? null,
+  };
+}
+
 function cartLinesForPrint(lines: SaleCartLine[]) {
   return lines.map((l) => {
     const pack =
       Number(l.tabletsPerStrip) > 1 || Number(l.stripsPerBox) > 1
         ? formatPackLabel(l.tabletsPerStrip, l.stripsPerBox)
         : "";
-    const prices =
-      l.unitPricePkr > 0
-        ? medicinePackPrices(l.unitPricePkr, l.tabletsPerStrip, l.stripsPerBox)
-        : null;
+    const strip = l.stripPricePkr > 0 ? l.stripPricePkr : l.unitPricePkr;
+    const prices = strip > 0 ? medicinePackPrices(strip, l.tabletsPerStrip, l.stripsPerBox) : null;
     const rateNote =
       prices && (prices.tabletsPerStrip > 1 || prices.stripsPerBox > 1)
         ? `Pata ${prices.pataPkr} · Pack ${prices.packPkr}`
         : "";
+    const unitLabel = distSaleUnitLabel(l.saleUnit ?? "pata");
     const note =
-      [l.sku, l.companyName, pack, rateNote].filter((x) => x && String(x).trim()).join(" · ") ||
+      [l.sku, l.companyName, unitLabel, rateNote].filter((x) => x && String(x).trim()).join(" · ") ||
       undefined;
     return {
       label: l.name,
       qty: l.qty,
       unitPrice: l.unitPricePkr,
       freeQty: l.freeQty > 0 ? l.freeQty : undefined,
+      pack: pack || undefined,
       note,
     };
   });
+}
+
+function bookLinePayload(l: SaleCartLine) {
+  const unit = l.saleUnit ?? "pata";
+  const stripPrice = Math.max(0, Math.round(l.stripPricePkr || l.unitPricePkr));
+  if (unit === "goli") {
+    return {
+      medicineId: l.medicineId,
+      quantity: l.qty,
+      freeQuantity: l.freeQty || undefined,
+      unitPricePkr: l.unitPricePkr,
+      discountPkr: l.discountPkr || undefined,
+    };
+  }
+  const quantity = distToStripQty(l.qty, unit, l.tabletsPerStrip, l.stripsPerBox);
+  const freeQuantity = l.freeQty
+    ? distToStripQty(l.freeQty, unit, l.tabletsPerStrip, l.stripsPerBox)
+    : undefined;
+  return {
+    medicineId: l.medicineId,
+    quantity,
+    freeQuantity,
+    unitPricePkr: stripPrice,
+    discountPkr: l.discountPkr || undefined,
+  };
 }
 
 function shouldSaveSaleOffline(err?: unknown): boolean {
@@ -120,16 +191,32 @@ function paymentInfo(o: Record<string, unknown>): {
   isCash: boolean;
   isCredit: boolean;
 } {
-  const methodRaw = String(o.paymentMethod ?? o.payment_method ?? "").toLowerCase();
+  const notes = String(o.notes ?? "");
+  const methodFromNotes = /\[\[pm:Cash\]\]/i.test(notes)
+    ? "cash"
+    : /\[\[pm:Credit\]\]/i.test(notes)
+      ? "credit"
+      : "";
+  const methodRaw = String(o.paymentMethod ?? o.payment_method ?? methodFromNotes ?? "").toLowerCase();
+  const payStatus = String(o.paymentStatus ?? o.payment_status ?? "").toLowerCase();
   const due = Number(o.amountDuePkr ?? o.amountDue ?? NaN);
   const status = String(o.status ?? "").toLowerCase();
   const isCash =
-    methodRaw === "cash" || (Number.isFinite(due) && due <= 0 && (status === "invoiced" || status === "delivered"));
+    methodRaw === "cash" ||
+    (Number.isFinite(due) && due <= 0 && (status === "invoiced" || status === "delivered"));
   const isCredit =
     methodRaw === "credit" || (Number.isFinite(due) && due > 0) || methodRaw.includes("credit");
   const isPaid =
-    isCash || (Number.isFinite(due) && due <= 0 && (status === "invoiced" || status === "delivered" || status === "dispatched"));
-  const isOpen = status === "draft" || status === "booked" || status === "held";
+    payStatus === "paid" ||
+    payStatus === "settled" ||
+    (status === "invoiced" && (isCash || payStatus === "paid")) ||
+    (Number.isFinite(due) && due <= 0 && (status === "invoiced" || status === "delivered" || status === "dispatched"));
+  const isOpen =
+    status === "draft" ||
+    status === "booked" ||
+    status === "held" ||
+    status === "submitted" ||
+    status === "approved";
 
   if (isPaid) {
     return {
@@ -142,15 +229,15 @@ function paymentInfo(o: Record<string, unknown>): {
       isCredit: isCredit && !isCash,
     };
   }
-  if (isCredit || (Number.isFinite(due) && due > 0)) {
+  if (isCredit || (Number.isFinite(due) && due > 0) || payStatus === "unpaid") {
     return {
       paidLabel: "Pay",
       paidTone: "warning",
-      methodLabel: "Credit",
-      methodTone: "warning",
+      methodLabel: methodRaw === "cash" ? "Cash" : "Credit",
+      methodTone: methodRaw === "cash" ? "success" : "warning",
       isPaid: false,
-      isCash: false,
-      isCredit: true,
+      isCash: methodRaw === "cash",
+      isCredit: methodRaw !== "cash",
     };
   }
   if (isOpen) {
@@ -190,38 +277,50 @@ function orderHistoryLine(o: Record<string, unknown>): string {
 
 const NEXT_ACTIONS: Record<
   string,
-  { label: string; status?: string; kind?: "approve" | "invoice" | "print" }[]
+  { label: string; status?: string; kind?: "approve" | "invoice" | "print" | "pay" }[]
 > = {
   draft: [
     { label: "Book", status: "booked" },
     { label: "Cancel", status: "cancelled" },
   ],
-  submitted: [{ label: "Approve", kind: "approve" }],
+  submitted: [
+    { label: "Pay", kind: "pay" },
+    { label: "Approve", kind: "approve" },
+  ],
   booked: [
+    { label: "Pay", kind: "pay" },
     { label: "Approve", kind: "approve" },
     { label: "Print", kind: "print" },
     { label: "Cancel", status: "cancelled" },
   ],
   approved: [
+    { label: "Pay", kind: "pay" },
     { label: "Reserve", status: "stock_reserved" },
     { label: "Pick", status: "picking" },
     { label: "Invoice", kind: "invoice" },
     { label: "Print", kind: "print" },
   ],
   stock_reserved: [
+    { label: "Pay", kind: "pay" },
     { label: "Pick", status: "picking" },
     { label: "Invoice", kind: "invoice" },
   ],
-  picking: [{ label: "Pack", status: "packed" }],
+  picking: [
+    { label: "Pay", kind: "pay" },
+    { label: "Pack", status: "packed" },
+  ],
   packed: [
+    { label: "Pay", kind: "pay" },
     { label: "Ready", status: "ready_for_dispatch" },
     { label: "Invoice", kind: "invoice" },
   ],
   ready_for_dispatch: [
+    { label: "Pay", kind: "pay" },
     { label: "Dispatch", status: "dispatched" },
     { label: "Invoice", kind: "invoice" },
   ],
   invoiced: [
+    { label: "Pay", kind: "pay" },
     { label: "Dispatch", status: "dispatched" },
     { label: "Print", kind: "print" },
     { label: "Delivered", status: "delivered" },
@@ -317,6 +416,23 @@ export function DistributionOrdersPage(): JSX.Element {
   const [payInOpen, setPayInOpen] = useState(false);
   const [payOutOpen, setPayOutOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const [payModal, setPayModal] = useState<
+    | null
+    | { source: "cart" }
+    | {
+        source: "order";
+        order: {
+          id: string;
+          orderNumber?: string;
+          status?: string;
+          totalPkr?: number;
+          tradeCustomerId?: string;
+          amountDuePkr?: number;
+          invoiceId?: string;
+          customerName?: string;
+        };
+      }
+  >(null);
   const [productLayout, setProductLayout] = useState<"list" | "grid">(() => {
     try {
       return localStorage.getItem("dist-sale-product-layout") === "grid" ? "grid" : "list";
@@ -331,6 +447,22 @@ export function DistributionOrdersPage(): JSX.Element {
       return "list";
     }
   });
+  const [defaultSaleUnit, setDefaultSaleUnit] = useState<DistSaleUnit>(() => {
+    try {
+      return parseDistSaleUnit(localStorage.getItem("dist-sale-unit"));
+    } catch {
+      return "pata";
+    }
+  });
+
+  const persistDefaultSaleUnit = useCallback((unit: DistSaleUnit) => {
+    setDefaultSaleUnit(unit);
+    try {
+      localStorage.setItem("dist-sale-unit", unit);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const cashSessionQuery = useQuery({
     queryKey: ["accounting", "cash-session-open", branch?.code],
@@ -453,9 +585,22 @@ export function DistributionOrdersPage(): JSX.Element {
     (!creditOverride || !creditOverrideReason.trim());
 
   const enrichLine = useCallback(
-    async (lineKey: string, medicineId: string, qty: number, name: string, sku?: string | null, freeQty = 0) => {
+    async (
+      lineKey: string,
+      medicineId: string,
+      qty: number,
+      name: string,
+      sku?: string | null,
+      freeQty = 0,
+      saleUnit: DistSaleUnit = "pata",
+      tabletsPerStrip?: number | null,
+      stripsPerBox?: number | null,
+    ) => {
       if (!branch?.code || !customer) return;
-      const physicalQty = Math.max(1, Math.round(qty) + Math.max(0, Math.round(freeQty)));
+      const stripQty = distToStripQty(qty, saleUnit, tabletsPerStrip, stripsPerBox);
+      const freeStrip =
+        freeQty > 0 ? distToStripQty(freeQty, saleUnit, tabletsPerStrip, stripsPerBox) : 0;
+      const physicalQty = Math.max(1, stripQty + freeStrip);
       try {
         const [avail, quote] = await Promise.all([
           checkSaleAvailability({
@@ -468,18 +613,25 @@ export function DistributionOrdersPage(): JSX.Element {
             tradeCustomerId: customer.id,
             priceLevel: customer.priceLevel ?? "wholesale",
             warehouseId: warehouseId || undefined,
-            lines: [{ medicineId, quantity: qty }],
+            lines: [{ medicineId, quantity: Math.max(1, stripQty) }],
           }).catch(() => null),
         ]);
 
         const availLine = avail?.lines?.[0];
         const quoteLine = quote?.lines?.[0];
+        const stripFromQuote =
+          quoteLine?.unitPricePkr != null ? Math.round(quoteLine.unitPricePkr) : null;
         cart.updateLine(lineKey, {
           allocations: availLine?.allocations,
           availableQty: availLine?.availableQty ?? null,
           fulfillable: availLine?.fulfillable ?? null,
           shortfall: availLine?.shortfall ?? null,
-          ...(quoteLine?.unitPricePkr != null ? { unitPricePkr: quoteLine.unitPricePkr } : {}),
+          ...(stripFromQuote != null
+            ? {
+                stripPricePkr: stripFromQuote,
+                unitPricePkr: distUnitPrice(stripFromQuote, saleUnit, tabletsPerStrip, stripsPerBox),
+              }
+            : {}),
           ...(quoteLine?.priceSource != null ? { priceSource: quoteLine.priceSource } : {}),
           ...(quoteLine?.freeQty != null ? { freeQty: quoteLine.freeQty } : {}),
           ...(quoteLine?.discountPkr != null ? { discountPkr: quoteLine.discountPkr } : {}),
@@ -505,8 +657,18 @@ export function DistributionOrdersPage(): JSX.Element {
       const existing = qtyTimers.current.get(line.key);
       if (existing) window.clearTimeout(existing);
       const t = window.setTimeout(() => {
-        void enrichLine(line.key, line.medicineId, line.qty, line.name, line.sku, line.freeQty);
-      }, 280);
+        void enrichLine(
+          line.key,
+          line.medicineId,
+          line.qty,
+          line.name,
+          line.sku,
+          line.freeQty,
+          line.saleUnit ?? "pata",
+          line.tabletsPerStrip,
+          line.stripsPerBox,
+        );
+      }, 550);
       qtyTimers.current.set(line.key, t);
     },
     [enrichLine],
@@ -515,7 +677,7 @@ export function DistributionOrdersPage(): JSX.Element {
   const pendingEnrichRef = useRef<{ medicineId: string; qty: number } | null>(null);
 
   const addProductStable = useCallback(
-    (product: SaleProductHit, qty = 1) => {
+    (product: SaleProductHit, qty = 1, saleUnit: DistSaleUnit = defaultSaleUnit) => {
       if (saleUi.blockZeroStockAdd && isOutOfStock(product)) {
         openPurchasingForProduct(product);
         return;
@@ -527,14 +689,17 @@ export function DistributionOrdersPage(): JSX.Element {
         window.setTimeout(() => customerSearchRef.current?.focus(), 30);
         return;
       }
-      const price = catalogPrice(product);
+      const stripPrice = catalogPrice(product);
+      const unitPrice = distUnitPrice(stripPrice, saleUnit, product.tabletsPerStrip, product.stripsPerBox);
       pendingEnrichRef.current = { medicineId: product.id, qty };
       cart.add({
         medicineId: product.id,
         name: product.name,
         sku: product.sku,
         qty,
-        unitPricePkr: price,
+        saleUnit,
+        unitPricePkr: unitPrice,
+        stripPricePkr: stripPrice,
         priceSource: "catalog",
         companyName: product.companyName,
         pack: product.pack,
@@ -547,7 +712,44 @@ export function DistributionOrdersPage(): JSX.Element {
       focusAndSelect(productSearchRef.current);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cart.add / productSearch.setQuery stable enough
-    [customer, cart.add, productSearch.setQuery, saleUi.blockZeroStockAdd, openPurchasingForProduct],
+    [
+      customer,
+      cart.add,
+      productSearch.setQuery,
+      saleUi.blockZeroStockAdd,
+      openPurchasingForProduct,
+      defaultSaleUnit,
+    ],
+  );
+
+  const changeLineSaleUnit = useCallback(
+    (line: SaleCartLine, nextUnit: DistSaleUnit) => {
+      if (nextUnit === (line.saleUnit ?? "pata")) return;
+      const nextQty = distConvertSaleQty(
+        line.qty,
+        line.saleUnit ?? "pata",
+        nextUnit,
+        line.tabletsPerStrip,
+        line.stripsPerBox,
+      );
+      const stripPrice = line.stripPricePkr || line.unitPricePkr;
+      const nextPrice = distUnitPrice(stripPrice, nextUnit, line.tabletsPerStrip, line.stripsPerBox);
+      const patched: SaleCartLine = {
+        ...line,
+        saleUnit: nextUnit,
+        qty: nextQty,
+        stripPricePkr: stripPrice,
+        unitPricePkr: nextPrice,
+      };
+      cart.updateLine(line.key, {
+        saleUnit: nextUnit,
+        qty: nextQty,
+        stripPricePkr: stripPrice,
+        unitPricePkr: nextPrice,
+      });
+      scheduleEnrich(patched);
+    },
+    [cart, scheduleEnrich],
   );
 
   useEffect(() => {
@@ -556,7 +758,17 @@ export function DistributionOrdersPage(): JSX.Element {
     const line = [...cart.lines].reverse().find((l) => l.medicineId === pending.medicineId);
     if (!line) return;
     pendingEnrichRef.current = null;
-    void enrichLine(line.key, line.medicineId, line.qty, line.name, line.sku, line.freeQty);
+    void enrichLine(
+      line.key,
+      line.medicineId,
+      line.qty,
+      line.name,
+      line.sku,
+      line.freeQty,
+      line.saleUnit ?? "pata",
+      line.tabletsPerStrip,
+      line.stripsPerBox,
+    );
   }, [cart.lines, enrichLine]);
 
   const onBarcode = useCallback(
@@ -594,7 +806,7 @@ export function DistributionOrdersPage(): JSX.Element {
   }, [customerSearch.setQuery]);
 
   const buildBookBody = useCallback(
-    (submit: boolean, idempotencyKey?: string) => {
+    (submit: boolean, idempotencyKey?: string, billDiscountPkr?: number) => {
       if (!branch || !customer) return null;
       return {
         branchCode: branch.code,
@@ -610,14 +822,9 @@ export function DistributionOrdersPage(): JSX.Element {
             : undefined,
         idempotencyKey,
         taxPkr: billTaxPkr || undefined,
+        discountPkr: billDiscountPkr && billDiscountPkr > 0 ? Math.round(billDiscountPkr) : undefined,
         notes: billServicePkr > 0 ? `[[svc:${billServicePkr}]]` : undefined,
-        lines: cart.lines.map((l) => ({
-          medicineId: l.medicineId,
-          quantity: l.qty,
-          freeQuantity: l.freeQty || undefined,
-          unitPricePkr: l.unitPricePkr,
-          discountPkr: l.discountPkr || undefined,
-        })),
+        lines: cart.lines.map((l) => bookLinePayload(l)),
       };
     },
     [
@@ -690,19 +897,43 @@ export function DistributionOrdersPage(): JSX.Element {
   }, [branch, customer, cart, buildBookBody, persistLocalHold, invalidate, held]);
 
   const bookOrder = useCallback(
-    async (andPrint: boolean) => {
+    async (
+      opts: boolean | { print?: boolean; pay?: boolean; payDetail?: DistPayConfirmPayload } = false,
+    ) => {
+      const andPrint = typeof opts === "boolean" ? opts : Boolean(opts.print);
+      /** Only Book & Pay settles cash / marks Paid — Book and Book & Print just book. */
+      const forcePay = typeof opts === "boolean" ? false : Boolean(opts.pay);
+      const payDetail = typeof opts === "boolean" ? undefined : opts.payDetail;
+      const settleMethod = payDetail?.paymentMethod ?? "Cash";
+
       if (!branch || !customer || cart.lines.length === 0 || booking) return;
-      if (creditBlocked) {
+      if (!forcePay && creditBlocked) {
         setError("Credit limit exceeded — enable credit override to book");
         return;
       }
       setBooking(true);
       setError(null);
       const idempotencyKey = crypto.randomUUID();
-      const body = buildBookBody(true, idempotencyKey);
+      const body = buildBookBody(
+        true,
+        idempotencyKey,
+        forcePay && payDetail?.discountPkr ? payDetail.discountPkr : undefined,
+      );
       if (!body) {
         setBooking(false);
         return;
+      }
+      if (forcePay) {
+        body.paymentMethod = "Cash";
+        body.creditOverride = undefined;
+        body.creditOverrideReason = undefined;
+        if (payDetail?.notes) {
+          body.notes = body.notes ? `${body.notes} · ${payDetail.notes}` : payDetail.notes;
+        } else {
+          body.notes = body.notes
+            ? `${body.notes} · [[pay:${settleMethod}]]`
+            : `[[pay:${settleMethod}]]`;
+        }
       }
 
       const finishOffline = () => {
@@ -728,11 +959,11 @@ export function DistributionOrdersPage(): JSX.Element {
             customerPhone: customer.phone ?? undefined,
             lines: cartLinesForPrint(cart.lines),
             totalPkr: cart.totals.net,
-            modeLabel: "Offline booking",
+            modeLabel: forcePay ? "Offline cash pay" : "Offline booking",
             salesmanName: salesmanName || undefined,
             warehouseName: wh?.name,
             warehouseCode: wh?.code,
-            paymentMethod,
+            paymentMethod: forcePay ? "Cash" : paymentMethod,
           }).catch(() => {
             /* print best-effort */
           });
@@ -749,77 +980,66 @@ export function DistributionOrdersPage(): JSX.Element {
           return;
         }
 
-        try {
-          const validation = await validateSale(body);
-          if (!validation.ok || validation.issues.some((i) => (i.severity ?? "error") === "error")) {
-            const msg = formatSaleValidateErrors(validation);
-            setError(msg || "Validation failed");
-            return;
-          }
-        } catch (valErr) {
-          if (shouldSaveSaleOffline(valErr)) {
-            finishOffline();
-            return;
-          }
-          throw valErr;
-        }
-
+        // `/sales/book` already validates server-side — skip a separate validate round-trip.
         const order = await bookSale(body);
-        let noticeMsg = `Booked ${order.orderNumber ?? "order"} (${paymentMethod})`;
+        let noticeMsg = `Booked ${order.orderNumber ?? "order"} (${forcePay ? "Cash" : paymentMethod})`;
         let printedInvoiceNumber: string | undefined;
+        const receiptPaymentMethod = forcePay ? "Cash" : paymentMethod;
 
-        if (paymentMethod === "Cash" && order.id) {
+        if (forcePay && order.id) {
           try {
-            await approvePharmacyDistOrder(order.id);
-            for (const st of ["picking", "packed", "ready_for_dispatch"] as const) {
-              try {
-                await advancePharmacyDistOrder(order.id, st);
-              } catch {
-                /* pipeline step may already be passed */
-              }
-            }
-            const inv = (await invoicePharmacyDistOrder(order.id, {
-              paymentMethod: "Cash",
-            })) as { id?: string; invoiceNumber?: string; totalPkr?: number; amountDuePkr?: number };
+            // Book & Pay only: approve + cash invoice → paymentStatus paid in sales.
+            const inv = await cashSettlePharmacyDistOrder(order.id);
             printedInvoiceNumber = inv.invoiceNumber ? String(inv.invoiceNumber) : undefined;
-            const due = Number(inv.amountDuePkr ?? inv.totalPkr ?? order.totalPkr ?? cart.totals.net);
+            const due = Number(inv.amountDuePkr ?? 0);
             if (due > 0 && inv.id) {
-              // Live API may still create Credit invoices until backend redeploy —
-              // settle with a cash collection so AR does not stay open.
-              await createPharmacyCollection({
+              void createPharmacyCollection({
                 branchCode: branch.code,
                 tradeCustomerId: customer.id,
-                invoiceId: inv.id,
+                invoiceId: String(inv.id),
                 amountPkr: due,
                 paymentMethod: "Cash",
                 notes: `Cash sale ${order.orderNumber ?? ""}`,
+              }).catch(() => {
+                /* best-effort */
               });
             }
             const session = cashSessionQuery.data;
             if (session?.id) {
-              try {
-                await recordCashMovement({
-                  branchCode: branch.code,
-                  sessionId: session.id,
-                  type: "paid_in",
-                  amountPkr: Number(order.totalPkr ?? billNet),
-                  reason: `Cash sale ${order.orderNumber ?? inv.invoiceNumber ?? ""}`,
-                });
-              } catch {
+              void recordCashMovement({
+                branchCode: branch.code,
+                sessionId: session.id,
+                type: "paid_in",
+                amountPkr: Number(order.totalPkr ?? billNet),
+                reason: `Cash sale ${order.orderNumber ?? inv.invoiceNumber ?? ""}`,
+              }).catch(() => {
                 /* drawer pay-in best-effort */
-              }
+              });
             }
-            noticeMsg = `Cash sale ${order.orderNumber ?? "order"} invoiced${
+            noticeMsg = `Paid ${order.orderNumber ?? "order"}${
               inv.invoiceNumber ? ` · ${inv.invoiceNumber}` : ""
-            } · ${formatPkr(Number(order.totalPkr ?? billNet))}`;
+            } · ${settleMethod} ${formatPkr(Number(order.totalPkr ?? billNet))}${
+              payDetail && payDetail.discountPkr > 0
+                ? ` · disc ${formatPkr(payDetail.discountPkr)}`
+                : ""
+            }${
+              payDetail && payDetail.changePkr > 0 ? ` · change ${formatPkr(payDetail.changePkr)}` : ""
+            }${
+              payDetail?.bank
+                ? ` · ${payDetail.bank.bankName} #${payDetail.bank.slipNo}`
+                : payDetail?.card
+                  ? ` · ${payDetail.card.cardType} ****${payDetail.card.last4}`
+                  : ""
+            } · status Paid`;
           } catch (cashErr) {
-            noticeMsg = `Booked ${order.orderNumber ?? "order"} — cash finalize failed: ${
+            noticeMsg = `Booked ${order.orderNumber ?? "order"} — pay failed: ${
               cashErr instanceof Error ? cashErr.message : "error"
             }`;
           }
         }
 
         setNotice(noticeMsg);
+        setPayModal(null);
         if (andPrint) {
           try {
             const salesmanName =
@@ -827,54 +1047,22 @@ export function DistributionOrdersPage(): JSX.Element {
             const wh = ((warehouses.data ?? []) as { id: string; name?: string; code?: string }[]).find(
               (w) => w.id === warehouseId,
             );
-            // Prefer server detail when available (full lines + meta after cash pipeline).
-            if (order.id) {
-              try {
-                const detail = await fetchPharmacyDistOrder(order.id);
-                await printDistOrderReceipt(
-                  {
-                    ...detail,
-                    invoiceNumber: printedInvoiceNumber ?? detail.invoiceNumber,
-                    paymentMethod: detail.paymentMethod ?? paymentMethod,
-                  },
-                  { branchName: branch.name || branch.code, branchCode: branch.code },
-                );
-              } catch {
-                await printDistBookingSlip({
-                  branchName: branch.name || branch.code,
-                  branchCode: branch.code,
-                  orderNumber: order.orderNumber ?? "BOOKING",
-                  customerName: customer.name,
-                  customerCode: customer.code ?? undefined,
-                  customerPhone: customer.phone ?? undefined,
-                  lines: cartLinesForPrint(cart.lines),
-                  totalPkr: order.totalPkr ?? billNet,
-                  modeLabel: paymentMethod === "Cash" ? "Cash sale" : "Credit booking",
-                  invoiceNumber: printedInvoiceNumber,
-                  salesmanName: salesmanName || undefined,
-                  warehouseName: wh?.name,
-                  warehouseCode: wh?.code,
-                  paymentMethod,
-                });
-              }
-            } else {
-              await printDistBookingSlip({
-                branchName: branch.name || branch.code,
-                branchCode: branch.code,
-                orderNumber: order.orderNumber ?? "BOOKING",
-                customerName: customer.name,
-                customerCode: customer.code ?? undefined,
-                customerPhone: customer.phone ?? undefined,
-                lines: cartLinesForPrint(cart.lines),
-                totalPkr: order.totalPkr ?? billNet,
-                modeLabel: paymentMethod === "Cash" ? "Cash sale" : "Credit booking",
-                invoiceNumber: printedInvoiceNumber,
-                salesmanName: salesmanName || undefined,
-                warehouseName: wh?.name,
-                warehouseCode: wh?.code,
-                paymentMethod,
-              });
-            }
+            await printDistBookingSlip({
+              branchName: branch.name || branch.code,
+              branchCode: branch.code,
+              orderNumber: order.orderNumber ?? "BOOKING",
+              customerName: customer.name,
+              customerCode: customer.code ?? undefined,
+              customerPhone: customer.phone ?? undefined,
+              lines: cartLinesForPrint(cart.lines),
+              totalPkr: order.totalPkr ?? billNet,
+              modeLabel: forcePay ? "Cash sale" : "Booking",
+              invoiceNumber: printedInvoiceNumber,
+              salesmanName: salesmanName || undefined,
+              warehouseName: wh?.name,
+              warehouseCode: wh?.code,
+              paymentMethod: receiptPaymentMethod,
+            });
             setNotice(`${noticeMsg} — print dialog opened`);
           } catch (printErr) {
             setError(printErr instanceof Error ? printErr.message : "Print failed — sale is booked");
@@ -884,7 +1072,7 @@ export function DistributionOrdersPage(): JSX.Element {
         setCreditOverride(false);
         setCreditOverrideReason("");
         localStorage.removeItem(HOLD_KEY);
-        invalidate();
+        void invalidate();
         void cashSessionQuery.refetch();
       } catch (err) {
         if (shouldSaveSaleOffline(err)) {
@@ -939,7 +1127,7 @@ export function DistributionOrdersPage(): JSX.Element {
       if (data.customer) setCustomer(data.customer);
       if (data.warehouseId) setWarehouseId(data.warehouseId);
       if (data.salesmanEmployeeId) setSalesmanEmployeeId(data.salesmanEmployeeId);
-      if (data.cart?.length) cart.replaceAll(data.cart);
+      if (data.cart?.length) cart.replaceAll(data.cart.map((l) => normalizeCartLine(l)));
       setCustomerFocused(false);
       setWorkspace("sell");
       setNotice("Local hold restored");
@@ -967,16 +1155,19 @@ export function DistributionOrdersPage(): JSX.Element {
       if (order.warehouseId) setWarehouseId(order.warehouseId);
       if (order.lines?.length) {
         cart.replaceAll(
-          order.lines.map((l) => ({
-            key: `${l.medicineId}-${crypto.randomUUID().slice(0, 8)}`,
-            medicineId: l.medicineId,
-            name: l.medicineId,
-            qty: l.quantity,
-            freeQty: l.freeQty ?? 0,
-            unitPricePkr: l.unitPricePkr ?? 0,
-            discountPkr: 0,
-            taxPkr: 0,
-          })),
+          order.lines.map((l) =>
+            normalizeCartLine({
+              medicineId: l.medicineId,
+              name: l.medicineId,
+              qty: l.quantity,
+              freeQty: l.freeQty ?? 0,
+              unitPricePkr: l.unitPricePkr ?? 0,
+              stripPricePkr: l.unitPricePkr ?? 0,
+              saleUnit: "pata",
+              discountPkr: 0,
+              taxPkr: 0,
+            }),
+          ),
         );
       }
       setWorkspace("sell");
@@ -1000,7 +1191,11 @@ export function DistributionOrdersPage(): JSX.Element {
     },
     onHold: () => void holdSale(),
     onBook: () => void bookOrder(false),
-    onBookAndPrint: () => void bookOrder(true),
+    onBookAndPrint: () => void bookOrder({ print: true }),
+    onBookAndPay: () => {
+      if (!customer || cart.lines.length === 0 || booking) return;
+      setPayModal({ source: "cart" });
+    },
     onNewSale: () => newSale(),
     onEscape: () => {
       if (customerFocused) {
@@ -1059,6 +1254,92 @@ export function DistributionOrdersPage(): JSX.Element {
       })
       .catch((err: Error) => setError(err.message));
 
+  async function payExistingOrder(
+    order: {
+      id: string;
+      orderNumber?: string;
+      status?: string;
+      totalPkr?: number;
+      tradeCustomerId?: string;
+      amountDuePkr?: number;
+      invoiceId?: string;
+    },
+    payDetail?: DistPayConfirmPayload,
+  ) {
+    if (!branch?.code) return;
+    const status = String(order.status ?? "").toLowerCase();
+    const settleMethod = payDetail?.paymentMethod ?? "Cash";
+
+    if (status === "invoiced") {
+      let invoiceId = order.invoiceId ? String(order.invoiceId) : "";
+      let tradeCustomerId = order.tradeCustomerId ? String(order.tradeCustomerId) : "";
+      let due = Number(order.amountDuePkr ?? 0);
+      if (!invoiceId || due <= 0 || !tradeCustomerId) {
+        const detail = (await fetchPharmacyDistOrder(order.id)) as Record<string, unknown>;
+        invoiceId = String(detail.invoiceId ?? invoiceId);
+        tradeCustomerId = String(detail.tradeCustomerId ?? tradeCustomerId);
+        due = Number(detail.amountDuePkr ?? order.totalPkr ?? due);
+      }
+      if (!invoiceId || !tradeCustomerId) {
+        throw new Error("Invoice not found for this order");
+      }
+      if (due <= 0) {
+        setNotice(`${order.orderNumber ?? "Order"} already paid`);
+        void invalidate();
+        return;
+      }
+      await createPharmacyCollection({
+        branchCode: branch.code,
+        tradeCustomerId,
+        invoiceId,
+        amountPkr: payDetail?.amountPaid ?? due,
+        paymentMethod: settleMethod,
+        notes:
+          payDetail?.notes ??
+          `Pipeline pay ${order.orderNumber ?? ""}${
+            payDetail && payDetail.changePkr > 0 ? ` · change ${payDetail.changePkr}` : ""
+          }`,
+      });
+      setNotice(
+        `Paid ${order.orderNumber ?? "order"} · ${settleMethod} ${formatPkr(payDetail?.amountPaid ?? due)}${
+          payDetail && payDetail.changePkr > 0 ? ` · change ${formatPkr(payDetail.changePkr)}` : ""
+        }`,
+      );
+      return;
+    }
+
+    const inv = await cashSettlePharmacyDistOrder(order.id);
+    const due = Number(inv.amountDuePkr ?? 0);
+    const tradeCustomerId = order.tradeCustomerId ? String(order.tradeCustomerId) : "";
+    if (due > 0 && inv.id && tradeCustomerId) {
+      await createPharmacyCollection({
+        branchCode: branch.code,
+        tradeCustomerId,
+        invoiceId: String(inv.id),
+        amountPkr: due,
+        paymentMethod: settleMethod,
+        notes: payDetail?.notes ?? `Pipeline pay ${order.orderNumber ?? ""}`,
+      });
+    }
+    const session = cashSessionQuery.data;
+    if (session?.id) {
+      void recordCashMovement({
+        branchCode: branch.code,
+        sessionId: session.id,
+        type: "paid_in",
+        amountPkr: Number(order.totalPkr ?? inv.totalPkr ?? 0),
+        reason: `Pay ${settleMethod} ${order.orderNumber ?? inv.invoiceNumber ?? ""}`,
+      }).catch(() => {
+        /* best-effort */
+      });
+    }
+    setNotice(
+      `Paid ${order.orderNumber ?? "order"}${inv.invoiceNumber ? ` · ${inv.invoiceNumber}` : ""} · ${settleMethod}${
+        payDetail && payDetail.changePkr > 0 ? ` · change ${formatPkr(payDetail.changePkr)}` : ""
+      } · status Paid`,
+    );
+  }
+
   async function printExisting(order: {
     id: string;
     orderNumber: string;
@@ -1093,7 +1374,7 @@ export function DistributionOrdersPage(): JSX.Element {
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <h1 className="text-lg font-semibold text-slate-900 dark:text-white">Sale Window</h1>
             <span className="text-[11px] text-slate-500">
-              F2 customer · F4 product · F8 hold · F9 book · F7 orders
+              F2 customer · F4 product · F8 hold · F9 book · F11 pay · F7 orders
             </span>
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
@@ -1121,7 +1402,17 @@ export function DistributionOrdersPage(): JSX.Element {
                   setWarehouseId(next);
                   for (const line of cart.lines) {
                     window.setTimeout(() => {
-                      void enrichLine(line.key, line.medicineId, line.qty, line.name, line.sku, line.freeQty);
+                      void enrichLine(
+                        line.key,
+                        line.medicineId,
+                        line.qty,
+                        line.name,
+                        line.sku,
+                        line.freeQty,
+                        line.saleUnit ?? "pata",
+                        line.tabletsPerStrip,
+                        line.stripsPerBox,
+                      );
                     }, 0);
                   }
                 }}
@@ -1237,10 +1528,21 @@ export function DistributionOrdersPage(): JSX.Element {
             {booking ? "Booking…" : "Book"}
           </DistButton>
           <DistButton
+            className="!py-1 text-xs"
+            disabled={!customer || cart.lines.length === 0 || booking}
+            title="Book, invoice and collect cash now"
+            onClick={() => {
+              if (!customer || cart.lines.length === 0 || booking) return;
+              setPayModal({ source: "cart" });
+            }}
+          >
+            Book&Pay
+          </DistButton>
+          <DistButton
             variant="secondary"
             className="!py-1 text-xs"
             disabled={!customer || cart.lines.length === 0 || booking || creditBlocked}
-            onClick={() => void bookOrder(true)}
+            onClick={() => void bookOrder({ print: true })}
           >
             Book&Print
           </DistButton>
@@ -1404,7 +1706,7 @@ export function DistributionOrdersPage(): JSX.Element {
       ) : null}
 
       {workspace === "sell" && customer ? (
-      <div className="grid min-h-0 flex-1 gap-2 overflow-hidden lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+      <div className="grid min-h-0 flex-1 gap-2 overflow-hidden lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/40">
           <div className="shrink-0 space-y-2 border-b border-slate-200 p-2 dark:border-slate-800">
             <div className="flex flex-wrap items-center gap-2">
@@ -1527,6 +1829,29 @@ export function DistributionOrdersPage(): JSX.Element {
                   }
                 }}
               />
+              <div
+                className="inline-flex shrink-0 rounded-md border border-slate-300 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-950"
+                role="group"
+                aria-label="Sale unit"
+                title="Add as Goli / Pata / Pack"
+              >
+                {DIST_SALE_UNITS.map((unit) => (
+                  <button
+                    key={unit}
+                    type="button"
+                    title={distSaleUnitHint(unit)}
+                    aria-pressed={defaultSaleUnit === unit}
+                    onClick={() => persistDefaultSaleUnit(unit)}
+                    className={`rounded px-2 py-1 text-[11px] font-semibold transition ${
+                      defaultSaleUnit === unit
+                        ? "bg-cyan-600 text-white"
+                        : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+                    }`}
+                  >
+                    {distSaleUnitLabel(unit)}
+                  </button>
+                ))}
+              </div>
               <div
                 className="inline-flex shrink-0 rounded-md border border-slate-300 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-950"
                 role="group"
@@ -1729,11 +2054,14 @@ export function DistributionOrdersPage(): JSX.Element {
           </div>
         </section>
 
-        {/* Right: cart */}
-        <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/40">
-          <div className="flex shrink-0 items-start justify-between gap-2 border-b border-slate-200 px-2.5 py-2 dark:border-slate-800">
+        {/* Right: cart — scrolls when totals/actions exceed viewport */}
+        <aside className="flex min-h-0 flex-col overflow-y-auto overscroll-contain rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/40">
+          <div className="sticky top-0 z-10 flex shrink-0 items-start justify-between gap-2 border-b border-slate-200 bg-white px-2.5 py-2 dark:border-slate-800 dark:bg-slate-950">
             <div className="min-w-0">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Cart</div>
+              <div className="truncate text-[10px] text-slate-500">
+                Add as {distSaleUnitLabel(defaultSaleUnit)} · change per line
+              </div>
               <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">
                 {customer?.name ?? "No customer"}
               </div>
@@ -1793,8 +2121,10 @@ export function DistributionOrdersPage(): JSX.Element {
             </div>
           </div>
           <div
-            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 ${
-              cartLayout === "grid" ? "grid grid-cols-1 gap-1.5 content-start sm:grid-cols-2" : "space-y-1.5"
+            className={`shrink-0 p-2 ${
+              cartLayout === "grid"
+                ? "grid grid-cols-2 gap-1.5 content-start"
+                : "space-y-1.5"
             }`}
           >
             {cart.lines.length === 0 ? (
@@ -1803,6 +2133,8 @@ export function DistributionOrdersPage(): JSX.Element {
               cart.lines.map((l) => {
                 const batch = formatBatchSummary(l);
                 const selected = cart.selectedKey === l.key;
+                const saleUnit = l.saleUnit ?? "pata";
+                const strip = l.stripPricePkr > 0 ? l.stripPricePkr : l.unitPricePkr;
                 return (
                   <div
                     key={l.key}
@@ -1812,7 +2144,7 @@ export function DistributionOrdersPage(): JSX.Element {
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") cart.setSelectedKey(l.key);
                     }}
-                    className={`rounded-md border p-2 ${
+                    className={`min-w-0 rounded-md border p-2 ${
                       selected
                         ? "border-cyan-500 bg-cyan-50/60 dark:border-cyan-600 dark:bg-cyan-950/20"
                         : "border-slate-200 dark:border-slate-700"
@@ -1837,7 +2169,7 @@ export function DistributionOrdersPage(): JSX.Element {
                             .join(" · ") || null}
                         </div>
                         {(() => {
-                          const br = medicinePackPrices(l.unitPricePkr, l.tabletsPerStrip, l.stripsPerBox);
+                          const br = medicinePackPrices(strip, l.tabletsPerStrip, l.stripsPerBox);
                           return (
                             <div className="mt-0.5 text-[10px] tabular-nums text-slate-500">
                               Pata {formatPkr(br.pataPkr)} · Goli {formatPkr(br.goliPkr)} · Pack{" "}
@@ -1856,6 +2188,29 @@ export function DistributionOrdersPage(): JSX.Element {
                       >
                         Remove
                       </button>
+                    </div>
+                    <div
+                      className="mt-1.5 inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-900/60"
+                      role="group"
+                      aria-label="Line sale unit"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {DIST_SALE_UNITS.map((unit) => (
+                        <button
+                          key={unit}
+                          type="button"
+                          title={distSaleUnitHint(unit, l.tabletsPerStrip, l.stripsPerBox)}
+                          aria-pressed={saleUnit === unit}
+                          onClick={() => changeLineSaleUnit(l, unit)}
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                            saleUnit === unit
+                              ? "bg-cyan-600 text-white"
+                              : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+                          }`}
+                        >
+                          {distSaleUnitLabel(unit)}
+                        </button>
+                      ))}
                     </div>
                     {batch ? (
                       <div className="mt-0.5 text-[10px] leading-snug text-slate-500">{batch}</div>
@@ -1907,7 +2262,9 @@ export function DistributionOrdersPage(): JSX.Element {
                         >
                           +
                         </button>
-                        <span className="text-[10px] text-slate-400">@ {formatPkr(l.unitPricePkr)}</span>
+                        <span className="text-[10px] text-slate-400">
+                          {distSaleUnitLabel(saleUnit)} @ {formatPkr(l.unitPricePkr)}
+                        </span>
                       </div>
                       <span className="text-sm tabular-nums font-medium">
                         {formatPkr(cart.lineNet(l))}
@@ -1918,7 +2275,7 @@ export function DistributionOrdersPage(): JSX.Element {
               })
             )}
           </div>
-          <div className="shrink-0 space-y-1 border-t border-slate-200 p-2.5 text-sm dark:border-slate-800">
+          <div className="shrink-0 space-y-1 border-t border-slate-200 bg-white p-2.5 text-sm dark:border-slate-800 dark:bg-slate-950">
             <div className="mb-1.5 rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5 text-[10px] leading-snug text-slate-600 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-300">
               POS rates: service {posSettings.servicePct}% · default tax {posSettings.taxPct}% · cash{" "}
               {posSettings.cashTaxPct}% · card {posSettings.cardTaxPct}%
@@ -1963,10 +2320,15 @@ export function DistributionOrdersPage(): JSX.Element {
                 <span className="tabular-nums">{formatPkr(projectedOutstanding)}</span>
               </div>
             ) : null}
-            {customer && paymentMethod === "Cash" ? (
-              <div className="rounded-md bg-emerald-50 px-2 py-1.5 text-[11px] font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
-                Cash sale · service {billServicePct}% · tax {billTaxPct}% · total {formatPkr(billNet)} · paid at
-                invoice
+            {customer ? (
+              <div className="rounded-md bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600 dark:bg-slate-900/50 dark:text-slate-300">
+                <span className="font-medium text-slate-800 dark:text-slate-100">Book</span> = order only ·{" "}
+                <span className="font-medium text-slate-800 dark:text-slate-100">Book & Print</span> = slip ·{" "}
+                <span className="font-medium text-emerald-700 dark:text-emerald-300">Book & Pay</span> = payment
+                popup → Paid
+                {paymentMethod === "Cash"
+                  ? ` · service ${billServicePct}% · tax ${billTaxPct}% · ${formatPkr(billNet)}`
+                  : ""}
               </div>
             ) : null}
             {paymentMethod === "Credit" && creditRisk ? (
@@ -2000,10 +2362,21 @@ export function DistributionOrdersPage(): JSX.Element {
               {booking ? "Booking…" : "Book (F9)"}
             </DistButton>
             <DistButton
+              className="w-full !py-2"
+              disabled={!customer || cart.lines.length === 0 || booking}
+              title="Invoice and collect cash payment now"
+              onClick={() => {
+                if (!customer || cart.lines.length === 0 || booking) return;
+                setPayModal({ source: "cart" });
+              }}
+            >
+              {booking ? "Paying…" : "Book & Pay (F11)"}
+            </DistButton>
+            <DistButton
               variant="secondary"
               className="w-full !py-1.5"
               disabled={!customer || cart.lines.length === 0 || booking || creditBlocked}
-              onClick={() => void bookOrder(true)}
+              onClick={() => void bookOrder({ print: true })}
             >
               Book & Print (F10)
             </DistButton>
@@ -2098,7 +2471,7 @@ export function DistributionOrdersPage(): JSX.Element {
             <div>
               <div className="text-sm font-semibold">Orders pipeline</div>
               <div className="text-[11px] text-slate-500">
-                Approve · reserve · invoice · print
+                Approve · reserve · invoice · print · pay
                 {saleUi.showOrdersPayment ? " · paid status" : ""}
                 {saleUi.showOrdersHistory ? " · history" : ""}
               </div>
@@ -2186,13 +2559,33 @@ export function DistributionOrdersPage(): JSX.Element {
                   <DistStatusBadge status={o.status} />
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {(NEXT_ACTIONS[o.status] ?? []).map((a) => (
+                  {(NEXT_ACTIONS[o.status] ?? [])
+                    .filter((a) => (a.kind === "pay" ? !pay.isPaid : true))
+                    .map((a) => (
                     <DistButton
                       key={a.label}
-                      variant="secondary"
+                      variant={a.kind === "pay" ? "primary" : "secondary"}
                       className="!py-1 text-xs"
                       onClick={() => {
-                        if (a.kind === "approve") act(approvePharmacyDistOrder(o.id));
+                        if (a.kind === "pay") {
+                          setPayModal({
+                            source: "order",
+                            order: {
+                              id: o.id,
+                              orderNumber: o.orderNumber,
+                              status: o.status,
+                              totalPkr: Number(o.totalPkr ?? 0),
+                              tradeCustomerId: o.tradeCustomerId
+                                ? String(o.tradeCustomerId)
+                                : undefined,
+                              amountDuePkr:
+                                row.amountDuePkr != null ? Number(row.amountDuePkr) : undefined,
+                              invoiceId: row.invoiceId != null ? String(row.invoiceId) : undefined,
+                              customerName:
+                                row.customerName != null ? String(row.customerName) : undefined,
+                            },
+                          });
+                        } else if (a.kind === "approve") act(approvePharmacyDistOrder(o.id));
                         else if (a.kind === "invoice") act(invoicePharmacyDistOrder(o.id));
                         else if (a.kind === "print") void printExisting(o);
                         else if (a.status) act(advancePharmacyDistOrder(o.id, a.status));
@@ -2210,6 +2603,50 @@ export function DistributionOrdersPage(): JSX.Element {
         </section>
       ) : null}
 
+      {payModal ? (
+        <DistPayModal
+          title={payModal.source === "cart" ? "Book & Pay" : "Collect payment"}
+          customerName={
+            payModal.source === "cart"
+              ? customer?.name
+              : payModal.order.customerName ?? customer?.name
+          }
+          orderNumber={payModal.source === "order" ? payModal.order.orderNumber : undefined}
+          subtotal={
+            payModal.source === "cart"
+              ? cart.totals.subtotal
+              : Number(payModal.order.totalPkr ?? 0)
+          }
+          discount={payModal.source === "cart" ? cart.totals.discount : 0}
+          freeUnits={payModal.source === "cart" ? cart.totals.freeUnits : 0}
+          servicePct={payModal.source === "cart" ? billServicePct : 0}
+          servicePkr={payModal.source === "cart" ? billServicePkr : 0}
+          taxPct={payModal.source === "cart" ? billTaxPct : 0}
+          taxPkr={payModal.source === "cart" ? billTaxPkr : 0}
+          total={
+            payModal.source === "cart" ? billNet : Number(payModal.order.amountDuePkr ?? payModal.order.totalPkr ?? 0)
+          }
+          settings={saleUi}
+          isSubmitting={booking}
+          onClose={() => {
+            if (!booking) setPayModal(null);
+          }}
+          onConfirm={(payload) => {
+            if (payModal.source === "cart") {
+              void bookOrder({ pay: true, payDetail: payload });
+              return;
+            }
+            const order = payModal.order;
+            setBooking(true);
+            act(
+              payExistingOrder(order, payload).finally(() => {
+                setBooking(false);
+                setPayModal(null);
+              }),
+            );
+          }}
+        />
+      ) : null}
       {payInOpen ? (
         <PosPayInModal
           onClose={() => setPayInOpen(false)}

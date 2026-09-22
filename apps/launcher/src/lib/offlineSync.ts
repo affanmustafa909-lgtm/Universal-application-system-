@@ -242,7 +242,14 @@ export async function pullFromCloud(accessToken: string, organizationId: string)
 /** Auto-sync only in cloud mode (local mode keeps data on device until manual sync). */
 export async function autoSyncIfNeeded(accessToken: string): Promise<void> {
   if (!shouldAutoSyncToCloud()) return;
-  await flushAllOfflineData(accessToken);
+  try {
+    await flushAllOfflineData(accessToken);
+    useDataModeStore.getState().setLastSyncError(null);
+    useDataModeStore.getState().markSynced();
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Sync failed";
+    useDataModeStore.getState().setLastSyncError(message);
+  }
 }
 
 export async function countPendingOutbox(): Promise<number> {

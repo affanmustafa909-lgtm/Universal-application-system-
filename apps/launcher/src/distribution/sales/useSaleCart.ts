@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type { AvailabilityAllocation } from "../../pharmacy/api/pharmacy-inventory";
+import type { DistSaleUnit } from "../lib/medicinePackPricing";
 
 export type SaleCartLine = {
   /** Stable row key for React lists (allows same medicine twice if allocations differ). */
@@ -9,7 +10,12 @@ export type SaleCartLine = {
   sku?: string | null;
   qty: number;
   freeQty: number;
+  /** Price per `saleUnit` (goli / pata / pack). */
   unitPricePkr: number;
+  /** Catalog / quote strip (pata) price — source of truth for pack math. */
+  stripPricePkr: number;
+  /** How the user is selling this line. Default pata. */
+  saleUnit: DistSaleUnit;
   priceSource?: string | null;
   discountPkr: number;
   taxPkr: number;
@@ -32,6 +38,8 @@ export type SaleCartAddInput = {
   qty?: number;
   freeQty?: number;
   unitPricePkr: number;
+  stripPricePkr?: number;
+  saleUnit?: DistSaleUnit;
   priceSource?: string | null;
   discountPkr?: number;
   taxPkr?: number;
@@ -65,6 +73,8 @@ function allocationsEqual(
 
 function canMerge(existing: SaleCartLine, incoming: SaleCartAddInput): boolean {
   if (existing.medicineId !== incoming.medicineId) return false;
+  const incomingUnit = incoming.saleUnit ?? "pata";
+  if (existing.saleUnit !== incomingUnit) return false;
   if (Math.round(existing.unitPricePkr) !== Math.round(incoming.unitPricePkr)) return false;
   if (incoming.allocations && !allocationsEqual(existing.allocations, incoming.allocations)) {
     return false;
@@ -82,6 +92,8 @@ export function useSaleCart() {
 
   const add = useCallback((input: SaleCartAddInput) => {
     const qty = Math.max(1, Math.round(input.qty ?? 1));
+    const saleUnit = input.saleUnit ?? "pata";
+    const stripPricePkr = Math.max(0, Math.round(input.stripPricePkr ?? input.unitPricePkr));
     let selectKey: string | null = null;
     setLines((prev) => {
       const mergeIdx = prev.findIndex((l) => canMerge(l, input));
@@ -94,6 +106,8 @@ export function useSaleCart() {
           qty: cur.qty + qty,
           freeQty: cur.freeQty + Math.max(0, Math.round(input.freeQty ?? 0)),
           unitPricePkr: input.unitPricePkr,
+          stripPricePkr,
+          saleUnit,
           priceSource: input.priceSource ?? cur.priceSource,
           discountPkr: cur.discountPkr + Math.max(0, Number(input.discountPkr ?? 0)),
           taxPkr: cur.taxPkr + Math.max(0, Number(input.taxPkr ?? 0)),
@@ -120,6 +134,8 @@ export function useSaleCart() {
           qty,
           freeQty: Math.max(0, Math.round(input.freeQty ?? 0)),
           unitPricePkr: input.unitPricePkr,
+          stripPricePkr,
+          saleUnit,
           priceSource: input.priceSource ?? null,
           discountPkr: Math.max(0, Number(input.discountPkr ?? 0)),
           taxPkr: Math.max(0, Number(input.taxPkr ?? 0)),

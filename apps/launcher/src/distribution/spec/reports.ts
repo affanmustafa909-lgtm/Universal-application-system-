@@ -15,18 +15,26 @@ export type DistReportDef = {
 /** Catalog — all reports run against live API queries. */
 export const DISTRIBUTION_REPORTS: DistReportDef[] = [
   // Sales
+  {
+    id: "sales-report",
+    title: "Sales report",
+    category: "Sales",
+    live: true,
+    description: "Full sales lines — date, customer, salesman, company, product, qty, value",
+  },
   { id: "daily-sales", title: "Daily sales", category: "Sales", live: true, description: "Orders and totals by date" },
   { id: "city-sales", title: "City-wise sales", category: "Sales", live: true, description: "Sales rolled up by city" },
   { id: "area-sales", title: "Area-wise sales", category: "Sales", live: true, description: "Sales rolled up by area" },
   { id: "status-pipeline", title: "Order status pipeline", category: "Sales", live: true, description: "Count of orders by status" },
   { id: "scheme-utilization", title: "Scheme utilization", category: "Sales", live: true, description: "Schemes vs free qty given on orders" },
   { id: "salesman-sales", title: "Salesman-wise sales", category: "Sales", live: true, description: "Orders and sales by salesman" },
+  { id: "customer-sales", title: "Customer-wise sales", category: "Sales", live: true, description: "Orders and sales by trade customer" },
   { id: "sku-sales", title: "SKU / product sales", category: "Sales", live: true, description: "Qty and value by SKU" },
 
   // Recovery
   { id: "outstanding-aging", title: "Outstanding / aging", category: "Recovery", live: true, description: "Trade customers with balance due" },
   { id: "collections-summary", title: "Collections summary", category: "Recovery", live: true, description: "Collections by date" },
-  { id: "customer-ledger", title: "Customer ledger", category: "Recovery", live: true, description: "Outstanding and credit by customer", to: "/pops/distribution/finance/customer-ledger" },
+  { id: "customer-ledger", title: "Customer ledger", category: "Recovery", live: true, description: "Outstanding and credit by customer" },
   { id: "credit-limit-breach", title: "Credit limit alerts", category: "Recovery", live: true, description: "Customers over credit limit" },
 
   // Stock

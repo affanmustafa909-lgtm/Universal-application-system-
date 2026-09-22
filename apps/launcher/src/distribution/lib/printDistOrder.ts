@@ -8,6 +8,10 @@ export type DistPrintLine = {
   freeQty?: number;
   /** Optional batch / SKU note under the item name */
   note?: string;
+  /** Pack size e.g. 10 goli × 10 pata */
+  pack?: string;
+  batch?: string;
+  expiry?: string;
 };
 
 function escapeHtml(value: unknown): string {
@@ -25,6 +29,56 @@ function formatRs(n: number): string {
 function formatQty(n: number): string {
   const v = Number(n) || 0;
   return Number.isInteger(v) ? String(v) : v.toFixed(2);
+}
+
+const ONES = [
+  "",
+  "One",
+  "Two",
+  "Three",
+  "Four",
+  "Five",
+  "Six",
+  "Seven",
+  "Eight",
+  "Nine",
+  "Ten",
+  "Eleven",
+  "Twelve",
+  "Thirteen",
+  "Fourteen",
+  "Fifteen",
+  "Sixteen",
+  "Seventeen",
+  "Eighteen",
+  "Nineteen",
+];
+const TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+function twoDigits(n: number): string {
+  if (n < 20) return ONES[n] ?? "";
+  return `${TENS[Math.floor(n / 10)]}${n % 10 ? ` ${ONES[n % 10]}` : ""}`.trim();
+}
+
+function threeDigits(n: number): string {
+  if (n < 100) return twoDigits(n);
+  return `${ONES[Math.floor(n / 100)]} Hundred${n % 100 ? ` ${twoDigits(n % 100)}` : ""}`;
+}
+
+/** Pakistani numbering (thousand / lakh / crore) for invoice amount in words. */
+export function amountInWordsPkr(n: number): string {
+  const num = Math.round(Math.abs(Number(n) || 0));
+  if (num === 0) return "Zero Rupees Only";
+  const crore = Math.floor(num / 10_000_000);
+  const lakh = Math.floor((num % 10_000_000) / 100_000);
+  const thousand = Math.floor((num % 100_000) / 1_000);
+  const rest = num % 1_000;
+  const parts: string[] = [];
+  if (crore) parts.push(`${threeDigits(crore)} Crore`);
+  if (lakh) parts.push(`${threeDigits(lakh)} Lakh`);
+  if (thousand) parts.push(`${threeDigits(thousand)} Thousand`);
+  if (rest) parts.push(threeDigits(rest));
+  return `${parts.join(" ")} Rupees Only`;
 }
 
 /** Shared Dist wholesale document chrome (A4) — booking, invoice, PO, GRN, collection, reports. */
@@ -47,31 +101,31 @@ function buildDistDocumentHtml(opts: {
   taxPkr?: number;
   footerNote?: string;
 }): string {
-  const printedAt = new Date().toLocaleString();
-  const branchLine = [opts.branchName, opts.branchCode].filter(Boolean).join(" · ");
+  const printedAt = new Date().toLocaleString("en-PK");
+  const companyName = (opts.branchName || "Medical Distribution").trim();
+  const companySub = [opts.branchCode ? `Branch ${opts.branchCode}` : "", "Wholesale Medical Distribution"]
+    .filter(Boolean)
+    .join(" · ");
 
-  const metaRows = (opts.meta ?? [])
-    .filter((m) => m.value != null && String(m.value).trim() !== "")
-    .map(
-      (m) =>
-        `<div class="meta-cell"><span class="meta-label">${escapeHtml(m.label)}</span><span class="meta-value">${escapeHtml(m.value)}</span></div>`,
-    )
-    .join("");
+  const meta = (opts.meta ?? []).filter((m) => m.value != null && String(m.value).trim() !== "");
+  const renderMetaList = (rows: Array<{ label: string; value: string }>) =>
+    rows
+      .map(
+        (m) =>
+          `<tr><td class="k">${escapeHtml(m.label)}</td><td class="v">${escapeHtml(m.value)}</td></tr>`,
+      )
+      .join("");
 
   let bodyTable: string;
   if (opts.report) {
-    const head = opts.report.columns
-      .map((c) => `<th>${escapeHtml(c)}</th>`)
-      .join("");
+    const head = opts.report.columns.map((c) => `<th>${escapeHtml(c)}</th>`).join("");
     const rows = opts.report.rows
       .map(
         (r) =>
-          `<tr>${opts.report!.columns
-            .map((c) => `<td>${escapeHtml(r[c])}</td>`)
-            .join("")}</tr>`,
+          `<tr>${opts.report!.columns.map((c) => `<td>${escapeHtml(r[c])}</td>`).join("")}</tr>`,
       )
       .join("");
-    bodyTable = `<table class="lines">
+    bodyTable = `<table class="grid">
       <thead><tr>${head}</tr></thead>
       <tbody>${rows || `<tr><td colspan="${Math.max(1, opts.report.columns.length)}">No rows</td></tr>`}</tbody>
     </table>`;
@@ -80,31 +134,33 @@ function buildDistDocumentHtml(opts: {
     const lineRows = lines
       .map((l, i) => {
         const amount = (Number(l.qty) || 0) * (Number(l.unitPrice) || 0);
-        const free =
-          l.freeQty && l.freeQty > 0
-            ? `<div class="line-note">+ ${formatQty(l.freeQty)} free</div>`
-            : "";
-        const note = l.note ? `<div class="line-note">${escapeHtml(l.note)}</div>` : "";
+        const extra = [l.note, l.batch ? `Batch ${l.batch}` : "", l.expiry ? `Exp ${l.expiry}` : ""]
+          .filter((x) => x && String(x).trim())
+          .join(" · ");
         return `<tr>
-          <td class="num">${i + 1}</td>
-          <td>${escapeHtml(l.label)}${free}${note}</td>
-          <td class="num">${formatQty(l.qty)}</td>
-          <td class="num">${formatRs(l.unitPrice)}</td>
-          <td class="num">${formatRs(amount)}</td>
+          <td class="c">${i + 1}</td>
+          <td>${escapeHtml(l.label)}${extra ? `<div class="sub">${escapeHtml(extra)}</div>` : ""}</td>
+          <td class="c">${escapeHtml(l.pack || "—")}</td>
+          <td class="n">${formatQty(l.qty)}</td>
+          <td class="n">${l.freeQty && l.freeQty > 0 ? formatQty(l.freeQty) : "—"}</td>
+          <td class="n">${formatRs(l.unitPrice)}</td>
+          <td class="n">${formatRs(amount)}</td>
         </tr>`;
       })
       .join("");
-    bodyTable = `<table class="lines">
+    bodyTable = `<table class="grid">
       <thead>
         <tr>
-          <th class="num" style="width:2.5rem">#</th>
-          <th>Item</th>
-          <th class="num" style="width:4.5rem">Qty</th>
-          <th class="num" style="width:6.5rem">Rate</th>
-          <th class="num" style="width:7rem">Amount</th>
+          <th class="c" style="width:28px">Sr</th>
+          <th>Product</th>
+          <th class="c" style="width:72px">Pack</th>
+          <th class="n" style="width:52px">Qty</th>
+          <th class="n" style="width:52px">Bonus</th>
+          <th class="n" style="width:88px">Rate</th>
+          <th class="n" style="width:96px">Amount</th>
         </tr>
       </thead>
-      <tbody>${lineRows || `<tr><td colspan="5">No lines</td></tr>`}</tbody>
+      <tbody>${lineRows || `<tr><td colspan="7">No lines</td></tr>`}</tbody>
     </table>`;
   }
 
@@ -114,206 +170,105 @@ function buildDistDocumentHtml(opts: {
   const total = opts.totalPkr;
   const totalsBlock =
     total != null
-      ? `<div class="totals">
-          ${subtotal != null ? `<div class="tot-row"><span>Subtotal</span><span>${formatRs(subtotal)}</span></div>` : ""}
-          ${discount > 0 ? `<div class="tot-row"><span>Discount</span><span>− ${formatRs(discount)}</span></div>` : ""}
-          ${tax > 0 ? `<div class="tot-row"><span>Tax</span><span>${formatRs(tax)}</span></div>` : ""}
-          <div class="tot-row tot-grand"><span>Total</span><span>${formatRs(total)}</span></div>
+      ? `<div class="bottom">
+          <div class="words"><b>Amount in words:</b> ${escapeHtml(amountInWordsPkr(total))}</div>
+          <table class="totals">
+            ${subtotal != null ? `<tr><td>Gross Amount</td><td class="n">${formatRs(subtotal)}</td></tr>` : ""}
+            ${discount > 0 ? `<tr><td>Discount</td><td class="n">− ${formatRs(discount)}</td></tr>` : ""}
+            ${tax > 0 ? `<tr><td>Sales Tax</td><td class="n">${formatRs(tax)}</td></tr>` : ""}
+            <tr class="net"><td>Net Amount</td><td class="n">${formatRs(total)}</td></tr>
+          </table>
         </div>`
       : "";
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <title>${escapeHtml(opts.title)} ${escapeHtml(opts.documentNumber)}</title>
 <style>
-  :root { --ink:#0f172a; --muted:#64748b; --line:#cbd5e1; --head:#0e7490; --band:#ecfeff; }
+  @page { size: A4; margin: 10mm; }
   * { box-sizing: border-box; }
   body {
-    font-family: "Segoe UI", Calibri, Arial, sans-serif;
-    color: var(--ink);
+    font-family: Arial, Tahoma, sans-serif;
+    color: #000;
     margin: 0;
-    padding: 14mm 12mm;
-    font-size: 12px;
-    line-height: 1.35;
-  }
-  .sheet { max-width: 210mm; margin: 0 auto; }
-  .brand-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 16px;
-    border-bottom: 3px solid var(--head);
-    padding-bottom: 10px;
-    margin-bottom: 14px;
-  }
-  .brand-name {
-    font-size: 20px;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-    color: var(--head);
-    margin: 0;
-  }
-  .brand-sub { color: var(--muted); font-size: 11px; margin: 2px 0 0; }
-  .doc-badge {
-    text-align: right;
-    background: var(--band);
-    border: 1px solid #a5f3fc;
-    border-radius: 6px;
-    padding: 8px 12px;
-    min-width: 11rem;
-  }
-  .doc-badge .doc-title {
-    font-size: 13px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--head);
-    margin: 0;
-  }
-  .doc-badge .doc-no { font-size: 14px; font-weight: 700; margin: 4px 0 0; }
-  .party {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin-bottom: 12px;
-  }
-  .party-box {
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 10px 12px;
-    background: #f8fafc;
-  }
-  .party-box .lbl {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--muted);
-    margin: 0 0 4px;
-  }
-  .party-box .val { font-size: 14px; font-weight: 700; margin: 0; }
-  .meta-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-    gap: 8px;
-    margin-bottom: 14px;
-  }
-  .meta-cell {
-    border: 1px solid var(--line);
-    border-radius: 4px;
-    padding: 6px 8px;
-  }
-  .meta-label {
-    display: block;
-    font-size: 9px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--muted);
-  }
-  .meta-value { font-weight: 600; font-size: 12px; }
-  table.lines {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 4px;
-    font-size: 11.5px;
-  }
-  table.lines th {
-    background: var(--head);
-    color: #fff;
-    text-align: left;
-    padding: 7px 8px;
-    font-weight: 700;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-  table.lines th.num, table.lines td.num { text-align: right; }
-  table.lines td {
-    padding: 7px 8px;
-    border-bottom: 1px solid #e2e8f0;
-    vertical-align: top;
-  }
-  table.lines tbody tr:nth-child(even) td { background: #f8fafc; }
-  .line-note { font-size: 10px; color: var(--muted); margin-top: 2px; }
-  .totals {
-    margin-top: 12px;
-    margin-left: auto;
-    width: 14rem;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    overflow: hidden;
-  }
-  .tot-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 6px 10px;
-    font-size: 12px;
-  }
-  .tot-grand {
-    background: var(--head);
-    color: #fff;
-    font-weight: 800;
-    font-size: 14px;
-    padding: 8px 10px;
-  }
-  .signs {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 20px;
-    margin-top: 36px;
-  }
-  .sign {
-    border-top: 1px solid var(--ink);
-    padding-top: 6px;
+    padding: 8mm 8mm;
     font-size: 11px;
-    color: var(--muted);
-    text-align: center;
+    line-height: 1.3;
   }
-  .footer {
-    margin-top: 28px;
-    padding-top: 10px;
-    border-top: 1px dashed var(--line);
-    font-size: 10px;
-    color: var(--muted);
+  .sheet { max-width: 190mm; margin: 0 auto; }
+  .head { text-align: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 0; }
+  .co { font-size: 18px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; margin: 0; }
+  .co-sub { font-size: 10px; margin: 2px 0 0; }
+  .doc-bar {
     display: flex;
     justify-content: space-between;
-    gap: 12px;
+    align-items: center;
+    border: 1px solid #000;
+    border-top: none;
+    padding: 5px 8px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 13px;
   }
+  .doc-bar .no { font-size: 12px; letter-spacing: 0; font-weight: 700; }
+  table.info { width: 100%; border-collapse: collapse; margin-top: 0; }
+  table.info td { vertical-align: top; padding: 6px 8px; border: 1px solid #000; width: 50%; }
+  .who .lbl { font-size: 9px; font-weight: 700; text-transform: uppercase; }
+  .who .name { font-size: 13px; font-weight: 800; margin: 2px 0; }
+  .who .extra { white-space: pre-line; font-size: 10px; }
+  table.kv { width: 100%; border-collapse: collapse; }
+  table.kv td { border: none !important; padding: 1px 0; font-size: 10px; }
+  table.kv td.k { width: 38%; font-weight: 700; }
+  table.grid { width: 100%; border-collapse: collapse; margin-top: 0; }
+  table.grid th, table.grid td { border: 1px solid #000; padding: 4px 5px; vertical-align: top; }
+  table.grid th { background: #000; color: #fff; font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; }
+  table.grid td { font-size: 11px; }
+  table.grid .c { text-align: center; }
+  table.grid .n, table.totals .n { text-align: right; white-space: nowrap; }
+  table.grid tbody tr:nth-child(even) td { background: #f3f3f3; }
+  .sub { font-size: 9px; color: #333; margin-top: 1px; }
+  .bottom { display: flex; align-items: stretch; gap: 0; }
+  table.totals { width: 58mm; border-collapse: collapse; flex-shrink: 0; }
+  table.totals td { border: 1px solid #000; padding: 4px 6px; font-size: 11px; }
+  table.totals tr:first-child td { border-top: none; }
+  table.totals tr.net td { font-weight: 800; font-size: 12px; background: #000; color: #fff; }
+  .words { flex: 1; border: 1px solid #000; border-top: none; border-right: none; padding: 6px 8px; font-size: 10px; }
+  .signs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-top: 28px; }
+  .sign { border-top: 1px solid #000; padding-top: 4px; font-size: 10px; text-align: center; }
+  .foot { margin-top: 14px; border-top: 1px solid #000; padding-top: 4px; font-size: 9px; display: flex; justify-content: space-between; gap: 12px; }
   @media print {
-    body { padding: 8mm 10mm; }
+    body { padding: 0; }
     .sheet { max-width: none; }
   }
 </style></head><body>
   <div class="sheet">
-    <div class="brand-bar">
-      <div>
-        <p class="brand-name">Medical Distribution</p>
-        <p class="brand-sub">${escapeHtml(branchLine || "Wholesale ERP")}</p>
-      </div>
-      <div class="doc-badge">
-        <p class="doc-title">${escapeHtml(opts.title)}</p>
-        <p class="doc-no">${escapeHtml(opts.documentNumber)}</p>
-      </div>
+    <div class="head">
+      <p class="co">${escapeHtml(companyName)}</p>
+      <p class="co-sub">${escapeHtml(companySub)}</p>
+    </div>
+    <div class="doc-bar">
+      <span>${escapeHtml(opts.title)}</span>
+      <span class="no">No. ${escapeHtml(opts.documentNumber)}</span>
     </div>
 
-    <div class="party">
-      <div class="party-box">
-        <p class="lbl">${escapeHtml(opts.partyLabel)}</p>
-        <p class="val">${escapeHtml(opts.partyName || "—")}</p>
-        ${
-          opts.partyExtra
-            ? `<p class="brand-sub" style="margin-top:4px;white-space:pre-line">${escapeHtml(opts.partyExtra)}</p>`
-            : ""
-        }
-      </div>
-      <div class="party-box">
-        <p class="lbl">Branch</p>
-        <p class="val">${escapeHtml(opts.branchName || opts.branchCode || "—")}</p>
-        ${opts.branchCode && opts.branchName ? `<p class="brand-sub" style="margin-top:2px">${escapeHtml(opts.branchCode)}</p>` : ""}
-      </div>
-    </div>
-
-    ${metaRows ? `<div class="meta-grid">${metaRows}</div>` : ""}
+    <table class="info">
+      <tr>
+        <td class="who">
+          <div class="lbl">${escapeHtml(opts.partyLabel)}</div>
+          <div class="name">${escapeHtml(opts.partyName || "—")}</div>
+          ${opts.partyExtra ? `<div class="extra">${escapeHtml(opts.partyExtra)}</div>` : ""}
+        </td>
+        <td>
+          <table class="kv">
+            ${
+              meta.length
+                ? renderMetaList(meta)
+                : `<tr><td class="k">Branch</td><td class="v">${escapeHtml(opts.branchName || opts.branchCode || "—")}</td></tr>`
+            }
+          </table>
+        </td>
+      </tr>
+    </table>
 
     ${bodyTable}
     ${totalsBlock}
@@ -324,7 +279,7 @@ function buildDistDocumentHtml(opts: {
       <div class="sign">Received by</div>
     </div>
 
-    <div class="footer">
+    <div class="foot">
       <span>${escapeHtml(opts.footerNote || "Computer-generated distribution document")}</span>
       <span>Printed ${escapeHtml(printedAt)}</span>
     </div>
@@ -419,7 +374,6 @@ export async function printDistBookingSlip(opts: {
     partyName: opts.customerName,
     partyExtra: partyExtra || undefined,
     meta: [
-      { label: "Order #", value: opts.orderNumber },
       ...(opts.invoiceNumber ? [{ label: "Invoice", value: opts.invoiceNumber }] : []),
       { label: "Type", value: opts.modeLabel ?? "Booking" },
       ...(opts.paymentMethod ? [{ label: "Payment", value: opts.paymentMethod }] : []),
@@ -459,14 +413,18 @@ export async function printDistOrderReceipt(
     const tps = Number(l.tabletsPerStrip ?? 0) || 0;
     const spb = Number(l.stripsPerBox ?? 0) || 0;
     const pack =
-      tps > 1 || spb > 1 ? `${Math.max(1, tps)} goli × ${Math.max(1, spb)} pata` : "";
-    const unit = clean(l.unit);
-    const note = [sku, company, pack, unit].filter(Boolean).join(" · ") || undefined;
+      tps > 1 || spb > 1 ? `${Math.max(1, tps)}×${Math.max(1, spb)}` : clean(l.unit) || undefined;
+    const batch = clean(l.batchNumber) || clean(l.batch);
+    const expiry = clean(l.expiryDate) || clean(l.expiry);
+    const note = [sku, company].filter(Boolean).join(" · ") || undefined;
     return {
       label: name,
       qty: Number(l.quantity ?? 0),
       unitPrice: Number(l.unitPricePkr ?? 0),
       freeQty: Number(l.freeQuantity ?? 0) > 0 ? Number(l.freeQuantity) : undefined,
+      pack,
+      batch: batch || undefined,
+      expiry: expiry || undefined,
       note,
     };
   });

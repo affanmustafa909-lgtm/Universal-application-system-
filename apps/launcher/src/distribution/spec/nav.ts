@@ -14,6 +14,7 @@ export const distributionNavItems: PopsNavItem[] = [
       { path: "distribution/invoices", label: "Invoices" },
       { path: "distribution/wholesale-returns", label: "Sales Returns" },
       { path: "distribution/pricing", label: "Prices / Schemes" },
+      { path: "distribution/reports", label: "Sales Report" },
     ],
   },
   {
@@ -126,6 +127,7 @@ export const distributionNavItems: PopsNavItem[] = [
     label: "Reports",
     children: [
       { path: "distribution/reports", label: "Report Center" },
+      { path: "distribution/reports?mode=custom", label: "Custom Report Builder" },
       { path: "distribution/registers", label: "Registers" },
     ],
   },

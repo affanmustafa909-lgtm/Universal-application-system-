@@ -138,11 +138,14 @@ async function uploadFiles(release, files) {
   }
 }
 
-/** Keep every edition's latest-*.json on the GitHub "latest" release so /releases/latest/download works. */
-async function syncAllManifestsOntoLatest(latestRelease) {
-  if (!existsSync(updatesDir)) return;
+/** Keep published editions' latest-*.json on the GitHub "latest" release so /releases/latest/download works.
+ * Only syncs the editions we just published — never clobber other channels with stale local manifests.
+ */
+async function syncPublishedManifestsOntoLatest(latestRelease, editionIds) {
+  if (!existsSync(updatesDir) || !editionIds?.length) return;
+  const wanted = new Set(editionIds.map((e) => `latest-${e}.json`));
   const manifests = readdirSync(updatesDir)
-    .filter((n) => /^latest-(suite|restaurant|general-store|pharmacy|distribution)\.json$/.test(n))
+    .filter((n) => wanted.has(n))
     .map((n) => join(updatesDir, n));
   if (manifests.length === 0) return;
   const fresh = await api(
@@ -246,7 +249,10 @@ async function main() {
   if (lastRelease) {
     // Always sync onto whatever GitHub currently considers "latest".
     const latest = await fetchLatestRelease();
-    await syncAllManifestsOntoLatest(latest);
+    await syncPublishedManifestsOntoLatest(
+      latest,
+      ready.map((p) => p.edition),
+    );
   }
 
   console.log("[publish-desktop] Done.");

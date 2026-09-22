@@ -1,20 +1,50 @@
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+} from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
-/** Dense, professional Dist ERP chrome — cyan accent, low decoration. */
+/** Dense Dist ERP chrome — follows active system brand tokens. */
 export const distInputClass =
-  "w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100";
+  "w-full rounded-md border border-[color:var(--line)] bg-[var(--card,#fff)] px-2.5 py-1.5 text-sm text-[color:var(--ink)] placeholder:text-[color:var(--muted)] outline-none transition focus:border-[color:var(--brand)] focus:ring-1 focus:ring-[color:var(--brand)]/30 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100";
 
 export const distSelectClass = distInputClass;
 
+/** Native date field — brand accent on calendar indicator / focus. */
+export const distDateClass = [
+  distInputClass,
+  "accent-[color:var(--brand)] [color-scheme:light] dark:[color-scheme:dark]",
+  "[&::-webkit-calendar-picker-indicator]:cursor-pointer",
+  "[&::-webkit-calendar-picker-indicator]:opacity-70",
+  "[&::-webkit-calendar-picker-indicator]:hover:opacity-100",
+].join(" ");
+
 export const distBtnPrimaryClass =
-  "inline-flex items-center justify-center gap-1.5 rounded-md bg-cyan-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-1.5 rounded-md bg-[var(--brand)] px-3 py-1.5 text-sm font-semibold text-[color:var(--brand-fg,#fff)] shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50";
 
 export const distBtnSecondaryClass =
-  "inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800";
+  "inline-flex items-center justify-center gap-1.5 rounded-md border border-[color:var(--line)] bg-[var(--card,#fff)] px-3 py-1.5 text-sm font-medium text-[color:var(--ink)] transition hover:border-[color:var(--brand)] hover:bg-[var(--brand-cream)] disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800";
 
 export const distBtnGhostClass =
-  "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-800";
+  "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-[color:var(--muted)] transition hover:bg-[var(--brand-cream)] hover:text-[color:var(--ink)] disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-800";
+
+export const distChipClass =
+  "rounded-full border border-[color:var(--line)] bg-[var(--brand-cream)] px-2.5 py-0.5 text-[10px] font-semibold text-[color:var(--brand-dark,var(--ink))] transition hover:border-[color:var(--brand)] hover:bg-[var(--brand)] hover:text-[color:var(--brand-fg,#fff)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200";
+
+export const distChipActiveClass =
+  "rounded-full border border-[color:var(--brand)] bg-[var(--brand)] px-2.5 py-0.5 text-[10px] font-semibold text-[color:var(--brand-fg,#fff)] shadow-sm";
+
+export const distCheckClass =
+  "h-3.5 w-3.5 rounded border-[color:var(--line)] text-[color:var(--brand)] accent-[color:var(--brand)] focus:ring-[color:var(--brand)]/30";
+
 
 export function DistStatusBadge({
   status,
@@ -76,23 +106,23 @@ export function DistFilterBar({
   const filteredAreas = (areas ?? []).filter((a) => !value.cityId || a.cityId === value.cityId);
   return (
     <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950/40">
-      <label className="text-xs text-slate-500">
+      <label className="text-xs text-[color:var(--muted)]">
         From
-        <input
-          type="date"
-          className={`mt-1 block ${distInputClass}`}
-          value={value.from ?? ""}
-          onChange={(e) => onChange({ ...value, from: e.target.value || undefined })}
-        />
+        <div className="mt-1">
+          <DistDateField
+            value={value.from ?? ""}
+            onChange={(e) => onChange({ ...value, from: e.target.value || undefined })}
+          />
+        </div>
       </label>
-      <label className="text-xs text-slate-500">
+      <label className="text-xs text-[color:var(--muted)]">
         To
-        <input
-          type="date"
-          className={`mt-1 block ${distInputClass}`}
-          value={value.to ?? ""}
-          onChange={(e) => onChange({ ...value, to: e.target.value || undefined })}
-        />
+        <div className="mt-1">
+          <DistDateField
+            value={value.to ?? ""}
+            onChange={(e) => onChange({ ...value, to: e.target.value || undefined })}
+          />
+        </div>
       </label>
       {cities ? (
         <label className="text-xs text-slate-500">
@@ -266,8 +296,8 @@ export function DistBulkBar({
 }): JSX.Element | null {
   if (count <= 0) return null;
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm dark:border-cyan-900 dark:bg-cyan-950/40">
-      <strong>{count} selected</strong>
+    <div className="flex flex-wrap items-center gap-2 rounded-md border border-[color:var(--brand)]/30 bg-[var(--brand-cream)] px-3 py-2 text-sm text-[color:var(--ink)] dark:border-[color:var(--brand)]/40 dark:bg-slate-900">
+      <strong className="text-[color:var(--brand-dark,var(--brand))]">{count} selected</strong>
       {children}
       <button type="button" className={distBtnGhostClass} onClick={onClear}>
         Clear
@@ -468,10 +498,251 @@ export function DistButton({
 }
 
 export const DistInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
-  function DistInput({ className, ...props }, ref) {
-    return <input ref={ref} className={[distInputClass, className].filter(Boolean).join(" ")} {...props} />;
+  function DistInput({ className, type, ...props }, ref) {
+    const base = type === "date" || type === "datetime-local" || type === "month" ? distDateClass : distInputClass;
+    return (
+      <input ref={ref} type={type} className={[base, className].filter(Boolean).join(" ")} {...props} />
+    );
   },
 );
+
+/** Branded date field — custom calendar popover (no native blue picker). */
+export function DistDateField({
+  label,
+  className,
+  value = "",
+  onChange,
+  disabled,
+  id,
+}: {
+  label?: string;
+  className?: string;
+  value?: string;
+  onChange?: (e: { target: { value: string } }) => void;
+  disabled?: boolean;
+  id?: string;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const selected = useMemo(() => {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    const [y, m, d] = value.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }, [value]);
+
+  const [view, setView] = useState(() => {
+    const base = selected ?? new Date();
+    return { y: base.getFullYear(), m: base.getMonth() };
+  });
+
+  useEffect(() => {
+    if (selected) setView({ y: selected.getFullYear(), m: selected.getMonth() });
+  }, [selected]);
+
+  useEffect(() => {
+    if (!open) return;
+    function place() {
+      const btn = rootRef.current?.querySelector("button");
+      if (!btn) return;
+      const r = btn.getBoundingClientRect();
+      const width = 280;
+      const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8);
+      const below = r.bottom + 6;
+      const panelH = 320;
+      const top = below + panelH > window.innerHeight - 8 ? Math.max(8, r.top - panelH - 6) : below;
+      setPos({ top, left });
+    }
+    place();
+    function onDoc(ev: MouseEvent) {
+      const t = ev.target as Node;
+      if (rootRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
+    }
+    function onKey(ev: KeyboardEvent) {
+      if (ev.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const today = new Date();
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  const display = selected
+    ? selected.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" })
+    : "";
+
+  const monthLabel = new Date(view.y, view.m, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+
+  const firstDow = new Date(view.y, view.m, 1).getDay();
+  const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
+  const cells: (number | null)[] = [
+    ...Array.from({ length: firstDow }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  function emit(iso: string) {
+    onChange?.({ target: { value: iso } });
+  }
+
+  function pickDay(day: number) {
+    const iso = `${view.y}-${String(view.m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    emit(iso);
+    setOpen(false);
+  }
+
+  function shiftMonth(delta: number) {
+    setView((v) => {
+      const d = new Date(v.y, v.m + delta, 1);
+      return { y: d.getFullYear(), m: d.getMonth() };
+    });
+  }
+
+  const field = (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        id={id}
+        disabled={disabled}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={[
+          distInputClass,
+          "flex items-center justify-between gap-2 text-left",
+          open ? "border-[color:var(--brand)] ring-1 ring-[color:var(--brand)]/30" : "",
+          className,
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        <span className={display ? "text-[color:var(--ink)]" : "text-[color:var(--muted)]"}>
+          {display || "Select date"}
+        </span>
+        <span aria-hidden className="shrink-0 text-[color:var(--brand)]">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="5" width="18" height="16" rx="2" />
+            <path d="M3 10h18M8 3v4M16 3v4" />
+          </svg>
+        </span>
+      </button>
+
+      {open && pos
+        ? createPortal(
+            <div
+              ref={panelRef}
+              role="dialog"
+              aria-label="Choose date"
+              style={{ top: pos.top, left: pos.left }}
+              className="fixed z-[200] w-[17.5rem] rounded-xl border border-[color:var(--line)] bg-[var(--card,#fff)] p-3 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-sm text-[color:var(--ink)] hover:bg-[var(--brand-cream)]"
+                  onClick={() => shiftMonth(-1)}
+                  aria-label="Previous month"
+                >
+                  ‹
+                </button>
+                <div className="text-sm font-semibold text-[color:var(--ink)]">{monthLabel}</div>
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-sm text-[color:var(--ink)] hover:bg-[var(--brand-cream)]"
+                  onClick={() => shiftMonth(1)}
+                  aria-label="Next month"
+                >
+                  ›
+                </button>
+              </div>
+
+              <div className="mb-1 grid grid-cols-7 gap-0.5 text-center text-[10px] font-semibold uppercase tracking-wide text-[color:var(--muted)]">
+                {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
+                  <div key={d} className="py-1">
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-0.5">
+                {cells.map((day, i) => {
+                  if (day == null) return <div key={`e-${i}`} className="h-8" />;
+                  const iso = `${view.y}-${String(view.m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                  const isSelected = value === iso;
+                  const isToday = todayIso === iso;
+                  return (
+                    <button
+                      key={iso}
+                      type="button"
+                      onClick={() => pickDay(day)}
+                      className={[
+                        "h-8 rounded-lg text-xs font-medium transition",
+                        isSelected
+                          ? "bg-[var(--brand)] text-[color:var(--brand-fg,#fff)] shadow-sm"
+                          : isToday
+                            ? "ring-1 ring-[color:var(--brand)] text-[color:var(--brand-dark,var(--brand))] hover:bg-[var(--brand-cream)]"
+                            : "text-[color:var(--ink)] hover:bg-[var(--brand-cream)]",
+                      ].join(" ")}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-2 flex items-center justify-between border-t border-[color:var(--line)] pt-2 dark:border-slate-700">
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-[color:var(--muted)] hover:text-[color:var(--ink)]"
+                  onClick={() => {
+                    emit("");
+                    setOpen(false);
+                  }}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-[color:var(--brand)] hover:opacity-80"
+                  onClick={() => {
+                    emit(todayIso);
+                    setView({ y: today.getFullYear(), m: today.getMonth() });
+                    setOpen(false);
+                  }}
+                >
+                  Today
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+
+  if (!label) return field;
+  return (
+    <label className="block text-xs font-medium text-[color:var(--muted)]">
+      {label}
+      <div className="mt-1">{field}</div>
+    </label>
+  );
+}
 
 export function DistSelect({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>): JSX.Element {
   return <select className={[distSelectClass, className].filter(Boolean).join(" ")} {...props} />;

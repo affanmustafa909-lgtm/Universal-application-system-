@@ -4,14 +4,14 @@ export const ICE_CREAM_EXPENSE_LINES = [
   { key: "cash_cream", labelUr: "نقد کریم کے پیسے", labelEn: "Cash for cream" },
   { key: "sugar", labelUr: "چینی پاؤڈر", labelEn: "Sugar powder" },
   { key: "ice", labelUr: "برف", labelEn: "Ice" },
-  { key: "petrol", labelUr: "پیٹرول", labelEn: "Petrol" },
+  { key: "petrol", labelUr: "پٹرول", labelEn: "Petrol" },
   { key: "roti", labelUr: "روٹی", labelEn: "Roti" },
-  { key: "dmat", labelUr: "ڈیماٹ آئسکریم", labelEn: "D-Mat ice cream" },
+  { key: "dmat", labelUr: "ڈائمنڈ آئسکریم", labelEn: "Diamond ice cream" },
   { key: "retail_discount", labelUr: "پرچون رعایت", labelEn: "Retail discount" },
   { key: "soap", labelUr: "صابن + صافی", labelEn: "Soap + cloth" },
   { key: "cups_expense", labelUr: "کپ", labelEn: "Cups (expense)" },
   { key: "checking_waste", labelUr: "چیکنگ + ضائع", labelEn: "Checking + waste" },
-  { key: "phenyl", labelUr: "فینیل + پٹی + برش", labelEn: "Phenyl + strip + brush" },
+  { key: "phenyl", labelUr: "فینیل + پولی + برش", labelEn: "Phenyl + poly + brush" },
 ] as const;
 
 export type IceCreamExpenseKey = (typeof ICE_CREAM_EXPENSE_LINES)[number]["key"];

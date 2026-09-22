@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { createPharmacyMedicine } from "../../pharmacy/api/pharmacy";
+import { createPharmacyCompany } from "../../pharmacy/api/pharmacy-erp";
 import {
   brandsApi,
   categoriesApi,
@@ -15,6 +16,7 @@ import {
   taxProfilesApi,
   unitsApi,
   updateMedicine,
+  type CompanyRow,
   type MedicineMasterDetail,
   type MedicineMasterRow,
 } from "../../pharmacy/api/pharmacy-masters";
@@ -35,7 +37,33 @@ import {
   exportRowsToCsv,
 } from "../ui/DistUi";
 
-type MasterOption = { id: string; code: string; name: string };
+type MasterOption = { id: string; code: string; name: string; parentId?: string | null };
+
+type CompanyTargetDraft = {
+  code: string;
+  companyTitle: string;
+  name: string;
+  address: string;
+  address2: string;
+  bankName: string;
+  bankBranch: string;
+  transport: string;
+  salesmanCommissionPct: string;
+  showForAdvTax: string;
+};
+
+const emptyCompanyTarget = (): CompanyTargetDraft => ({
+  code: "",
+  companyTitle: "",
+  name: "",
+  address: "",
+  address2: "",
+  bankName: "",
+  bankBranch: "",
+  transport: "",
+  salesmanCommissionPct: "0",
+  showForAdvTax: "Yes",
+});
 
 const BUILTIN_MASTERS: Record<
   "generics" | "brands" | "categories" | "dosage-forms" | "units" | "tax-profiles",
@@ -257,7 +285,7 @@ function MasterSelect({
   );
 }
 
-type MedicineForm = {
+export type MedicineForm = {
   sku: string;
   name: string;
   genericName: string;
@@ -267,18 +295,36 @@ type MedicineForm = {
   companyId: string;
   genericId: string;
   brandId: string;
+  /** Parent category (Group). */
+  groupId: string;
   categoryId: string;
   dosageFormId: string;
   unitId: string;
   taxProfileId: string;
   barcode: string;
+  alternateBarcode: string;
+  companyProductCode: string;
   purchasePrice: string;
   sellingPrice: string;
   wholesalePrice: string;
   dealerPrice: string;
   costPrice: string;
+  minSalePrice: string;
+  maxRetailPrice: string;
   taxPct: string;
+  extraTaxPct: string;
+  salesTaxType: string;
+  extSalesTaxType: string;
+  fbrProductType: string;
+  advTaxEnabled: boolean;
+  saleOnTradePrice: boolean;
+  schemeDisc1Pct: string;
+  schemeDisc2Pct: string;
+  schemeQty: string;
+  schemeBonusQty: string;
+  discOnRetailPct: string;
   reorderLevel: string;
+  suggestedReorderQty: string;
   minStock: string;
   maxStock: string;
   tabletsPerStrip: string;
@@ -290,6 +336,9 @@ type MedicineForm = {
   aisleLocation: string;
   rackLocation: string;
   shelfLocation: string;
+  sortOrder: string;
+  holdQty: string;
+  locked: boolean;
   isControlled: boolean;
   prescriptionRequired: boolean;
   batchTrackingEnabled: boolean;
@@ -308,18 +357,35 @@ const emptyForm = (): MedicineForm => ({
   companyId: "",
   genericId: "",
   brandId: "",
+  groupId: "",
   categoryId: "",
   dosageFormId: "",
   unitId: "",
   taxProfileId: "",
   barcode: "",
+  alternateBarcode: "",
+  companyProductCode: "",
   purchasePrice: "0",
   sellingPrice: "0",
   wholesalePrice: "0",
   dealerPrice: "0",
   costPrice: "0",
+  minSalePrice: "0",
+  maxRetailPrice: "0",
   taxPct: "0",
+  extraTaxPct: "0",
+  salesTaxType: "None",
+  extSalesTaxType: "",
+  fbrProductType: "",
+  advTaxEnabled: false,
+  saleOnTradePrice: false,
+  schemeDisc1Pct: "0",
+  schemeDisc2Pct: "0",
+  schemeQty: "0",
+  schemeBonusQty: "0",
+  discOnRetailPct: "0",
   reorderLevel: "10",
+  suggestedReorderQty: "0",
   minStock: "0",
   maxStock: "0",
   tabletsPerStrip: "1",
@@ -331,6 +397,9 @@ const emptyForm = (): MedicineForm => ({
   aisleLocation: "",
   rackLocation: "",
   shelfLocation: "",
+  sortOrder: "0",
+  holdQty: "0",
+  locked: false,
   isControlled: false,
   prescriptionRequired: false,
   batchTrackingEnabled: true,
@@ -340,6 +409,7 @@ const emptyForm = (): MedicineForm => ({
 });
 
 function detailToForm(d: MedicineMasterDetail): MedicineForm {
+  const parentId = d.refs?.category?.parentId ?? null;
   return {
     sku: d.sku ?? "",
     name: d.name ?? "",
@@ -350,18 +420,35 @@ function detailToForm(d: MedicineMasterDetail): MedicineForm {
     companyId: d.companyId ?? "",
     genericId: d.genericId ?? "",
     brandId: d.brandId ?? "",
-    categoryId: d.categoryId ?? "",
+    groupId: parentId ? parentId : d.categoryId ?? "",
+    categoryId: parentId ? d.categoryId ?? "" : "",
     dosageFormId: d.dosageFormId ?? "",
     unitId: d.unitId ?? "",
     taxProfileId: d.taxProfileId ?? "",
     barcode: d.barcode ?? "",
+    alternateBarcode: d.alternateBarcode ?? "",
+    companyProductCode: d.companyProductCode ?? "",
     purchasePrice: String(d.purchasePricePkr ?? 0),
     sellingPrice: String(d.sellingPricePkr ?? 0),
     wholesalePrice: String(d.wholesalePricePkr ?? 0),
     dealerPrice: String(d.dealerPricePkr ?? 0),
     costPrice: String(d.costPricePkr ?? 0),
+    minSalePrice: String(d.minSalePricePkr ?? 0),
+    maxRetailPrice: String(d.maxRetailPricePkr ?? 0),
     taxPct: String(d.taxPct ?? 0),
+    extraTaxPct: String(d.extraTaxPct ?? 0),
+    salesTaxType: d.salesTaxType ?? "None",
+    extSalesTaxType: d.extSalesTaxType ?? "",
+    fbrProductType: d.fbrProductType ?? "",
+    advTaxEnabled: Boolean(d.advTaxEnabled),
+    saleOnTradePrice: Boolean(d.saleOnTradePrice),
+    schemeDisc1Pct: String(d.schemeDisc1Pct ?? 0),
+    schemeDisc2Pct: String(d.schemeDisc2Pct ?? 0),
+    schemeQty: String(d.schemeQty ?? 0),
+    schemeBonusQty: String(d.schemeBonusQty ?? 0),
+    discOnRetailPct: String(d.discOnRetailPct ?? 0),
     reorderLevel: String(d.reorderLevel ?? 10),
+    suggestedReorderQty: String(d.suggestedReorderQty ?? 0),
     minStock: String(d.minStock ?? 0),
     maxStock: String(d.maxStock ?? 0),
     tabletsPerStrip: String(d.tabletsPerStrip ?? 1),
@@ -373,6 +460,9 @@ function detailToForm(d: MedicineMasterDetail): MedicineForm {
     aisleLocation: d.aisleLocation ?? "",
     rackLocation: d.rackLocation ?? "",
     shelfLocation: d.shelfLocation ?? "",
+    sortOrder: String(d.sortOrder ?? 0),
+    holdQty: String(d.holdQty ?? 0),
+    locked: Boolean(d.locked),
     isControlled: Boolean(d.isControlled),
     prescriptionRequired: Boolean(d.prescriptionRequired),
     batchTrackingEnabled: d.batchTrackingEnabled !== false,
@@ -384,6 +474,7 @@ function detailToForm(d: MedicineMasterDetail): MedicineForm {
 
 function formPayload(form: MedicineForm, branchCode: string, forCreate: boolean) {
   const id = (v: string) => (v && !v.startsWith("builtin:") ? v : undefined);
+  const resolvedCategoryId = id(form.categoryId) || id(form.groupId);
   const base: Record<string, unknown> = {
     sku: form.sku.trim(),
     name: form.name.trim(),
@@ -394,18 +485,34 @@ function formPayload(form: MedicineForm, branchCode: string, forCreate: boolean)
     companyId: id(form.companyId),
     genericId: id(form.genericId),
     brandId: id(form.brandId),
-    categoryId: id(form.categoryId),
+    categoryId: resolvedCategoryId,
     dosageFormId: id(form.dosageFormId),
     unitId: id(form.unitId),
     taxProfileId: id(form.taxProfileId),
     barcode: form.barcode.trim() || undefined,
+    alternateBarcode: form.alternateBarcode.trim() || undefined,
+    companyProductCode: form.companyProductCode.trim() || undefined,
     purchasePrice: Number(form.purchasePrice) || 0,
     sellingPrice: Number(form.sellingPrice) || 0,
     wholesalePrice: Number(form.wholesalePrice) || 0,
     dealerPrice: Number(form.dealerPrice) || 0,
     costPrice: Number(form.costPrice) || 0,
+    minSalePrice: Number(form.minSalePrice) || 0,
+    maxRetailPrice: Number(form.maxRetailPrice) || 0,
     taxPct: Number(form.taxPct) || 0,
+    extraTaxPct: Number(form.extraTaxPct) || 0,
+    salesTaxType: form.salesTaxType.trim() || undefined,
+    extSalesTaxType: form.extSalesTaxType.trim() || undefined,
+    fbrProductType: form.fbrProductType.trim() || undefined,
+    advTaxEnabled: form.advTaxEnabled,
+    saleOnTradePrice: form.saleOnTradePrice,
+    schemeDisc1Pct: Number(form.schemeDisc1Pct) || 0,
+    schemeDisc2Pct: Number(form.schemeDisc2Pct) || 0,
+    schemeQty: Number(form.schemeQty) || 0,
+    schemeBonusQty: Number(form.schemeBonusQty) || 0,
+    discOnRetailPct: Number(form.discOnRetailPct) || 0,
     reorderLevel: Number(form.reorderLevel) || 10,
+    suggestedReorderQty: Number(form.suggestedReorderQty) || 0,
     minStock: Number(form.minStock) || 0,
     maxStock: Number(form.maxStock) || 0,
     tabletsPerStrip: Number(form.tabletsPerStrip) || 1,
@@ -417,6 +524,9 @@ function formPayload(form: MedicineForm, branchCode: string, forCreate: boolean)
     aisleLocation: form.aisleLocation.trim() || undefined,
     rackLocation: form.rackLocation.trim() || undefined,
     shelfLocation: form.shelfLocation.trim() || undefined,
+    sortOrder: Number(form.sortOrder) || 0,
+    holdQty: Number(form.holdQty) || 0,
+    locked: form.locked,
     isControlled: form.isControlled,
     prescriptionRequired: form.prescriptionRequired,
     batchTrackingEnabled: form.batchTrackingEnabled,
@@ -434,6 +544,8 @@ function formPayload(form: MedicineForm, branchCode: string, forCreate: boolean)
     wholesalePricePkr: base.wholesalePrice,
     dealerPricePkr: base.dealerPrice,
     costPricePkr: base.costPrice,
+    minSalePricePkr: base.minSalePrice,
+    maxRetailPricePkr: base.maxRetailPrice,
   };
 }
 
@@ -449,8 +561,10 @@ function MedicineFormFields({
   taxProfiles,
   warehouses,
   onCreateMaster,
+  onCreateCompany,
   onSeedDefaults,
   seedingDefaults,
+  companyLastCode,
 }: {
   form: MedicineForm;
   setForm: (f: MedicineForm) => void;
@@ -464,14 +578,35 @@ function MedicineFormFields({
   warehouses: MasterOption[];
   onCreateMaster?: (
     kind: "generics" | "brands" | "categories" | "dosage-forms" | "units" | "tax-profiles",
-    input: { code: string; name: string },
+    input: { code: string; name: string; parentId?: string },
   ) => Promise<MasterOption>;
+  onCreateCompany?: (draft: CompanyTargetDraft) => Promise<MasterOption>;
   onSeedDefaults?: () => void;
   seedingDefaults?: boolean;
+  companyLastCode?: number;
 }) {
   const set = (patch: Partial<MedicineForm>) => setForm({ ...form, ...patch });
+  const [showCompanyTarget, setShowCompanyTarget] = useState(false);
+  const [companyDraft, setCompanyDraft] = useState<CompanyTargetDraft>(emptyCompanyTarget());
+  const [companyBusy, setCompanyBusy] = useState(false);
+  const [companyErr, setCompanyErr] = useState<string | null>(null);
   const retailPack = medicinePackPrices(form.sellingPrice, form.tabletsPerStrip, form.stripsPerBox);
   const wholesalePack = medicinePackPrices(form.wholesalePrice, form.tabletsPerStrip, form.stripsPerBox);
+  const tradePrice = Number(form.sellingPrice) || 0;
+  const salesTaxValue = Math.round((tradePrice * (Number(form.taxPct) || 0)) / 100);
+  const extraTaxValue = Math.round((tradePrice * (Number(form.extraTaxPct) || 0)) / 100);
+
+  const groupOptions = useMemo(
+    () => categories.filter((c) => !c.parentId),
+    [categories],
+  );
+  const subGroupOptions = useMemo(
+    () =>
+      form.groupId
+        ? categories.filter((c) => c.parentId === form.groupId)
+        : categories.filter((c) => Boolean(c.parentId)),
+    [categories, form.groupId],
+  );
 
   const setStripFromPack = (packPkr: number, field: "sellingPrice" | "wholesalePrice") => {
     const spb = Math.max(1, Math.round(Number(form.stripsPerBox) || 1));
@@ -487,6 +622,26 @@ function MedicineFormFields({
     dosageForms.length === 0 ||
     units.length === 0 ||
     generics.length === 0;
+
+  const saveCompanyTarget = async () => {
+    if (!onCreateCompany) return;
+    if (!companyDraft.code.trim() || !companyDraft.name.trim()) {
+      setCompanyErr("Code aur Company Name zaroori hain");
+      return;
+    }
+    setCompanyBusy(true);
+    setCompanyErr(null);
+    try {
+      const created = await onCreateCompany(companyDraft);
+      set({ companyId: created.id, manufacturer: companyDraft.companyTitle || companyDraft.name });
+      setCompanyDraft(emptyCompanyTarget());
+      setShowCompanyTarget(false);
+    } catch (e) {
+      setCompanyErr(e instanceof Error ? e.message : "Company create failed");
+    } finally {
+      setCompanyBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -509,14 +664,114 @@ function MedicineFormFields({
       <section className="space-y-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Identity</h3>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <MasterSelect
+            label="Company"
+            required
+            value={form.companyId}
+            onChange={(v) => set({ companyId: v })}
+            options={companies}
+          />
+          <div className="flex items-end">
+            <DistButton
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={() => {
+                setShowCompanyTarget((v) => !v);
+                setCompanyErr(null);
+                if (!companyDraft.code && companyLastCode) {
+                  setCompanyDraft((d) => ({ ...d, code: String(companyLastCode + 1) }));
+                }
+              }}
+            >
+              {showCompanyTarget ? "Hide Company Target" : "+ New company (Company Target)"}
+            </DistButton>
+          </div>
           <label className="text-xs text-slate-500">
-            SKU / Code
+            Code (SKU)
             <DistInput className="mt-1" value={form.sku} onChange={(e) => set({ sku: e.target.value })} required />
+          </label>
+          <label className="text-xs text-slate-500">
+            Alternate Code
+            <DistInput
+              className="mt-1"
+              value={form.alternateBarcode}
+              onChange={(e) => set({ alternateBarcode: e.target.value })}
+            />
           </label>
           <label className="text-xs text-slate-500 sm:col-span-2">
             Name
             <DistInput className="mt-1" value={form.name} onChange={(e) => set({ name: e.target.value })} required />
           </label>
+          <label className="text-xs text-slate-500">
+            Company Prd Code
+            <DistInput
+              className="mt-1"
+              value={form.companyProductCode}
+              onChange={(e) => set({ companyProductCode: e.target.value })}
+            />
+          </label>
+          <MasterSelect
+            label="Group"
+            value={form.groupId}
+            onChange={(v) => {
+              const opt = groupOptions.find((c) => c.id === v);
+              set({
+                groupId: v,
+                categoryId: "",
+                category: opt?.name || form.category || "Tablet",
+              });
+            }}
+            options={groupOptions.length ? groupOptions : categories}
+            mastersTab="categories"
+            builtins={BUILTIN_MASTERS.categories}
+            onCreate={
+              onCreateMaster
+                ? async (input) => {
+                    const created = await onCreateMaster("categories", input);
+                    set({ groupId: created.id, categoryId: "", category: created.name });
+                    return created;
+                  }
+                : undefined
+            }
+          />
+          <MasterSelect
+            label="Sub Group"
+            value={form.categoryId}
+            onChange={(v) => {
+              if (!v) {
+                set({ categoryId: "" });
+                return;
+              }
+              if (v.startsWith("builtin:")) {
+                const code = v.slice("builtin:".length);
+                const hit = BUILTIN_MASTERS.categories.find((b) => b.code === code);
+                set({ categoryId: "", category: hit?.name || form.category || "Tablet" });
+                return;
+              }
+              const opt = categories.find((c) => c.id === v);
+              set({
+                categoryId: v,
+                groupId: opt?.parentId || form.groupId,
+                category: opt?.name || form.category || "Tablet",
+              });
+            }}
+            options={subGroupOptions}
+            mastersTab="categories"
+            builtins={form.groupId ? undefined : BUILTIN_MASTERS.categories}
+            onCreate={
+              onCreateMaster
+                ? async (input) => {
+                    const created = await onCreateMaster("categories", {
+                      ...input,
+                      parentId: form.groupId || undefined,
+                    });
+                    set({ categoryId: created.id, category: created.name });
+                    return created;
+                  }
+                : undefined
+            }
+          />
           <label className="text-xs text-slate-500">
             Barcode
             <DistInput className="mt-1" value={form.barcode} onChange={(e) => set({ barcode: e.target.value })} />
@@ -539,20 +794,131 @@ function MedicineFormFields({
             />
           </label>
         </div>
+
+        {showCompanyTarget ? (
+          <div className="mt-3 space-y-2 rounded-xl border border-sky-200 bg-sky-50/50 p-3 dark:border-sky-800 dark:bg-sky-950/30">
+            <div className="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+              Company Target — new company for this product
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <label className="text-xs text-slate-500">
+                Code
+                <DistInput
+                  className="mt-1"
+                  value={companyDraft.code}
+                  onChange={(e) => setCompanyDraft({ ...companyDraft, code: e.target.value })}
+                  required
+                />
+                <span className="mt-0.5 block text-[10px] text-slate-400">
+                  Last Code: {companyLastCode || "—"}
+                </span>
+              </label>
+              <label className="text-xs text-slate-500 sm:col-span-2">
+                Company Title
+                <DistInput
+                  className="mt-1"
+                  value={companyDraft.companyTitle}
+                  onChange={(e) => setCompanyDraft({ ...companyDraft, companyTitle: e.target.value })}
+                />
+              </label>
+              <label className="text-xs text-slate-500 sm:col-span-2 lg:col-span-3">
+                Company Name
+                <DistInput
+                  className="mt-1"
+                  value={companyDraft.name}
+                  onChange={(e) => setCompanyDraft({ ...companyDraft, name: e.target.value })}
+                  required
+                />
+              </label>
+              <label className="text-xs text-slate-500 sm:col-span-2 lg:col-span-3">
+                Company Address 1
+                <DistInput
+                  className="mt-1"
+                  value={companyDraft.address}
+                  onChange={(e) => setCompanyDraft({ ...companyDraft, address: e.target.value })}
+                />
+              </label>
+              <label className="text-xs text-slate-500 sm:col-span-2 lg:col-span-3">
+                Company Address 2
+                <DistInput
+                  className="mt-1"
+                  value={companyDraft.address2}
+                  onChange={(e) => setCompanyDraft({ ...companyDraft, address2: e.target.value })}
+                />
+              </label>
+              <label className="text-xs text-slate-500">
+                Bank
+                <DistInput
+                  className="mt-1"
+                  value={companyDraft.bankName}
+                  onChange={(e) => setCompanyDraft({ ...companyDraft, bankName: e.target.value })}
+                />
+              </label>
+              <label className="text-xs text-slate-500">
+                Branch
+                <DistInput
+                  className="mt-1"
+                  value={companyDraft.bankBranch}
+                  onChange={(e) => setCompanyDraft({ ...companyDraft, bankBranch: e.target.value })}
+                />
+              </label>
+              <label className="text-xs text-slate-500">
+                Transport
+                <DistInput
+                  className="mt-1"
+                  value={companyDraft.transport}
+                  onChange={(e) => setCompanyDraft({ ...companyDraft, transport: e.target.value })}
+                />
+              </label>
+              <label className="text-xs text-slate-500">
+                Salesman Commission %Age
+                <DistInput
+                  className="mt-1"
+                  type="number"
+                  value={companyDraft.salesmanCommissionPct}
+                  onChange={(e) =>
+                    setCompanyDraft({ ...companyDraft, salesmanCommissionPct: e.target.value })
+                  }
+                />
+              </label>
+              <label className="text-xs text-slate-500">
+                Show Company For Adv. Tax
+                <DistSelect
+                  className="mt-1"
+                  value={companyDraft.showForAdvTax}
+                  onChange={(e) => setCompanyDraft({ ...companyDraft, showForAdvTax: e.target.value })}
+                >
+                  <option>Yes</option>
+                  <option>No</option>
+                </DistSelect>
+              </label>
+            </div>
+            {companyErr ? <p className="text-xs text-red-600">{companyErr}</p> : null}
+            <div className="flex flex-wrap gap-2">
+              <DistButton type="button" disabled={companyBusy || !onCreateCompany} onClick={() => void saveCompanyTarget()}>
+                {companyBusy ? "Saving company…" : "Create company & select"}
+              </DistButton>
+              <DistButton
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setShowCompanyTarget(false);
+                  setCompanyDraft(emptyCompanyTarget());
+                  setCompanyErr(null);
+                }}
+              >
+                Cancel
+              </DistButton>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="space-y-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Company &amp; formula</h3>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <MasterSelect
-            label="Company"
-            required
-            value={form.companyId}
-            onChange={(v) => set({ companyId: v })}
-            options={companies}
-          />
-          <MasterSelect
-            label="Formula / Generic"
+            label="Gen. Code / Formula"
             value={form.genericId}
             onChange={(v) => set({ genericId: v.startsWith("builtin:") ? "" : v })}
             options={generics}
@@ -560,6 +926,15 @@ function MedicineFormFields({
             builtins={BUILTIN_MASTERS.generics}
             onCreate={onCreateMaster ? (input) => onCreateMaster("generics", input) : undefined}
           />
+          <label className="text-xs text-slate-500">
+            Gen. Name (free text)
+            <DistInput
+              className="mt-1"
+              value={form.genericName}
+              onChange={(e) => set({ genericName: e.target.value })}
+              placeholder="e.g. Paracetamol 500mg"
+            />
+          </label>
           <MasterSelect
             label="Brand"
             value={form.brandId}
@@ -577,32 +952,23 @@ function MedicineFormFields({
             builtins={BUILTIN_MASTERS.brands}
             onCreate={onCreateMaster ? (input) => onCreateMaster("brands", input) : undefined}
           />
-          <MasterSelect
-            label="Category"
-            value={form.categoryId}
-            onChange={(v) => {
-              if (v.startsWith("builtin:")) {
-                const code = v.slice("builtin:".length);
-                const hit = BUILTIN_MASTERS.categories.find((b) => b.code === code);
-                set({ categoryId: "", category: hit?.name || form.category || "Tablet" });
-                return;
-              }
-              const opt = categories.find((c) => c.id === v);
-              set({ categoryId: v, category: opt?.name || form.category || "Tablet" });
-            }}
-            options={categories}
-            mastersTab="categories"
-            builtins={BUILTIN_MASTERS.categories}
-            onCreate={
-              onCreateMaster
-                ? async (input) => {
-                    const created = await onCreateMaster("categories", input);
-                    set({ categoryId: created.id, category: created.name });
-                    return created;
-                  }
-                : undefined
-            }
-          />
+          <label className="text-xs text-slate-500">
+            Brand (free text)
+            <DistInput
+              className="mt-1"
+              value={form.brandName}
+              onChange={(e) => set({ brandName: e.target.value })}
+              placeholder="e.g. Panadol"
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Manufacturer
+            <DistInput
+              className="mt-1"
+              value={form.manufacturer}
+              onChange={(e) => set({ manufacturer: e.target.value })}
+            />
+          </label>
           <label className="text-xs text-slate-500">
             Category (free text)
             <DistInput
@@ -656,35 +1022,17 @@ function MedicineFormFields({
             builtins={BUILTIN_MASTERS["tax-profiles"]}
             onCreate={onCreateMaster ? (input) => onCreateMaster("tax-profiles", input) : undefined}
           />
-          <label className="text-xs text-slate-500">
-            Formula (free text)
-            <DistInput
-              className="mt-1"
-              value={form.genericName}
-              onChange={(e) => set({ genericName: e.target.value })}
-              placeholder="e.g. Paracetamol 500mg"
-            />
-          </label>
-          <label className="text-xs text-slate-500">
-            Brand (free text)
-            <DistInput
-              className="mt-1"
-              value={form.brandName}
-              onChange={(e) => set({ brandName: e.target.value })}
-              placeholder="e.g. Panadol"
-            />
-          </label>
         </div>
       </section>
 
       <section className="space-y-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pack size</h3>
         <p className="text-[11px] text-slate-500">
-          Kitni goli 1 pata me · kitne pata 1 pack/box me — prices neeche auto calculate hoti hain.
+          Unit in a Pack = goli / pata · Unit in a Case = pata / box — prices neeche auto calculate hoti hain.
         </p>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <label className="text-xs text-slate-500">
-            Goli / pata (tabs per strip)
+            Unit in a Pack (goli / pata)
             <DistInput
               className="mt-1"
               type="number"
@@ -694,7 +1042,7 @@ function MedicineFormFields({
             />
           </label>
           <label className="text-xs text-slate-500">
-            Pata / pack (strips per box)
+            Unit in a Case (pata / pack)
             <DistInput
               className="mt-1"
               type="number"
@@ -711,13 +1059,86 @@ function MedicineFormFields({
       </section>
 
       <section className="space-y-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pack / pata / goli prices</h3>
-        <p className="text-[11px] text-slate-500">
-          Base = 1 pata (strip). Goli / pack edit karo to pata price sync ho jayegi.
-        </p>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rates &amp; prices</h3>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="text-xs text-slate-500">
+            Trade Price (1 pata)
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.sellingPrice}
+              onChange={(e) => set({ sellingPrice: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Cut Rate / W.Rate
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.wholesalePrice}
+              onChange={(e) => set({ wholesalePrice: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Pur. Rate
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.purchasePrice}
+              onChange={(e) => set({ purchasePrice: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Min Sale Rate
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.minSalePrice}
+              onChange={(e) => set({ minSalePrice: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Retail Price / MRP
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.maxRetailPrice}
+              onChange={(e) => set({ maxRetailPrice: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Cost
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.costPrice}
+              onChange={(e) => set({ costPrice: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Dealer
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.dealerPrice}
+              onChange={(e) => set({ dealerPrice: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Sale On TP
+            <DistSelect
+              className="mt-1"
+              value={form.saleOnTradePrice ? "Y" : "N"}
+              onChange={(e) => set({ saleOnTradePrice: e.target.value === "Y" })}
+            >
+              <option value="N">N</option>
+              <option value="Y">Y</option>
+            </DistSelect>
+          </label>
+        </div>
         <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-cyan-800 dark:text-cyan-300">
-            Retail
+            Retail pack breakdown
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
             <label className="text-xs text-slate-500">
@@ -751,7 +1172,7 @@ function MedicineFormFields({
         </div>
         <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
-            Wholesale (Sale Window)
+            Wholesale pack breakdown
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
             <label className="text-xs text-slate-500">
@@ -783,31 +1204,169 @@ function MedicineFormFields({
             </label>
           </div>
         </div>
+      </section>
+
+      <section className="space-y-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Taxation</h3>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {(
-            [
-              ["purchasePrice", "Purchase"],
-              ["costPrice", "Cost"],
-              ["dealerPrice", "Dealer"],
-              ["taxPct", "Tax %"],
-            ] as const
-          ).map(([key, label]) => (
-            <label key={key} className="text-xs text-slate-500">
-              {label}
-              <DistInput
-                className="mt-1"
-                type="number"
-                value={form[key]}
-                onChange={(e) => set({ [key]: e.target.value })}
-              />
-            </label>
-          ))}
+          <label className="text-xs text-slate-500">
+            Sales Tax Type
+            <DistSelect
+              className="mt-1"
+              value={form.salesTaxType || "None"}
+              onChange={(e) => set({ salesTaxType: e.target.value })}
+            >
+              <option value="None">None</option>
+              <option value="Inclusive">Inclusive</option>
+              <option value="Exclusive">Exclusive</option>
+              <option value="Exempt">Exempt</option>
+            </DistSelect>
+          </label>
+          <label className="text-xs text-slate-500">
+            Ext. STax Type
+            <DistInput
+              className="mt-1"
+              value={form.extSalesTaxType}
+              onChange={(e) => set({ extSalesTaxType: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Product FBR Type
+            <DistInput
+              className="mt-1"
+              value={form.fbrProductType}
+              onChange={(e) => set({ fbrProductType: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Adv. Tax Y/N
+            <DistSelect
+              className="mt-1"
+              value={form.advTaxEnabled ? "Y" : "N"}
+              onChange={(e) => set({ advTaxEnabled: e.target.value === "Y" })}
+            >
+              <option value="N">N</option>
+              <option value="Y">Y</option>
+            </DistSelect>
+          </label>
+          <label className="text-xs text-slate-500">
+            Sales Tax %
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.taxPct}
+              onChange={(e) => set({ taxPct: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Sales Tax Value
+            <DistInput className="mt-1" type="number" value={String(salesTaxValue)} readOnly />
+          </label>
+          <label className="text-xs text-slate-500">
+            Extra STax %
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.extraTaxPct}
+              onChange={(e) => set({ extraTaxPct: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Extra STax Value
+            <DistInput className="mt-1" type="number" value={String(extraTaxValue)} readOnly />
+          </label>
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Schemes &amp; discounts</h3>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="text-xs text-slate-500">
+            Scheme Disc 1 %
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.schemeDisc1Pct}
+              onChange={(e) => set({ schemeDisc1Pct: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Scheme Disc 2 %
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.schemeDisc2Pct}
+              onChange={(e) => set({ schemeDisc2Pct: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Scheme Qty
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.schemeQty}
+              onChange={(e) => set({ schemeQty: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Scheme Bonus
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.schemeBonusQty}
+              onChange={(e) => set({ schemeBonusQty: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Disc. on Retail %
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.discOnRetailPct}
+              onChange={(e) => set({ discOnRetailPct: e.target.value })}
+            />
+          </label>
         </div>
       </section>
 
       <section className="space-y-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Inventory config</h3>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <MasterSelect
+            label="Default Godown"
+            value={form.preferredWarehouseId}
+            onChange={(v) => set({ preferredWarehouseId: v })}
+            options={warehouses}
+          />
+          <label className="text-xs text-slate-500">
+            Hold
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.holdQty}
+              onChange={(e) => set({ holdQty: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Sort Order
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.sortOrder}
+              onChange={(e) => set({ sortOrder: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Locked
+            <DistSelect
+              className="mt-1"
+              value={form.locked ? "Y" : "N"}
+              onChange={(e) => set({ locked: e.target.value === "Y" })}
+            >
+              <option value="N">N</option>
+              <option value="Y">Y</option>
+            </DistSelect>
+          </label>
           <label className="text-xs text-slate-500">
             Reorder level
             <DistInput
@@ -815,6 +1374,15 @@ function MedicineFormFields({
               type="number"
               value={form.reorderLevel}
               onChange={(e) => set({ reorderLevel: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Suggested reorder qty
+            <DistInput
+              className="mt-1"
+              type="number"
+              value={form.suggestedReorderQty}
+              onChange={(e) => set({ suggestedReorderQty: e.target.value })}
             />
           </label>
           <label className="text-xs text-slate-500">
@@ -835,12 +1403,30 @@ function MedicineFormFields({
               onChange={(e) => set({ maxStock: e.target.value })}
             />
           </label>
-          <MasterSelect
-            label="Preferred warehouse"
-            value={form.preferredWarehouseId}
-            onChange={(v) => set({ preferredWarehouseId: v })}
-            options={warehouses}
-          />
+          <label className="text-xs text-slate-500">
+            Aisle
+            <DistInput
+              className="mt-1"
+              value={form.aisleLocation}
+              onChange={(e) => set({ aisleLocation: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Rack
+            <DistInput
+              className="mt-1"
+              value={form.rackLocation}
+              onChange={(e) => set({ rackLocation: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Shelf
+            <DistInput
+              className="mt-1"
+              value={form.shelfLocation}
+              onChange={(e) => set({ shelfLocation: e.target.value })}
+            />
+          </label>
           {(
             [
               ["batchTrackingEnabled", "Batch tracking"],
@@ -1101,7 +1687,7 @@ export function DistributionMedicinesPage(): JSX.Element {
 
   const createMaster = async (
     kind: "generics" | "brands" | "categories" | "dosage-forms" | "units" | "tax-profiles",
-    input: { code: string; name: string },
+    input: { code: string; name: string; parentId?: string },
   ): Promise<MasterOption> => {
     const apis = {
       generics: genericsApi,
@@ -1119,9 +1705,12 @@ export function DistributionMedicinesPage(): JSX.Element {
     if (kind === "brands" && form.companyId) {
       body.companyId = form.companyId;
     }
+    if (kind === "categories" && input.parentId) {
+      body.parentId = input.parentId;
+    }
     const row = await apis[kind].create(body);
     invalidateMastersPickers();
-    return { id: row.id, code: row.code, name: row.name };
+    return { id: row.id, code: row.code, name: row.name, parentId: row.parentId ?? input.parentId ?? null };
   };
 
   const seedDefaults = useMutation({
@@ -1190,8 +1779,38 @@ export function DistributionMedicinesPage(): JSX.Element {
     seedDefaults,
   ]);
 
+  const companyLastCode = useMemo(() => {
+    const codes = (companies.data?.items ?? [])
+      .map((r: CompanyRow) => Number(String(r.code).replace(/\D/g, "")))
+      .filter((n: number) => Number.isFinite(n) && n > 0);
+    return codes.length ? Math.max(...codes) : 0;
+  }, [companies.data?.items]);
+
+  const createCompanyFromProduct = async (draft: CompanyTargetDraft): Promise<MasterOption> => {
+    const row = (await createPharmacyCompany({
+      code: draft.code.trim(),
+      name: draft.name.trim(),
+      companyTitle: draft.companyTitle.trim() || undefined,
+      manufacturerName: draft.companyTitle.trim() || draft.name.trim() || undefined,
+      address: draft.address.trim() || undefined,
+      address2: draft.address2.trim() || undefined,
+      bankName: draft.bankName.trim() || undefined,
+      bankBranch: draft.bankBranch.trim() || undefined,
+      transport: draft.transport.trim() || undefined,
+      salesmanCommissionPct: Number(draft.salesmanCommissionPct) || 0,
+      showForAdvTax: draft.showForAdvTax.trim() || undefined,
+    })) as CompanyRow;
+    void queryClient.invalidateQueries({ queryKey: ["pharmacy", "companies-paged"] });
+    void queryClient.invalidateQueries({ queryKey: ["pharmacy", "companies-picker"] });
+    return { id: row.id, code: row.code, name: row.name };
+  };
+
   const refOpts = {
-    companies: companies.data?.items ?? [],
+    companies: (companies.data?.items ?? []).map((c: CompanyRow) => ({
+      id: c.id,
+      code: c.code,
+      name: c.name,
+    })),
     generics: generics.data?.items ?? [],
     brands: brands.data?.items ?? [],
     categories: categories.data?.items ?? [],
@@ -1200,6 +1819,8 @@ export function DistributionMedicinesPage(): JSX.Element {
     taxProfiles: taxProfiles.data?.items ?? [],
     warehouses: warehouses.data?.items ?? [],
     onCreateMaster: createMaster,
+    onCreateCompany: createCompanyFromProduct,
+    companyLastCode,
     onSeedDefaults: () => seedDefaults.mutate(),
     seedingDefaults: seedDefaults.isPending,
   };

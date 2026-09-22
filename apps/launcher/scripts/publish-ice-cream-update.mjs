@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..", "..", "..");
 const updatesDir = join(repoRoot, "dist-installers", "updates");
 const version = (process.argv[2] ?? "").trim();
-const owner = "affanmustafa909-lgtm";
+const owner = "basir2353";
 const repo = "ice-cream-bar-updates";
 
 const folders = existsSync(updatesDir)

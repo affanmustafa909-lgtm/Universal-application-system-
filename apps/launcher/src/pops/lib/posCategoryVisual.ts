@@ -1,5 +1,14 @@
-/** Ice cream parlour categories seeded alongside the restaurant menu. */
-const ICE_CREAM_CATEGORY_NAMES = new Set(["scoops", "sundaes", "shakes", "cones", "cakes"]);
+/** Ice cream parlour categories (Shahryar flyer + legacy demo names). */
+const ICE_CREAM_CATEGORY_NAMES = new Set([
+  "flavors",
+  "cones",
+  "cups",
+  "family packs",
+  "scoops",
+  "sundaes",
+  "shakes",
+  "cakes",
+]);
 
 export function isIceCreamMenuCategory(name: string): boolean {
   return ICE_CREAM_CATEGORY_NAMES.has(name.trim().toLowerCase());
@@ -33,7 +42,9 @@ export function posCategoryEmoji(name: string): string {
   if (!n) return "🍽️";
   if (n === "all") return "✨";
   if (n.includes("feature")) return "⭐";
-  if (n.includes("scoop")) return "🍨";
+  if (n.includes("flavor") || n.includes("flavour")) return "🍨";
+  if (n.includes("family")) return "📦";
+  if (n.includes("cup") || n.includes("scoop")) return "🍨";
   if (n.includes("sundae")) return "🍧";
   if (n.includes("shake") || n.includes("smoothie")) return "🥤";
   if (n.includes("cone")) return "🍦";

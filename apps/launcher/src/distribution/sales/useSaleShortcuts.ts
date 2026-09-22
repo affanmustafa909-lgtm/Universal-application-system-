@@ -14,6 +14,7 @@ export type SaleShortcutHandlers = {
   onHold: () => void;
   onBook: () => void;
   onBookAndPrint: () => void;
+  onBookAndPay?: () => void;
   onNewSale: () => void;
   onEscape: () => void;
   onDeleteLine: () => void;
@@ -63,6 +64,11 @@ export function useSaleShortcuts(handlers: SaleShortcutHandlers, enabled = true)
       if (e.key === "F10") {
         e.preventDefault();
         h.onBookAndPrint();
+        return;
+      }
+      if (e.key === "F11") {
+        e.preventDefault();
+        h.onBookAndPay?.();
         return;
       }
       if ((e.ctrlKey || e.metaKey) && (e.key === "n" || e.key === "N")) {

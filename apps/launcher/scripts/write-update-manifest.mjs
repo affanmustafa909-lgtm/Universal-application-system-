@@ -35,7 +35,7 @@ if (!VALID.has(edition)) {
   process.exit(1);
 }
 
-const ICE_CREAM_REPO = "affanmustafa909-lgtm/ice-cream-bar-updates";
+const ICE_CREAM_REPO = "basir2353/ice-cream-bar-updates";
 const DEFAULT_REPO = "basir2353/pops-desktop-updates";
 
 const launcherRoot = process.cwd();

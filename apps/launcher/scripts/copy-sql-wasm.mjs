@@ -15,15 +15,25 @@ try {
   process.exit(0);
 }
 
-const wasmSrc = join(sqlJsDir, "sql-wasm.wasm");
+const distDir = join(sqlJsDir, "dist");
 const wasmDestDir = join(__dirname, "..", "public");
-const wasmDest = join(wasmDestDir, "sql-wasm.wasm");
+mkdirSync(wasmDestDir, { recursive: true });
 
-if (!existsSync(wasmSrc)) {
-  console.warn("[copy-sql-wasm] sql-wasm.wasm not found at", wasmSrc);
-  process.exit(0);
+/** Browser sql.js (Vite) asks for sql-wasm-browser.wasm; Node build uses sql-wasm.wasm. */
+const files = ["sql-wasm-browser.wasm", "sql-wasm.wasm"];
+let copied = 0;
+for (const name of files) {
+  const src = join(distDir, name);
+  if (!existsSync(src)) {
+    console.warn("[copy-sql-wasm] missing", src);
+    continue;
+  }
+  const dest = join(wasmDestDir, name);
+  copyFileSync(src, dest);
+  console.log("[copy-sql-wasm] copied to", dest);
+  copied += 1;
 }
 
-mkdirSync(wasmDestDir, { recursive: true });
-copyFileSync(wasmSrc, wasmDest);
-console.log("[copy-sql-wasm] copied to", wasmDest);
+if (!copied) {
+  console.warn("[copy-sql-wasm] no wasm files copied");
+}

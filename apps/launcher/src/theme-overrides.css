@@ -516,3 +516,17 @@ html[data-erp="ice-cream-bar"][data-theme="light"] .text-amber-400 {
 html[data-erp="ice-cream-bar"][data-theme="light"] .table-order-ref {
   color: var(--brand-dark) !important;
 }
+
+/* Dist branded date / calendar controls */
+.dist-date-field,
+input[type="date"].dist-brand-date,
+input[type="date"] {
+  accent-color: var(--brand);
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+html[data-theme="dark"] input[type="date"] {
+  color-scheme: dark;
+}
+

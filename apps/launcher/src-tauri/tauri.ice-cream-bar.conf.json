@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Scoops Ice Cream Bar",
   "identifier": "com.platform.icecreambar",
-  "version": "0.3.61",
+  "version": "0.3.62",
   "app": {
     "windows": [
       {
@@ -23,10 +23,10 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIyOUQxMjU3Q0NCRjY5QzYKUldUR2FiL01WeEtkc3JQZzdtYXNYV3lEVkVobml4U2ltM3YyQVlneHZpZ0ZaVnFmY2I2Mkl1eDQK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxMkEzQ0U3QjBFNjkwNzUKUldSMWtPYXc1endxUVhKUUhpRmVZQ2UwTytweWtXNkhUS05KVjdBeEdpVW9NMzhrZEhGR0xCY1AK",
       "endpoints": [
-        "https://github.com/affanmustafa909-lgtm/ice-cream-bar-updates/releases/latest/download/latest-ice-cream-bar.json",
-        "https://github.com/affanmustafa909-lgtm/ice-cream-bar-updates/releases/download/ice-cream-latest/latest-ice-cream-bar.json"
+        "https://github.com/basir2353/ice-cream-bar-updates/releases/latest/download/latest-ice-cream-bar.json",
+        "https://github.com/basir2353/ice-cream-bar-updates/releases/download/ice-cream-latest/latest-ice-cream-bar.json"
       ],
       "windows": {
         "installMode": "passive"

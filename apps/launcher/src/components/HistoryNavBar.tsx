@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useNavigationHistory } from "../hooks/useNavigationHistory";
 import { isSingleSystemEdition } from "../lib/edition";
 import { useSessionStore } from "../stores/sessionStore";
+import { SyncStatusChip } from "./SyncStatusChip";
 import { ThemeToggle } from "./ThemeToggle";
 
 const navBtnClass =
@@ -46,10 +47,8 @@ export function HistoryNavBar(): JSX.Element {
             Super Admin Login
           </button>
         ) : null}
+        <SyncStatusChip />
         <ThemeToggle compact />
-        <span className="hidden max-w-[50%] truncate text-xs text-slate-500 sm:inline" title={location.pathname}>
-          {location.pathname}
-        </span>
       </div>
     </header>
   );

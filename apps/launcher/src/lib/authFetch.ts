@@ -4,6 +4,7 @@ import {
   platformFetch,
   wrapNetworkError,
 } from "@platform/auth-client";
+import { isOnline } from "@platform/connectivity";
 import { decodeAccessToken, isAccessTokenExpired } from "./jwt";
 import { getApiBaseUrl } from "./apiBase";
 import { useSessionStore } from "../stores/sessionStore";
@@ -40,14 +41,19 @@ async function refreshAccessToken(): Promise<string> {
       const claims = decodeAccessToken(tokens.accessToken);
       setTokens(tokens.accessToken, tokens.refreshToken, claims);
       return tokens.accessToken;
-    } catch {
-      const session = useSessionStore.getState();
-      if (session.claims && session.accessToken) {
-        session.setOfflineSession(true);
-        throw new OfflineNetworkError();
+    } catch (err) {
+      // Real network drop → stay offline-trusted. Auth rejection → force re-login.
+      if (isLikelyNetworkFailure(err) || !isOnline()) {
+        const session = useSessionStore.getState();
+        if (session.claims && session.accessToken) {
+          session.setOfflineSession(true);
+          throw new OfflineNetworkError();
+        }
       }
       clear();
-      throw new SessionExpiredError();
+      throw new SessionExpiredError(
+        err instanceof Error ? err.message : "Session expired. Sign in again.",
+      );
     }
   })().finally(() => {
     refreshInFlight = null;
@@ -80,13 +86,31 @@ export function isSessionExpiredError(err: unknown): boolean {
 
 /** Returns a valid access token, refreshing proactively when expired. */
 export async function getValidAccessToken(): Promise<string> {
-  const { accessToken, refreshToken, clear } = useSessionStore.getState();
+  const { accessToken, refreshToken, clear, offlineSession, setOfflineSession } =
+    useSessionStore.getState();
   if (!accessToken) throw new SessionExpiredError();
 
-  if (!isAccessTokenExpired(accessToken)) return accessToken;
+  if (!isAccessTokenExpired(accessToken)) {
+    // Back online with a still-valid token — leave offline trusted mode.
+    if (offlineSession && isOnline()) setOfflineSession(false);
+    return accessToken;
+  }
+
+  // Expired token: try refresh whenever the network is up (even from offline trusted mode).
+  if (refreshToken && isOnline()) {
+    try {
+      return await refreshAccessToken();
+    } catch (err) {
+      if (err instanceof OfflineNetworkError) throw err;
+      // Fall through to offline / expired handling below.
+    }
+  }
+
   const session = useSessionStore.getState();
   if (session.offlineSession && session.claims) {
-    throw new OfflineNetworkError();
+    throw new OfflineNetworkError(
+      "Offline trusted session — sign in again (or reconnect) to sync with the cloud.",
+    );
   }
   if (!refreshToken) {
     clear();
@@ -98,9 +122,15 @@ export async function getValidAccessToken(): Promise<string> {
 
 /** Restore session on cold start when the access token has expired but refresh is still valid. */
 export async function bootstrapSession(): Promise<void> {
-  const { accessToken, refreshToken, claims, setOfflineSession } = useSessionStore.getState();
+  const { accessToken, refreshToken, claims, setOfflineSession, offlineSession } =
+    useSessionStore.getState();
   if (!accessToken || !refreshToken) return;
-  if (!isAccessTokenExpired(accessToken)) return;
+
+  if (!isAccessTokenExpired(accessToken)) {
+    if (offlineSession && isOnline()) setOfflineSession(false);
+    return;
+  }
+
   try {
     await refreshAccessToken();
   } catch {

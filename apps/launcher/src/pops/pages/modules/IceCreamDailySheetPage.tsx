@@ -125,6 +125,17 @@ export function IceCreamDailySheetPage(): JSX.Element {
         subtitle="پرنٹ فارم جیسا ڈیجیٹل روزانہ ریکارڈ · خرچہ · کپ · دودھ / کریم"
       />
 
+      <details className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+        <summary className="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-200">
+          اصل پرنٹ فارم کی تصویر (حوالہ)
+        </summary>
+        <img
+          src="/shehryar/daily-sheet.jpg"
+          alt="Shehryar Ice Cream daily sheet"
+          className="mt-3 max-h-[28rem] w-full rounded-lg object-contain"
+        />
+      </details>
+
       {notice ? (
         <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
           {notice}

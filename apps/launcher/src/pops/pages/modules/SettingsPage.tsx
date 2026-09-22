@@ -788,7 +788,8 @@ export function SettingsPage(): JSX.Element {
           <div className="mt-4 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-3">
             <div className="text-xs font-medium text-cyan-200">Sale Window · Sell / Held / Orders</div>
             <p className="mt-1 text-[10px] text-slate-500">
-              Control paid status, history, and zero-stock behaviour on Distribution Sale Window tabs.
+              Control paid status, history, zero-stock, and Pay popup methods (Cash / Bank / Card /
+              Discount) on Distribution Sale Window.
             </p>
             <div className="mt-3 overflow-x-auto">
               <table className="w-full min-w-[320px] text-left text-xs text-slate-400">
@@ -817,6 +818,22 @@ export function SettingsPage(): JSX.Element {
                         key: "blockZeroStockAdd" as const,
                         label: "Sell — block zero stock (red → Purchase)",
                       },
+                      {
+                        key: "allowPayCash" as const,
+                        label: "Pay popup — Cash",
+                      },
+                      {
+                        key: "allowPayBank" as const,
+                        label: "Pay popup — Bank",
+                      },
+                      {
+                        key: "allowPayCard" as const,
+                        label: "Pay popup — Card",
+                      },
+                      {
+                        key: "allowPayDiscount" as const,
+                        label: "Pay popup — Discount field",
+                      },
                     ] as const
                   ).map((row) => (
                     <tr key={row.key} className="border-b border-slate-800/80 last:border-0">
@@ -836,6 +853,26 @@ export function SettingsPage(): JSX.Element {
                       </td>
                     </tr>
                   ))}
+                  <tr className="border-b border-slate-800/80 last:border-0">
+                    <td className="py-2 pr-2 text-slate-300">Pay popup — max discount %</td>
+                    <td className="py-2 px-2 text-center">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        aria-label="Max discount percent"
+                        value={distSaleDraft.maxDiscountPct}
+                        disabled={!distSaleDraft.allowPayDiscount}
+                        onChange={(e) =>
+                          setDistSaleDraft((prev) => ({
+                            ...prev,
+                            maxDiscountPct: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
+                          }))
+                        }
+                        className="w-16 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-center text-xs text-white disabled:opacity-40"
+                      />
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>

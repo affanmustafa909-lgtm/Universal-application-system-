@@ -11,6 +11,7 @@ import {
   listSyncErrors,
   pullFromCloud,
 } from "../../../lib/offlineSync";
+import { getValidAccessToken, OfflineNetworkError, SessionExpiredError } from "../../../lib/authFetch";
 import { useDataModeStore, type ConnectionMode } from "../../../stores/dataModeStore";
 import { useSessionStore } from "../../../stores/sessionStore";
 import { Badge } from "../../ui/Badge";
@@ -30,7 +31,6 @@ function formatRelativeTime(iso: string | null): string {
 export function SyncPage(): JSX.Element {
   const queryClient = useQueryClient();
   const accessToken = useSessionStore((s) => s.accessToken);
-  const claims = useSessionStore((s) => s.claims);
   const email = useSessionStore((s) => s.email);
   const offlineSession = useSessionStore((s) => s.offlineSession);
   const lastOnlineAt = useSessionStore((s) => s.lastOnlineAt);
@@ -39,6 +39,7 @@ export function SyncPage(): JSX.Element {
   const setConnectionMode = useDataModeStore((s) => s.setConnectionMode);
   const setSyncing = useDataModeStore((s) => s.setSyncing);
   const setLastSyncError = useDataModeStore((s) => s.setLastSyncError);
+  const markSynced = useDataModeStore((s) => s.markSynced);
   const apiInfo = describeApiServer();
 
   const [online, setOnline] = useState(isOnline());
@@ -68,17 +69,18 @@ export function SyncPage(): JSX.Element {
     (pending?.outbox ?? 0);
 
   async function run(kind: "push" | "pull" | "sync") {
-    if (!accessToken) throw new Error("Sign in to sync with the cloud database.");
     setSyncing(true);
     setLastSyncError(null);
     try {
+      const token = await getValidAccessToken();
+      const orgId = useSessionStore.getState().claims?.organizationId;
       if (kind === "pull" || kind === "sync") {
-        if (claims?.organizationId) {
-          await pullFromCloud(accessToken, claims.organizationId);
+        if (orgId) {
+          await pullFromCloud(token, orgId);
         }
       }
       if (kind === "push" || kind === "sync") {
-        return await flushAllOfflineData(accessToken);
+        return await flushAllOfflineData(token);
       }
       return null;
     } finally {
@@ -104,6 +106,8 @@ export function SyncPage(): JSX.Element {
           summary.cashFailed +
           summary.payrollFailed
         : 0;
+      setLastSyncError(null);
+      markSynced();
       setNotice(
         kind === "pull"
           ? "Pull finished. Local unsynced rows were not overwritten."
@@ -115,8 +119,14 @@ export function SyncPage(): JSX.Element {
       void queryClient.invalidateQueries();
     },
     onError: (e: Error) => {
-      setError(e.message);
-      setLastSyncError(e.message);
+      const message =
+        e instanceof OfflineNetworkError
+          ? e.message
+          : e instanceof SessionExpiredError
+            ? "Session expired — sign in again to sync."
+            : e.message;
+      setError(message);
+      setLastSyncError(message);
       setNotice(null);
     },
   });
@@ -154,7 +164,18 @@ export function SyncPage(): JSX.Element {
 
       {offlineSession ? (
         <div className="rounded-lg border border-sky-800/50 bg-sky-950/30 px-4 py-3 text-sm text-sky-100">
-          Offline mode — {email ?? "signed-in user"} · last online {formatRelativeTime(lastOnlineAt)}. Pending changes stay on this device until you push.
+          Offline trusted session — {email ?? "signed-in user"} · last online{" "}
+          {formatRelativeTime(lastOnlineAt)}. Click <strong>Sync now</strong> to reconnect; if the
+          session expired you will be asked to sign in again.
+        </div>
+      ) : null}
+
+      {error?.toLowerCase().includes("sign in") || error?.toLowerCase().includes("session expired") ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
+          <span>Cloud login expired. Sign in again to resume sync.</span>
+          <Button className="text-xs" onClick={() => window.location.assign("/login")}>
+            Sign in again
+          </Button>
         </div>
       ) : null}
 

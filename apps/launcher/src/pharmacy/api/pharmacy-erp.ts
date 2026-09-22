@@ -131,6 +131,44 @@ export const approvePharmacyDistOrder = (id: string) =>
   postJson(`/v1/pharmacy/distribution/orders/${id}/approve`, {});
 export const invoicePharmacyDistOrder = (id: string, body?: { paymentMethod?: string }) =>
   postJson(`/v1/pharmacy/distribution/orders/${id}/invoice`, body ?? {});
+
+let cashSettleRouteOk = true;
+
+/**
+ * Approve + Cash invoice in one round-trip when the API supports `/cash-settle`.
+ * Falls back to approve → invoice (still skips warehouse pipeline hops).
+ */
+export async function cashSettlePharmacyDistOrder(id: string): Promise<{
+  id?: string;
+  invoiceNumber?: string;
+  totalPkr?: number;
+  amountDuePkr?: number;
+  amountPaidPkr?: number;
+  [key: string]: unknown;
+}> {
+  if (cashSettleRouteOk) {
+    try {
+      return await postJson(`/v1/pharmacy/distribution/orders/${id}/cash-settle`, {});
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/Cannot POST|Not Found|404|cash-settle/i.test(msg)) {
+        cashSettleRouteOk = false;
+      } else {
+        throw err;
+      }
+    }
+  }
+  await approvePharmacyDistOrder(id);
+  return invoicePharmacyDistOrder(id, { paymentMethod: "Cash" }) as Promise<{
+    id?: string;
+    invoiceNumber?: string;
+    totalPkr?: number;
+    amountDuePkr?: number;
+    amountPaidPkr?: number;
+    [key: string]: unknown;
+  }>;
+}
+
 export const advancePharmacyDistOrder = (id: string, status: string) =>
   postJson(`/v1/pharmacy/distribution/orders/${id}/advance`, { status });
 
@@ -525,7 +563,15 @@ export type DistributionPsWidgets = {
 
 export const fetchDistributionReport = (
   reportId: string,
-  params: { from?: string; to?: string; cityId?: string; areaId?: string; branchCode?: string },
+  params: {
+    from?: string;
+    to?: string;
+    cityId?: string;
+    areaId?: string;
+    branchCode?: string;
+    companyId?: string;
+    salesmanIds?: string[];
+  },
 ) => {
   const q = new URLSearchParams();
   if (params.from) q.set("from", params.from);
@@ -533,6 +579,8 @@ export const fetchDistributionReport = (
   if (params.cityId) q.set("cityId", params.cityId);
   if (params.areaId) q.set("areaId", params.areaId);
   if (params.branchCode) q.set("branchCode", params.branchCode);
+  if (params.companyId) q.set("companyId", params.companyId);
+  if (params.salesmanIds?.length) q.set("salesmanIds", params.salesmanIds.join(","));
   const suffix = q.toString() ? `?${q}` : "";
   return getJson<{ reportId: string; columns: string[]; rows: any[] }>(
     `/v1/pharmacy/distribution/reports/${reportId}${suffix}`,
