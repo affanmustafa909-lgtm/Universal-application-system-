@@ -95,6 +95,11 @@ const args = ["exec", "tauri", "build"];
 }
 args.push(...extraArgs);
 
+const tauriTarget = (process.env.TAURI_TARGET ?? "").trim();
+if (tauriTarget && !extraArgs.includes("--target") && !extraArgs.includes("-t")) {
+  args.push("--target", tauriTarget);
+}
+
 const apiUrl = resolveApiUrl();
 process.env.VITE_API_BASE_URL = apiUrl;
 if (!apiUrl) {
@@ -119,7 +124,11 @@ if (icons.status !== 0) {
   process.exit(icons.status ?? 1);
 }
 
-console.log(`[build-edition] Building "${edition}" installer (API: ${apiUrl})…`);
+console.log(
+  `[build-edition] Building "${edition}" installer (API: ${apiUrl}${
+    tauriTarget ? `, target: ${tauriTarget}` : ""
+  })…`,
+);
 
 // PLATFORM_EDITION flows into the Vite build via tauri's beforeBuildCommand.
 const result = spawnSync("pnpm", args, {
@@ -129,6 +138,7 @@ const result = spawnSync("pnpm", args, {
     ...process.env,
     PLATFORM_EDITION: edition,
     VITE_API_BASE_URL: apiUrl,
+    ...(tauriTarget ? { TAURI_TARGET: tauriTarget } : {}),
   }),
   shell: process.platform === "win32",
 });
@@ -141,7 +151,10 @@ if ((result.status ?? 1) !== 0) {
 const manifest = spawnSync("node", ["./scripts/write-update-manifest.mjs", edition], {
   cwd: join(__dirname, ".."),
   stdio: "inherit",
-  env: process.env,
+  env: {
+    ...process.env,
+    ...(tauriTarget ? { TAURI_TARGET: tauriTarget } : {}),
+  },
   shell: process.platform === "win32",
 });
 if ((manifest.status ?? 1) !== 0) {

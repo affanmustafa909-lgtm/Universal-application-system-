@@ -95,7 +95,7 @@ export function CashDrawerPage(): JSX.Element {
       setError(null);
       try {
         await printCashMovementSlip({
-          branchName: branch?.name ?? "POPS",
+          branchName: branch?.name ?? "Zivra",
           branchCode: branch?.code,
           sessionRef: openSession?.sessionRef,
           type,
@@ -316,7 +316,7 @@ export function CashDrawerPage(): JSX.Element {
                                 className="text-[10px] font-medium text-amber-600 hover:text-amber-500 dark:text-amber-300"
                                 onClick={() => {
                                   void printCashMovementSlip({
-                                    branchName: branch?.name ?? "POPS",
+                                    branchName: branch?.name ?? "Zivra",
                                     branchCode: branch?.code,
                                     sessionRef: openSession.sessionRef,
                                     type: m.type,

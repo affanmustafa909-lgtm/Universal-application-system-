@@ -13,5 +13,5 @@ export function printBusinessDisplayName(
     return "Ice Cream Bar";
   }
   const branch = branchName?.trim() ?? "";
-  return branch || "POPS";
+  return branch || "Zivra";
 }

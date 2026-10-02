@@ -333,7 +333,7 @@ export function LoginPage(): JSX.Element {
           <ThemeToggle />
         </div>
         <div className="mb-3 rounded-lg border border-[color:var(--brand)]/25 bg-[var(--brand-cream)] px-3 py-2 text-center text-xs font-semibold text-[color:var(--ink)]">
-          Design refresh · Desktop v0.3.0 · auto-update live
+          Design refresh · Desktop v1.0.1 · auto-update live
         </div>
         <div className={`${loginCardClass} border-teal-500/20 shadow-lg shadow-teal-900/5 ring-1 ring-teal-500/35`}>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">
@@ -401,7 +401,7 @@ export function LoginPage(): JSX.Element {
       </div>
 
       <div className="mb-3 rounded-lg border border-[color:var(--brand)]/25 bg-[var(--brand-cream)] px-3 py-2 text-center text-xs font-semibold text-[color:var(--ink)]">
-        Design refresh · Desktop v0.3.0 · auto-update live
+        Design refresh · Desktop v1.0.1 · auto-update live
       </div>
 
       <div className={`${loginCardClass} shadow-lg ${accentRing}`}>

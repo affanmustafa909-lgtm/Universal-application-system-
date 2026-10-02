@@ -1,5 +1,5 @@
+import { runCatalogReport } from "./composedDistReports";
 import {
-  fetchDistributionReport,
   fetchPharmacyCollections,
   fetchPharmacyCompanies,
   fetchPharmacyDeliveries,
@@ -218,7 +218,7 @@ export async function runCustomReport(opts: {
   let rows: Record<string, unknown>[] = [];
 
   if (dataset.reportId) {
-    const res = await fetchDistributionReport(dataset.reportId, {
+    const res = await runCatalogReport(dataset.reportId, {
       from: opts.filters.from,
       to: opts.filters.to,
       cityId: opts.filters.cityId,

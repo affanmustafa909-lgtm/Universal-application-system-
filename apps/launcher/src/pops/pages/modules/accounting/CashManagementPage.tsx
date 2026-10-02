@@ -99,7 +99,7 @@ export function CashManagementPage(): JSX.Element {
       setNotice(type === "paid_in" ? `Cash In: ${formatPkr(amountNum)}` : `Cash Out: ${formatPkr(amountNum)}`);
       try {
         await printCashMovementSlip({
-          branchName: branch?.name ?? "POPS",
+          branchName: branch?.name ?? "Zivra",
           branchCode: branch?.code,
           sessionRef: openSession?.sessionRef,
           type,

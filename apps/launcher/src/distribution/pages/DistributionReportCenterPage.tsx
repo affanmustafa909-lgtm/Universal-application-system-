@@ -1,13 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "../../pops/ui/PageHeader";
 import { usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
-import {
-  fetchDistributionReport,
-  fetchPharmacyAreas,
-  fetchPharmacyCities,
-} from "../../pharmacy/api/pharmacy-erp";
+import { fetchPharmacyAreas, fetchPharmacyCities } from "../../pharmacy/api/pharmacy-erp";
+import { runCatalogReport } from "../lib/composedDistReports";
 import { DISTRIBUTION_REPORTS, REPORT_CATEGORY_ORDER } from "../spec/reports";
 import { DistCustomReportBuilder } from "../components/DistCustomReportBuilder";
 import {
@@ -17,9 +14,45 @@ import {
   DistStatusBadge,
   exportRowsToCsv,
 } from "../ui/DistUi";
+import { DistReportSummary } from "../components/DistReportSummary";
 import { printDistReportDocument } from "../lib/printDistOrder";
+import { summarizeReportRows, summarySubtitle } from "../lib/reportSummary";
 
 type Mode = "catalog" | "custom";
+
+const COLUMN_LABELS: Record<string, string> = {
+  deliveryNumber: "Delivery #",
+  customerCode: "Cust code",
+  customerName: "Customer",
+  orderNumber: "Order #",
+  invoiceNumber: "Invoice #",
+  creditLimitPkr: "Credit",
+  creditDays: "Credit days",
+  receivedPkr: "Received",
+  leftToReceivePkr: "Left to receive",
+  outstandingPkr: "Outstanding",
+  availableCreditPkr: "Available credit",
+  overByPkr: "Over credit",
+  openingBalancePkr: "Opening balance",
+  creditCategory: "Credit category",
+  termsOfPayment: "Terms",
+  modeOfPayment: "Payment mode",
+  monthlySalesTargetPkr: "Monthly target",
+  discountPct: "Discount %",
+  priceLevel: "Price level",
+  businessName: "Business",
+  companyCredit: "Company credit",
+  deliveredQty: "Delivered",
+  returnedQty: "Returned",
+  collectedPkr: "Collected",
+  salesPkr: "Sales PKR",
+};
+
+function columnHeader(key: string): string {
+  if (COLUMN_LABELS[key]) return COLUMN_LABELS[key];
+  const spaced = key.replace(/([A-Z])/g, " $1").replace(/Pkr$/i, " PKR");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
 
 export function DistributionReportCenterPage(): JSX.Element {
   const { branch } = usePharmacyAccess();
@@ -34,10 +67,18 @@ export function DistributionReportCenterPage(): JSX.Element {
     }
     return "All";
   });
+  const reportParam = searchParams.get("report");
   const [selectedId, setSelectedId] = useState(() => {
+    if (reportParam && DISTRIBUTION_REPORTS.some((r) => r.id === reportParam)) return reportParam;
     if (categoryParam === "Purchase") return "purchase-dashboard";
     return "sales-report";
   });
+  useEffect(() => {
+    if (reportParam && DISTRIBUTION_REPORTS.some((r) => r.id === reportParam)) {
+      setSelectedId(reportParam);
+      setMode("catalog");
+    }
+  }, [reportParam]);
   const [filters, setFilters] = useState<DistFilterValues>({});
   const [printNotice, setPrintNotice] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
@@ -48,7 +89,7 @@ export function DistributionReportCenterPage(): JSX.Element {
     queryKey: ["distribution", "report", selectedId, filters, branch?.code],
     enabled: mode === "catalog" && Boolean(selected?.live) && !selected?.to,
     queryFn: () =>
-      fetchDistributionReport(selectedId, {
+      runCatalogReport(selectedId, {
         from: filters.from,
         to: filters.to,
         cityId: filters.cityId,
@@ -61,11 +102,11 @@ export function DistributionReportCenterPage(): JSX.Element {
     const cols = report.data?.columns ?? [];
     return cols.map((key) => ({
       key,
-      header: key,
+      header: columnHeader(key),
       render: (row: Record<string, unknown>) => {
         const v = row[key];
         if (key === "status" && typeof v === "string") return <DistStatusBadge status={v} />;
-        if (typeof v === "number" && /pkr|total|sales|outstanding|qty|quantity|amount|count/i.test(key)) {
+        if (typeof v === "number" && /pkr|total|sales|outstanding|qty|quantity|amount|count|days|pct|over/i.test(key)) {
           return Number(v).toLocaleString();
         }
         if (v instanceof Date) return v.toISOString();
@@ -97,11 +138,20 @@ export function DistributionReportCenterPage(): JSX.Element {
     setPrintNotice(null);
     setPrinting(true);
     try {
+      const keys = report.data?.columns ?? columns.map((c) => c.key);
+      const labels = keys.map(columnHeader);
+      const totals = summarySubtitle(summarizeReportRows(keys, rows, columnHeader));
       await printDistReportDocument({
         title: selected.title,
-        subtitle: selected.description,
-        columns: report.data?.columns ?? columns.map((c) => c.key),
-        rows,
+        subtitle: [selected.description, totals].filter(Boolean).join(" — "),
+        columns: labels,
+        rows: rows.map((row) => {
+          const labeled: Record<string, unknown> = {};
+          keys.forEach((key, index) => {
+            labeled[labels[index]!] = row[key];
+          });
+          return labeled;
+        }),
       });
       setPrintNotice("Print dialog opened");
     } catch (err) {
@@ -277,22 +327,44 @@ export function DistributionReportCenterPage(): JSX.Element {
                     cities={cities.data ?? []}
                     areas={areas.data ?? []}
                   />
+                  {selectedId === "delivery-plan" ? (
+                    <p className="mt-2 text-xs text-slate-500">Click a delivery to open its line details.</p>
+                  ) : null}
                   {report.isError ? (
                     <p className="mt-3 text-sm text-red-600">{(report.error as Error).message}</p>
                   ) : null}
+                  <DistReportSummary
+                    columns={report.data?.columns ?? []}
+                    rows={rows}
+                    labelFor={columnHeader}
+                  />
                   <div className="mt-3">
                     <DistDataTable
                       columns={columns}
                       rows={rows}
                       rowKey={(r) =>
-                        String(
-                          r.id ??
-                            r.orderNumber ??
-                            r.code ??
-                            r.deliveryNumber ??
-                            r.collectionNumber ??
-                            JSON.stringify(r).slice(0, 48),
-                        )
+                        [
+                          r.id,
+                          r.code,
+                          r.deliveryNumber,
+                          r.orderNumber,
+                          r.sku,
+                          r.product,
+                          r.batch,
+                          r.qty,
+                          r.collectionNumber,
+                        ]
+                          .filter((part) => part != null && part !== "")
+                          .join("|") || JSON.stringify(r).slice(0, 80)
+                      }
+                      onRowClick={
+                        selectedId === "delivery-plan"
+                          ? (row) => {
+                              const number = String(row.deliveryNumber ?? "");
+                              setSelectedId("delivery-plan-details");
+                              setFilters((current) => ({ ...current, q: number }));
+                            }
+                          : undefined
                       }
                       empty={report.isLoading ? "Loading…" : "No rows for these filters"}
                       onExport={
@@ -300,7 +372,7 @@ export function DistributionReportCenterPage(): JSX.Element {
                           ? () =>
                               exportRowsToCsv(
                                 `${selectedId}.csv`,
-                                report.data?.columns ?? [],
+                                (report.data?.columns ?? []).map(columnHeader),
                                 rows.map((r) =>
                                   (report.data?.columns ?? []).map((c) => String(r[c] ?? "")),
                                 ),

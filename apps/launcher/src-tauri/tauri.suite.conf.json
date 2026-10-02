@@ -1,19 +1,19 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "POPS Universal Management System",
+  "productName": "Zivra Universal Management System",
   "identifier": "com.platform.pops.suite",
-  "version": "0.3.74",
+  "version": "1.0.1",
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "POPS Universal — Restaurant · Ice Cream · Store · Pharmacy · Distribution"
+        "title": "Zivra Universal — Restaurant · Ice Cream · Store · Pharmacy · Distribution"
       }
     ]
   },
   "bundle": {
-    "shortDescription": "Universal POS & ERP suite",
-    "longDescription": "POPS Universal Management System — Restaurant, Ice Cream Bar, General Store, Pharmacy, and Medical Distribution in one installer. Switch systems after login; includes POS, inventory, printing, pay in/out, tax, and reports.",
+    "shortDescription": "Universal POS & ERP suite by BARIQ ERP Solutions",
+    "longDescription": "Zivra Universal Management System by BARIQ ERP Solutions — Restaurant, Ice Cream Bar, General Store, Pharmacy, and Distribution in one installer. Switch systems after login; includes POS, inventory, printing, pay in/out, tax, and reports.",
     "windows": {
       "nsis": {
         "installMode": "currentUser",
@@ -24,8 +24,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-suite.json",
-        "https://github.com/basir2353/Desktop-application-Multiple-System/releases/latest/download/latest-suite.json"
+        "https://github.com/basir2353/zivra-desktop-updates/releases/latest/download/latest-suite.json"
       ]
     }
   }

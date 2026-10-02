@@ -1338,7 +1338,7 @@ export function PosPage(): JSX.Element {
     const lines = printOrderedCart();
     const staffName = formatSessionPrintName(useSessionStore.getState().claims?.sub) || sessionUserLabel;
     return {
-      branchName: branch?.name ?? "POPS",
+      branchName: branch?.name ?? "Zivra",
       branchCode: branch?.code ?? "—",
       orderRef,
       modeLabel,
@@ -2091,7 +2091,7 @@ export function PosPage(): JSX.Element {
         });
         const phone = phoneFromBillNotes(bill.notes);
         if (phone || mode === "delivery") {
-          shareBillViaWhatsApp(bill, branch?.name ?? "POPS", phone);
+          shareBillViaWhatsApp(bill, branch?.name ?? "Zivra", phone);
         }
         return;
       }
@@ -2104,7 +2104,7 @@ export function PosPage(): JSX.Element {
       });
       const phone = phoneFromBillNotes(bill.notes);
       if (phone || mode === "delivery") {
-        shareBillViaWhatsApp(bill, branch?.name ?? "POPS", phone);
+        shareBillViaWhatsApp(bill, branch?.name ?? "Zivra", phone);
       }
     },
     onError: (err: Error) => {

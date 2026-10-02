@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { createPharmacyMedicine } from "../../pharmacy/api/pharmacy";
 import { createPharmacyCompany } from "../../pharmacy/api/pharmacy-erp";
 import {
@@ -1466,6 +1466,7 @@ function MedicineFormFields({
 export function DistributionMedicinesPage(): JSX.Element {
   const { branch } = usePharmacyAccess();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const invalidate = useInvalidatePharmacy([
     ["pharmacy", "masters-medicines"],
     ["pharmacy", "masters-overview"],
@@ -1473,7 +1474,7 @@ export function DistributionMedicinesPage(): JSX.Element {
 
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("active");
-  const [companyId, setCompanyId] = useState("");
+  const [companyId, setCompanyId] = useState(() => searchParams.get("companyId") ?? "");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [error, setError] = useState<string | null>(null);
@@ -1485,6 +1486,14 @@ export function DistributionMedicinesPage(): JSX.Element {
   const [form, setForm] = useState<MedicineForm>(emptyForm);
   const [afterSave, setAfterSave] = useState<"stay" | "new" | "view">("stay");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const fromUrl = searchParams.get("companyId") ?? "";
+    if (fromUrl) {
+      setCompanyId(fromUrl);
+      setPage(1);
+    }
+  }, [searchParams]);
 
   const list = useQuery({
     queryKey: ["pharmacy", "masters-medicines", branch?.code, page, pageSize, q, status, companyId],

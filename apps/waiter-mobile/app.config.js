@@ -93,7 +93,7 @@ module.exports = {
       appVersion: base.expo.version,
       updateFeedUrl:
         process.env.EXPO_PUBLIC_UPDATE_FEED_URL ||
-        `https://github.com/basir2353/pops-mobile-updates/releases/latest/download/latest-${variant === "admin" ? "admin" : "staff"}.json`,
+        `https://github.com/basir2353/zivra-mobile-updates/releases/latest/download/latest-${variant === "admin" ? "admin" : "staff"}.json`,
     },
   },
 };

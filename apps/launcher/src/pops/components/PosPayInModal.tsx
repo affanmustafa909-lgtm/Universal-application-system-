@@ -50,7 +50,7 @@ export function PosPayInModal({ onClose, onSuccess }: Props): JSX.Element {
       onSuccess?.(`Pay In recorded: ${formatPkr(row.amountPkr)}`);
       try {
         await printCashMovementSlip({
-          branchName: branch?.name ?? "POPS",
+          branchName: branch?.name ?? "Zivra",
           branchCode: branch?.code,
           sessionRef: openSession?.sessionRef,
           type: "paid_in",

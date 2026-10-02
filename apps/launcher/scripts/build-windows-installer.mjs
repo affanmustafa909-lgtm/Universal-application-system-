@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Build the Windows .exe installer for POPS Launcher (suite edition).
+ * Build the Windows .exe installer for Zivra Launcher (suite edition).
  *
  * - On Windows: runs Tauri NSIS build locally → *-setup.exe
  * - On macOS/Linux: prints how to build via GitHub Actions
@@ -53,12 +53,12 @@ Option B — Build on a Windows PC:
   pnpm installer:windows
 
 Output file (after install, user double-clicks desktop shortcut):
-  apps/launcher/src-tauri/target/release/bundle/nsis/POPS-Universal-Management-System_*_x64-setup.exe
+  apps/launcher/src-tauri/target/release/bundle/nsis/Zivra-Universal-Management-System_*_x64-setup.exe
 `);
   process.exit(0);
 }
 
-console.log(`[installer] Building POPS Universal Windows setup (API: ${apiUrl})…`);
+console.log(`[installer] Building Zivra Universal Windows setup (API: ${apiUrl})…`);
 const result = spawnSync("node", ["./scripts/build-edition.mjs", "suite"], {
   cwd: launcherRoot,
   stdio: "inherit",

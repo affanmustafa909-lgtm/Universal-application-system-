@@ -36,6 +36,13 @@ export const DISTRIBUTION_REPORTS: DistReportDef[] = [
   { id: "collections-summary", title: "Collections summary", category: "Recovery", live: true, description: "Collections by date" },
   { id: "customer-ledger", title: "Customer ledger", category: "Recovery", live: true, description: "Outstanding and credit by customer" },
   { id: "credit-limit-breach", title: "Credit limit alerts", category: "Recovery", live: true, description: "Customers over credit limit" },
+  {
+    id: "customer-credit",
+    title: "Customer credit",
+    category: "Recovery",
+    live: true,
+    description: "Full credit statement — limit, days, outstanding, available, over-limit, terms, and company credit",
+  },
 
   // Stock
   { id: "stock-near-expiry", title: "Stock near expiry", category: "Stock", live: true, description: "Batches expiring within 90 days" },
@@ -45,6 +52,20 @@ export const DISTRIBUTION_REPORTS: DistReportDef[] = [
 
   // Distribution
   { id: "pending-deliveries", title: "Pending deliveries", category: "Distribution", live: true, description: "Open delivery tickets" },
+  {
+    id: "delivery-plan",
+    title: "Delivery plan",
+    category: "Distribution",
+    live: true,
+    description: "Delivery plan by customer, route, rider, and vehicle. Click a row for line details.",
+  },
+  {
+    id: "delivery-plan-details",
+    title: "Delivery plan details",
+    category: "Distribution",
+    live: true,
+    description: "Line-level delivery plan — product, batch, qty, delivered, and returned",
+  },
   { id: "delivery-status", title: "Delivery status wise", category: "Distribution", live: true, description: "Deliveries grouped by status" },
   { id: "pod-exceptions", title: "POD exceptions", category: "Distribution", live: true, description: "Failed / exception deliveries" },
   { id: "route-load", title: "Route load", category: "Distribution", live: true, description: "Deliveries pending vs delivered by route" },

@@ -2510,7 +2510,7 @@ export function buildThermalDialogHtml(
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>POPS Print</title>
+  <title>Zivra Print</title>
   <style>
     @page {
       size: ${pageW}mm auto;

@@ -357,7 +357,7 @@ export function PosPayOutModal({ onClose, onSuccess }: Props): JSX.Element {
       const queuedOffline = movement.id.startsWith("cash-");
       try {
         await printCashMovementSlip({
-          branchName: branch?.name ?? "POPS",
+          branchName: branch?.name ?? "Zivra",
           branchCode: branch?.code,
           sessionRef: sessionQuery.data?.sessionRef,
           type: "paid_out",

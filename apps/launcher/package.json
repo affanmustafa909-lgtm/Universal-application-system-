@@ -1,6 +1,6 @@
 {
   "name": "@platform/launcher",
-  "version": "0.3.74",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -27,6 +27,7 @@
     "manifest:ice-cream-bar": "node ./scripts/write-update-manifest.mjs ice-cream-bar",
     "publish:desktop": "node ./scripts/publish-desktop-update.mjs",
     "publish:desktop:all": "node ./scripts/publish-desktop-update.mjs all",
+    "publish:distribution": "node ./scripts/publish-distribution-update.mjs",
     "publish:ice-cream": "node ./scripts/publish-ice-cream-update.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

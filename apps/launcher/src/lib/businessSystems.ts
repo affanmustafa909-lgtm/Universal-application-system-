@@ -75,11 +75,11 @@ export const businessSystems: Record<BusinessSystemId, BusinessSystem> = {
   restaurant: {
     id: "restaurant",
     name: "Restaurant ERP",
-    shortName: "POPS",
+    shortName: "Zivra",
     tagline: "Full-service restaurant operations",
     description: "POS, kitchen, tables, menu, inventory, HR, and compliance for restaurants.",
     accentClass: "text-amber-400",
-    iconLetter: "P",
+    iconLetter: "Z",
     gradientClass: "from-amber-400 to-amber-600",
     routePrefix: "/pops",
     hiddenNavPaths: restaurantHidden,
@@ -111,12 +111,12 @@ export const businessSystems: Record<BusinessSystemId, BusinessSystem> = {
   distribution: {
     id: "distribution",
     name: "Medical Distribution",
-    shortName: "Distribution",
+    shortName: "Zivra Dist",
     tagline: "Wholesale booking, field force, and recovery",
     description:
       "Order booking, trade customers, deliveries, collections, territory/PJP, and pricing schemes.",
     accentClass: "text-cyan-400",
-    iconLetter: "D",
+    iconLetter: "Z",
     gradientClass: "from-cyan-400 to-blue-600",
     routePrefix: "/pops",
     hiddenNavPaths: distributionHidden,

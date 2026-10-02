@@ -4,14 +4,15 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * Publish desktop updater assets to basir2353/pops-desktop-updates.
- * Ice Cream Bar stays on publish-ice-cream-update.mjs (separate repo/key).
+ * Publish desktop updater assets to basir2353/zivra-desktop-updates.
+ * Distribution → publish-distribution-update.mjs (separate repo).
+ * Ice Cream Bar → publish-ice-cream-update.mjs (separate repo/key).
  *
  * Usage (after signed build + write-update-manifest):
  *   node scripts/publish-desktop-update.mjs <edition> [version]
  *   node scripts/publish-desktop-update.mjs all [version]
  *
- * Editions: suite | restaurant | general-store | pharmacy | distribution | all
+ * Editions: suite | restaurant | general-store | pharmacy | all
  */
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -20,9 +21,17 @@ const updatesDir = join(repoRoot, "dist-installers", "updates");
 const editionArg = (process.argv[2] ?? "").trim();
 const versionArg = (process.argv[3] ?? "").trim();
 
-const DESKTOP_EDITIONS = ["suite", "restaurant", "general-store", "pharmacy", "distribution"];
+const DESKTOP_EDITIONS = ["suite", "restaurant", "general-store", "pharmacy"];
 const owner = "basir2353";
-const repo = "pops-desktop-updates";
+const repo = "zivra-desktop-updates";
+
+if (editionArg === "distribution") {
+  console.error(
+    "[publish-desktop] Distribution uses a separate repo. Run:\n" +
+      "  node scripts/publish-distribution-update.mjs [version]",
+  );
+  process.exit(1);
+}
 
 if (!editionArg || (editionArg !== "all" && !DESKTOP_EDITIONS.includes(editionArg))) {
   console.error(
@@ -56,7 +65,7 @@ const apiHeaders = {
   Accept: "application/vnd.github+json",
   Authorization: `Bearer ${auth.token}`,
   "X-GitHub-Api-Version": "2022-11-28",
-  "User-Agent": "pops-desktop-updater",
+  "User-Agent": "zivra-desktop-updater",
 };
 
 async function api(method, url, body, extraHeaders = {}) {
@@ -230,8 +239,8 @@ async function main() {
     const allFiles = [...new Set(pkgs.flatMap((p) => p.files))];
     const release = await ensureRelease(
       tag,
-      `POPS Desktop ${version}`,
-      `Desktop auto-update assets for: ${pkgs.map((p) => p.edition).join(", ")}`,
+      `Zivra Desktop ${version}`,
+      `Zivra desktop auto-update assets (BARIQ ERP Solutions) for: ${pkgs.map((p) => p.edition).join(", ")}`,
       true,
     );
     // Refresh release after create so assets list is current

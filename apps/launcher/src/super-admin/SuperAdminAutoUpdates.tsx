@@ -35,13 +35,13 @@ const PRIMARY: Array<{ channel: SetupChannel; feedId: string; title: string; blu
     channel: "suite",
     feedId: "desktop-suite",
     title: "Universal (Suite)",
-    blurb: "POPS Universal Management System — all modules in one EXE",
+    blurb: "Zivra Universal Management System — all modules in one EXE (BARIQ ERP Solutions)",
   },
   {
     channel: "distribution",
     feedId: "desktop-distribution",
     title: "Distribution",
-    blurb: "Medical Distribution System — Dist-only EXE",
+    blurb: "Zivra Distribution System — Dist-only EXE (BARIQ ERP Solutions)",
   },
 ];
 

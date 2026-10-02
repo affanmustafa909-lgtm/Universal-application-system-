@@ -1,17 +1,21 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   createPharmacyCompany,
   createPharmacyWarehouse,
 } from "../../pharmacy/api/pharmacy-erp";
 import {
   listCompaniesPaged,
+  listMedicinesPaged,
   listWarehousesPaged,
   setCompanyStatus,
   setWarehouseStatus,
   updateCompany,
+  updateMedicine,
   updateWarehouse,
   type CompanyRow,
+  type MedicineMasterRow,
   type WarehouseRow,
 } from "../../pharmacy/api/pharmacy-masters";
 import { useInvalidatePharmacy, usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
@@ -48,6 +52,53 @@ type CompanyForm = {
 
 type CompanyTab = "company" | "product" | "discount" | "shifting";
 
+type DiscountPolicy = {
+  defaultTradeDiscountPct: number;
+  maxDiscountPct: number;
+  cashDiscountPct: number;
+  slabNotes: string;
+  notes: string;
+};
+
+const emptyDiscountPolicy = (): DiscountPolicy => ({
+  defaultTradeDiscountPct: 0,
+  maxDiscountPct: 0,
+  cashDiscountPct: 0,
+  slabNotes: "",
+  notes: "",
+});
+
+function parseDiscountPolicy(raw: string): DiscountPolicy {
+  const blank = emptyDiscountPolicy();
+  const text = raw.trim();
+  if (!text) return blank;
+  try {
+    const j = JSON.parse(text) as Record<string, unknown>;
+    if (!j || typeof j !== "object" || Array.isArray(j)) {
+      return { ...blank, notes: text };
+    }
+    return {
+      defaultTradeDiscountPct: Number(j.defaultTradeDiscountPct) || 0,
+      maxDiscountPct: Number(j.maxDiscountPct) || 0,
+      cashDiscountPct: Number(j.cashDiscountPct) || 0,
+      slabNotes: String(j.slabNotes ?? ""),
+      notes: String(j.notes ?? ""),
+    };
+  } catch {
+    return { ...blank, notes: text };
+  }
+}
+
+function serializeDiscountPolicy(p: DiscountPolicy): string {
+  return JSON.stringify({
+    defaultTradeDiscountPct: Number(p.defaultTradeDiscountPct) || 0,
+    maxDiscountPct: Number(p.maxDiscountPct) || 0,
+    cashDiscountPct: Number(p.cashDiscountPct) || 0,
+    slabNotes: p.slabNotes.trim(),
+    notes: p.notes.trim(),
+  });
+}
+
 const emptyCompanyForm = (): CompanyForm => ({
   code: "",
   name: "",
@@ -63,7 +114,7 @@ const emptyCompanyForm = (): CompanyForm => ({
   salesmanCommissionPct: "0",
   showForAdvTax: "Yes",
   productPolicyJson: "",
-  discountPolicyJson: "",
+  discountPolicyJson: serializeDiscountPolicy(emptyDiscountPolicy()),
   companyShiftingJson: "",
   status: "active",
 });
@@ -84,7 +135,9 @@ function rowToCompanyForm(r: CompanyRow): CompanyForm {
     salesmanCommissionPct: String(r.salesmanCommissionPct ?? 0),
     showForAdvTax: r.showForAdvTax ?? "Yes",
     productPolicyJson: r.productPolicyJson ?? "",
-    discountPolicyJson: r.discountPolicyJson ?? "",
+    discountPolicyJson: r.discountPolicyJson?.trim()
+      ? r.discountPolicyJson
+      : serializeDiscountPolicy(emptyDiscountPolicy()),
     companyShiftingJson: r.companyShiftingJson ?? "",
     status: r.status ?? "active",
   };
@@ -113,7 +166,14 @@ function companyPayload(form: CompanyForm) {
 }
 
 export function DistributionCompaniesPage(): JSX.Element {
-  const invalidate = useInvalidatePharmacy([["pharmacy", "companies-paged"], ["pharmacy", "companies-picker"]]);
+  const navigate = useNavigate();
+  const { branch } = usePharmacyAccess();
+  const invalidate = useInvalidatePharmacy([
+    ["pharmacy", "companies-paged"],
+    ["pharmacy", "companies-picker"],
+    ["pharmacy", "masters-medicines"],
+    ["pharmacy", "company-products"],
+  ]);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
@@ -123,9 +183,44 @@ export function DistributionCompaniesPage(): JSX.Element {
   const [form, setForm] = useState<CompanyForm>(emptyCompanyForm());
   const [tab, setTab] = useState<CompanyTab>("company");
 
+  const [productQ, setProductQ] = useState("");
+  const [productPage, setProductPage] = useState(1);
+  const [productPageSize, setProductPageSize] = useState(25);
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const [shiftTargetId, setShiftTargetId] = useState("");
+  const [shiftMsg, setShiftMsg] = useState<string | null>(null);
+
   const list = useQuery({
     queryKey: ["pharmacy", "companies-paged", page, pageSize, q, status],
     queryFn: () => listCompaniesPaged({ page, pageSize, q: q || undefined, status: status || undefined }),
+  });
+
+  const companyProducts = useQuery({
+    queryKey: [
+      "pharmacy",
+      "company-products",
+      editing?.id,
+      branch?.code,
+      productPage,
+      productPageSize,
+      productQ,
+    ],
+    enabled: Boolean(editing?.id && branch?.code && (tab === "product" || tab === "shifting")),
+    queryFn: () =>
+      listMedicinesPaged({
+        branchCode: branch!.code,
+        companyId: editing!.id,
+        page: productPage,
+        pageSize: productPageSize,
+        q: productQ || undefined,
+        status: "active",
+      }),
+  });
+
+  const companyPicker = useQuery({
+    queryKey: ["pharmacy", "companies-picker"],
+    queryFn: () => listCompaniesPaged({ page: 1, pageSize: 200, status: "active" }),
+    enabled: tab === "shifting",
   });
 
   const lastCode = useMemo(() => {
@@ -135,17 +230,40 @@ export function DistributionCompaniesPage(): JSX.Element {
     return codes.length ? Math.max(...codes) : 0;
   }, [list.data?.items]);
 
+  const discount = useMemo(
+    () => parseDiscountPolicy(form.discountPolicyJson),
+    [form.discountPolicyJson],
+  );
+
+  const setDiscount = (patch: Partial<DiscountPolicy>) => {
+    setForm((prev) => ({
+      ...prev,
+      discountPolicyJson: serializeDiscountPolicy({
+        ...parseDiscountPolicy(prev.discountPolicyJson),
+        ...patch,
+      }),
+    }));
+  };
+
   const save = useMutation({
     mutationFn: async () => {
       const body = companyPayload(form);
       if (editing) return updateCompany(editing.id, body);
       return createPharmacyCompany(body);
     },
-    onSuccess: () => {
-      invalidate();
-      setEditing(null);
-      setForm(emptyCompanyForm());
-      setTab("company");
+    onSuccess: (row) => {
+      void invalidate();
+      const saved = row as CompanyRow | undefined;
+      if (saved?.id) {
+        setEditing(saved);
+        setForm(rowToCompanyForm(saved));
+      } else {
+        setEditing(null);
+        setForm(emptyCompanyForm());
+        setTab("company");
+      }
+      setSelectedProductIds(new Set());
+      setShiftMsg(null);
       setError(null);
       void list.refetch();
     },
@@ -155,13 +273,53 @@ export function DistributionCompaniesPage(): JSX.Element {
   const toggle = useMutation({
     mutationFn: (r: CompanyRow) => setCompanyStatus(r.id, r.status === "active" ? "inactive" : "active"),
     onSuccess: () => {
-      invalidate();
+      void invalidate();
       void list.refetch();
     },
     onError: (e: Error) => setError(e.message),
   });
 
+  const shiftProducts = useMutation({
+    mutationFn: async () => {
+      if (!editing?.id) throw new Error("Save the company first.");
+      if (!shiftTargetId) throw new Error("Select a target company.");
+      if (shiftTargetId === editing.id) throw new Error("Target must be a different company.");
+      const ids = [...selectedProductIds];
+      if (ids.length === 0) throw new Error("Select at least one product to shift.");
+      for (const id of ids) {
+        await updateMedicine(id, { companyId: shiftTargetId });
+      }
+      return ids.length;
+    },
+    onSuccess: (count) => {
+      setSelectedProductIds(new Set());
+      setError(null);
+      void invalidate();
+      void companyProducts.refetch();
+      setShiftMsg(`Shifted ${count} product(s) to the target company.`);
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
   const set = (patch: Partial<CompanyForm>) => setForm({ ...form, ...patch });
+
+  const toggleProduct = (id: string) => {
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllVisibleProducts = () => {
+    const items = companyProducts.data?.items ?? [];
+    setSelectedProductIds((prev) => {
+      const allSelected = items.length > 0 && items.every((r) => prev.has(r.id));
+      if (allSelected) return new Set();
+      return new Set(items.map((r) => r.id));
+    });
+  };
 
   const tabs: Array<{ id: CompanyTab; label: string }> = [
     { id: "company", label: "Company" },
@@ -169,6 +327,10 @@ export function DistributionCompaniesPage(): JSX.Element {
     { id: "discount", label: "Discount-Policy" },
     { id: "shifting", label: "Company Shifting" },
   ];
+
+  const medicinesHref = editing?.id
+    ? `/pops/distribution/medicines?companyId=${encodeURIComponent(editing.id)}`
+    : "/pops/distribution/medicines";
 
   return (
     <DistPageShell
@@ -294,36 +456,265 @@ export function DistributionCompaniesPage(): JSX.Element {
           ) : null}
 
           {tab === "product" ? (
-            <label className="block text-xs text-slate-500">
-              Product policy / linked SKU notes
-              <textarea
-                className="mt-1 min-h-[10rem] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
-                value={form.productPolicyJson}
-                onChange={(e) => set({ productPolicyJson: e.target.value })}
-              />
-            </label>
+            <div className="space-y-3">
+              {!editing?.id ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                  Save the company first to manage its products.
+                </p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <DistInput
+                      className="min-w-[12rem] flex-1"
+                      placeholder="Search products…"
+                      value={productQ}
+                      onChange={(e) => {
+                        setProductQ(e.target.value);
+                        setProductPage(1);
+                      }}
+                    />
+                    <DistButton
+                      type="button"
+                      variant="secondary"
+                      onClick={() => navigate(medicinesHref)}
+                    >
+                      + Add product
+                    </DistButton>
+                    <Link
+                      to={medicinesHref}
+                      className="text-xs font-semibold text-sky-600 underline dark:text-sky-400"
+                    >
+                      Open medicines list
+                    </Link>
+                  </div>
+                  <DistDataTable
+                    loading={companyProducts.isLoading}
+                    rowKey={(r: MedicineMasterRow) => r.id}
+                    empty="No products linked to this company"
+                    rows={companyProducts.data?.items ?? []}
+                    columns={[
+                      { key: "sku", header: "SKU", className: "font-mono text-xs" },
+                      { key: "name", header: "Name" },
+                      {
+                        key: "wholesalePricePkr",
+                        header: "TP",
+                        render: (r) =>
+                          r.wholesalePricePkr != null ? String(r.wholesalePricePkr) : "—",
+                      },
+                      {
+                        key: "sellingPricePkr",
+                        header: "RP",
+                        render: (r) =>
+                          r.sellingPricePkr != null ? String(r.sellingPricePkr) : "—",
+                      },
+                      {
+                        key: "status",
+                        header: "Status",
+                        render: (r) => <DistStatusBadge status={r.status} />,
+                      },
+                      {
+                        key: "open",
+                        header: "",
+                        render: (r) => (
+                          <DistButton
+                            type="button"
+                            variant="ghost"
+                            className="px-2 py-1 text-xs"
+                            onClick={() => navigate(`/pops/distribution/medicines/${r.id}`)}
+                          >
+                            Open
+                          </DistButton>
+                        ),
+                      },
+                    ]}
+                  />
+                  <DistPagination
+                    page={companyProducts.data?.page ?? productPage}
+                    pageSize={companyProducts.data?.pageSize ?? productPageSize}
+                    total={companyProducts.data?.total ?? 0}
+                    totalPages={companyProducts.data?.totalPages}
+                    onPageChange={setProductPage}
+                    onPageSizeChange={(n) => {
+                      setProductPageSize(n);
+                      setProductPage(1);
+                    }}
+                  />
+                </>
+              )}
+              <label className="block text-xs text-slate-500">
+                Product policy / notes
+                <textarea
+                  className="mt-1 min-h-[6rem] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  value={form.productPolicyJson}
+                  onChange={(e) => set({ productPolicyJson: e.target.value })}
+                  placeholder="Optional notes for this company’s product policy…"
+                />
+              </label>
+            </div>
           ) : null}
 
           {tab === "discount" ? (
-            <label className="block text-xs text-slate-500">
-              Discount policy
-              <textarea
-                className="mt-1 min-h-[10rem] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
-                value={form.discountPolicyJson}
-                onChange={(e) => set({ discountPolicyJson: e.target.value })}
-              />
-            </label>
+            <div className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <label className="text-xs text-slate-500">
+                  Default trade discount %
+                  <DistInput
+                    className="mt-1"
+                    type="number"
+                    value={String(discount.defaultTradeDiscountPct)}
+                    onChange={(e) =>
+                      setDiscount({ defaultTradeDiscountPct: Number(e.target.value) || 0 })
+                    }
+                  />
+                </label>
+                <label className="text-xs text-slate-500">
+                  Max discount %
+                  <DistInput
+                    className="mt-1"
+                    type="number"
+                    value={String(discount.maxDiscountPct)}
+                    onChange={(e) => setDiscount({ maxDiscountPct: Number(e.target.value) || 0 })}
+                  />
+                </label>
+                <label className="text-xs text-slate-500">
+                  Cash discount %
+                  <DistInput
+                    className="mt-1"
+                    type="number"
+                    value={String(discount.cashDiscountPct)}
+                    onChange={(e) => setDiscount({ cashDiscountPct: Number(e.target.value) || 0 })}
+                  />
+                </label>
+              </div>
+              <label className="block text-xs text-slate-500">
+                Slab / scheme notes
+                <textarea
+                  className="mt-1 min-h-[5rem] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  value={discount.slabNotes}
+                  onChange={(e) => setDiscount({ slabNotes: e.target.value })}
+                  placeholder="e.g. 5% on 10+ boxes, 8% on 50+…"
+                />
+              </label>
+              <label className="block text-xs text-slate-500">
+                Other discount notes
+                <textarea
+                  className="mt-1 min-h-[5rem] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  value={discount.notes}
+                  onChange={(e) => setDiscount({ notes: e.target.value })}
+                />
+              </label>
+            </div>
           ) : null}
 
           {tab === "shifting" ? (
-            <label className="block text-xs text-slate-500">
-              Company shifting notes
-              <textarea
-                className="mt-1 min-h-[10rem] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
-                value={form.companyShiftingJson}
-                onChange={(e) => set({ companyShiftingJson: e.target.value })}
-              />
-            </label>
+            <div className="space-y-3">
+              {!editing?.id ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                  Save the company first to shift products.
+                </p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="min-w-[14rem] flex-1 text-xs text-slate-500">
+                      Target company
+                      <DistSelect
+                        className="mt-1"
+                        value={shiftTargetId}
+                        onChange={(e) => {
+                          setShiftTargetId(e.target.value);
+                          setShiftMsg(null);
+                        }}
+                      >
+                        <option value="">Select company…</option>
+                        {(companyPicker.data?.items ?? [])
+                          .filter((c) => c.id !== editing.id)
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.code} — {c.name}
+                            </option>
+                          ))}
+                      </DistSelect>
+                    </label>
+                    <DistButton
+                      type="button"
+                      disabled={shiftProducts.isPending}
+                      onClick={() => {
+                        setShiftMsg(null);
+                        shiftProducts.mutate();
+                      }}
+                    >
+                      {shiftProducts.isPending ? "Shifting…" : `Shift selected (${selectedProductIds.size})`}
+                    </DistButton>
+                  </div>
+                  {shiftMsg ? (
+                    <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+                      {shiftMsg}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <DistInput
+                      className="min-w-[12rem] flex-1"
+                      placeholder="Search products to shift…"
+                      value={productQ}
+                      onChange={(e) => {
+                        setProductQ(e.target.value);
+                        setProductPage(1);
+                      }}
+                    />
+                    <DistButton type="button" variant="secondary" onClick={toggleAllVisibleProducts}>
+                      Toggle page selection
+                    </DistButton>
+                  </div>
+                  <DistDataTable
+                    loading={companyProducts.isLoading}
+                    rowKey={(r: MedicineMasterRow) => r.id}
+                    empty="No products to shift"
+                    rows={companyProducts.data?.items ?? []}
+                    columns={[
+                      {
+                        key: "sel",
+                        header: "",
+                        render: (r) => (
+                          <input
+                            type="checkbox"
+                            checked={selectedProductIds.has(r.id)}
+                            onChange={() => toggleProduct(r.id)}
+                            aria-label={`Select ${r.sku}`}
+                          />
+                        ),
+                      },
+                      { key: "sku", header: "SKU", className: "font-mono text-xs" },
+                      { key: "name", header: "Name" },
+                      {
+                        key: "status",
+                        header: "Status",
+                        render: (r) => <DistStatusBadge status={r.status} />,
+                      },
+                    ]}
+                  />
+                  <DistPagination
+                    page={companyProducts.data?.page ?? productPage}
+                    pageSize={companyProducts.data?.pageSize ?? productPageSize}
+                    total={companyProducts.data?.total ?? 0}
+                    totalPages={companyProducts.data?.totalPages}
+                    onPageChange={setProductPage}
+                    onPageSizeChange={(n) => {
+                      setProductPageSize(n);
+                      setProductPage(1);
+                    }}
+                  />
+                </>
+              )}
+              <label className="block text-xs text-slate-500">
+                Company shifting notes
+                <textarea
+                  className="mt-1 min-h-[5rem] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  value={form.companyShiftingJson}
+                  onChange={(e) => set({ companyShiftingJson: e.target.value })}
+                  placeholder="Optional notes about company / product shifts…"
+                />
+              </label>
+            </div>
           ) : null}
 
           <div className="flex flex-wrap gap-2 pt-1">
@@ -338,12 +729,20 @@ export function DistributionCompaniesPage(): JSX.Element {
                   setEditing(null);
                   setForm(emptyCompanyForm());
                   setTab("company");
+                  setSelectedProductIds(new Set());
+                  setShiftTargetId("");
+                  setShiftMsg(null);
                 }}
               >
                 Cancel
               </DistButton>
             ) : (
-              <DistButton type="button" variant="secondary" onClick={() => setForm(emptyCompanyForm())}>
+              <DistButton type="button" variant="secondary" onClick={() => {
+                setForm(emptyCompanyForm());
+                setSelectedProductIds(new Set());
+                setShiftTargetId("");
+                setShiftMsg(null);
+              }}>
                 Clear
               </DistButton>
             )}
@@ -418,6 +817,11 @@ export function DistributionCompaniesPage(): JSX.Element {
                     setEditing(r);
                     setForm(rowToCompanyForm(r));
                     setTab("company");
+                    setProductQ("");
+                    setProductPage(1);
+                    setSelectedProductIds(new Set());
+                    setShiftTargetId("");
+                    setShiftMsg(null);
                   }}
                 >
                   Edit

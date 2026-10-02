@@ -1,19 +1,19 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Pharmacy Management System",
+  "productName": "Zivra Pharmacy Management System",
   "identifier": "com.platform.pharmacy",
-  "version": "0.3.74",
+  "version": "1.0.1",
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "Pharmacy Management System"
+        "title": "Zivra Pharmacy Management System"
       }
     ]
   },
   "bundle": {
-    "shortDescription": "Pharmacy POS & ERP",
-    "longDescription": "Pharmacy Management System — counter POS, medicines, batches/expiry, prescriptions, and suppliers.",
+    "shortDescription": "Pharmacy POS & ERP by BARIQ ERP Solutions",
+    "longDescription": "Zivra Pharmacy Management System by BARIQ ERP Solutions — counter POS, medicines, batches/expiry, prescriptions, and suppliers.",
     "windows": {
       "nsis": {
         "installMode": "currentUser",
@@ -24,8 +24,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-pharmacy.json",
-        "https://github.com/basir2353/Desktop-application-Multiple-System/releases/latest/download/latest-pharmacy.json"
+        "https://github.com/basir2353/zivra-desktop-updates/releases/latest/download/latest-pharmacy.json"
       ]
     }
   }

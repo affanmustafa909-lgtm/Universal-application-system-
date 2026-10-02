@@ -8,8 +8,10 @@ import {
   fetchPharmacySalesForce,
 } from "../../pharmacy/api/pharmacy-erp";
 import { usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
+import { DistReportSummary } from "./DistReportSummary";
 import { runCustomReport } from "../lib/customReportRunner";
 import { printDistReportDocument } from "../lib/printDistOrder";
+import { summarizeReportRows, summarySubtitle } from "../lib/reportSummary";
 import {
   CUSTOM_DATASET_CATEGORIES,
   CUSTOM_REPORT_DATASETS,
@@ -245,10 +247,13 @@ export function DistCustomReportBuilder({ onBackToCatalog }: Props): JSX.Element
           ? `Users: ${selectedSalesmen.map((e) => e.name).join(", ")}`
           : null,
         from || to ? `Date: ${from || "…"} → ${to || "…"}` : null,
+        summarySubtitle(
+          summarizeReportRows(result.columns, result.rows, (key) => result.columnLabels[key] ?? key),
+        ),
       ].filter(Boolean);
       await printDistReportDocument({
         title: presetName || dataset?.label || "Custom report",
-        subtitle: [filterBits.join(" · "), `${result.rows.length} row(s)`].filter(Boolean).join(" — "),
+        subtitle: filterBits.join(" · "),
         columns: result.columns.map((c) => result.columnLabels[c] ?? c),
         rows: result.rows.map((r) => {
           const mapped: Record<string, unknown> = {};
@@ -650,6 +655,13 @@ export function DistCustomReportBuilder({ onBackToCatalog }: Props): JSX.Element
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-3">
+            {result?.rows.length ? (
+              <DistReportSummary
+                columns={result.columns}
+                rows={result.rows}
+                labelFor={(key) => result.columnLabels[key] ?? key}
+              />
+            ) : null}
             {!result ? (
               <p className="text-sm text-slate-500">
                 Select company / users / columns, then click <strong>Run report</strong>.

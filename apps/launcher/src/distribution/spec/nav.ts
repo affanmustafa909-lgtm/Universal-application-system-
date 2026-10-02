@@ -22,6 +22,7 @@ export const distributionNavItems: PopsNavItem[] = [
     label: "Customers",
     children: [
       { path: "distribution/trade-customers", label: "Trade Customers" },
+      { path: "distribution/reports?report=customer-credit", label: "Customer credit" },
       { path: "distribution/aging", label: "Outstanding / Aging" },
       { path: "distribution/collection", label: "Collections Dashboard" },
       { path: "distribution/collections", label: "Collections" },
@@ -69,6 +70,8 @@ export const distributionNavItems: PopsNavItem[] = [
       { path: "distribution/delivery", label: "Delivery Dashboard" },
       { path: "distribution/deliveries", label: "Deliveries / POD" },
       { path: "distribution/dispatch", label: "Dispatch" },
+      { path: "distribution/reports?report=delivery-plan", label: "Delivery plan" },
+      { path: "distribution/reports?report=delivery-plan-details", label: "Delivery plan details" },
     ],
   },
   {

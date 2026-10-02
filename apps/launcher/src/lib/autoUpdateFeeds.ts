@@ -8,41 +8,43 @@ export type UpdateFeedInfo = {
   error?: string;
 };
 
-const DESKTOP_REPO = "basir2353/pops-desktop-updates";
+const DESKTOP_REPO = "basir2353/zivra-desktop-updates";
+const DISTRIBUTION_REPO = "basir2353/zivra-distribution-updates";
 const ICE_CREAM_REPO = "basir2353/ice-cream-bar-updates";
-const MOBILE_REPO = "basir2353/pops-mobile-updates";
+const MOBILE_REPO = "basir2353/zivra-mobile-updates";
 
 const DESKTOP_FEEDS = {
   suite: {
     manifest: "latest-suite.json",
     label: "Desktop · Universal",
     downloadTag: (v: string) =>
-      `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/POPS-Universal-Management-System_${v}_x64-setup.exe`,
+      `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/Zivra-Universal-Management-System_${v}_x64-setup.exe`,
   },
   restaurant: {
     manifest: "latest-restaurant.json",
     label: "Desktop · Restaurant",
     downloadTag: (v: string) =>
-      `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/Restaurant-Management-System_${v}_x64-setup.exe`,
+      `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/Zivra-Restaurant-Management-System_${v}_x64-setup.exe`,
   },
   "general-store": {
     manifest: "latest-general-store.json",
     label: "Desktop · General Store",
     downloadTag: (v: string) =>
-      `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/General-Store-Management-System_${v}_x64-setup.exe`,
+      `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/Zivra-General-Store-Management-System_${v}_x64-setup.exe`,
   },
   pharmacy: {
     manifest: "latest-pharmacy.json",
     label: "Desktop · Pharmacy",
     downloadTag: (v: string) =>
-      `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/Pharmacy-Management-System_${v}_x64-setup.exe`,
+      `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/Zivra-Pharmacy-Management-System_${v}_x64-setup.exe`,
   },
-  distribution: {
-    manifest: "latest-distribution.json",
-    label: "Desktop · Distribution",
-    downloadTag: (v: string) =>
-      `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/Medical-Distribution-System_${v}_x64-setup.exe`,
-  },
+} as const;
+
+const DISTRIBUTION_FEED = {
+  manifest: "latest-distribution.json",
+  label: "Desktop · Distribution",
+  downloadTag: (v: string) =>
+    `https://github.com/${DISTRIBUTION_REPO}/releases/download/desktop-v${v}/Zivra-Distribution-System_${v}_x64-setup.exe`,
 } as const;
 
 const ICE_CREAM_FEED = {
@@ -134,6 +136,27 @@ export async function fetchAutoUpdateStatus(input: {
     });
   }
 
+  const distribution = await fetchGitHubRelease(DISTRIBUTION_REPO);
+  const distributionVersion = distribution.release?.tag_name
+    ? versionFromTag(distribution.release.tag_name, "desktop")
+    : null;
+  const distAsset = distribution.release?.assets?.find((a) => a.name === DISTRIBUTION_FEED.manifest);
+  rows.push({
+    id: "desktop-distribution",
+    label: DISTRIBUTION_FEED.label,
+    localVersion: input.desktopVersion,
+    publishedVersion: distributionVersion,
+    publishedUrl:
+      distAsset?.browser_download_url ??
+      (distributionVersion ? DISTRIBUTION_FEED.downloadTag(distributionVersion) : null),
+    ok: distributionVersion === input.desktopVersion && Boolean(distAsset),
+    error:
+      distribution.error ??
+      (!distAsset && distributionVersion
+        ? `Missing ${DISTRIBUTION_FEED.manifest} on release`
+        : undefined),
+  });
+
   const mobile = await fetchGitHubRelease(MOBILE_REPO);
   const mobileVersion = mobile.release?.tag_name
     ? versionFromTag(mobile.release.tag_name, "mobile")
@@ -155,4 +178,13 @@ export async function fetchAutoUpdateStatus(input: {
   return rows;
 }
 
-export { DESKTOP_FEEDS, ICE_CREAM_FEED, MOBILE_FEEDS, DESKTOP_REPO, ICE_CREAM_REPO, MOBILE_REPO };
+export {
+  DESKTOP_FEEDS,
+  DISTRIBUTION_FEED,
+  ICE_CREAM_FEED,
+  MOBILE_FEEDS,
+  DESKTOP_REPO,
+  DISTRIBUTION_REPO,
+  ICE_CREAM_REPO,
+  MOBILE_REPO,
+};

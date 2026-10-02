@@ -509,7 +509,7 @@ export function WaiterPage(): JSX.Element {
         }
         const payload = withPrinterProfile(
           {
-            branchName: branch?.name ?? "POPS",
+            branchName: branch?.name ?? "Zivra",
             branchCode: branchCode || "—",
             orderRef: ticket.orderRef ?? ticket.ticketRef,
             modeLabel: "Dine-in",
@@ -644,7 +644,7 @@ export function WaiterPage(): JSX.Element {
       const assigned = getWaiterPrinter(branchCode, printUserId);
       const payload: Omit<PrintTicketInput, "kind"> = withPrinterProfile(
         {
-          ...billToPrintInput(branch?.name ?? "POPS", branchCode || "—", bill),
+          ...billToPrintInput(branch?.name ?? "Zivra", branchCode || "—", bill),
           printerName: profile?.name ?? assigned?.printerName,
           systemPrinterName: profile?.systemPrinterName ?? assigned?.systemPrinterName,
         },

@@ -17,6 +17,7 @@ import { join } from "node:path";
  *
  * Env:
  *   CARGO_TARGET_DIR — defaults to local src-tauri/target when NSIS exists
+ *   TAURI_TARGET — e.g. i686-pc-windows-msvc (finds NSIS under that triple)
  *   UPDATE_DOWNLOAD_BASE — GitHub release asset base URL (no trailing slash)
  */
 
@@ -36,16 +37,30 @@ if (!VALID.has(edition)) {
 }
 
 const ICE_CREAM_REPO = "basir2353/ice-cream-bar-updates";
-const DEFAULT_REPO = "basir2353/pops-desktop-updates";
+const DESKTOP_REPO = "basir2353/zivra-desktop-updates";
+const DISTRIBUTION_REPO = "basir2353/zivra-distribution-updates";
 
 const launcherRoot = process.cwd();
 const localTarget = join(launcherRoot, "src-tauri", "target");
+const tauriTarget = (process.env.TAURI_TARGET ?? "").trim();
 const cargoTarget =
   process.env.CARGO_TARGET_DIR?.trim() ||
-  (existsSync(join(localTarget, "release", "bundle", "nsis"))
+  (existsSync(join(localTarget, "release", "bundle", "nsis")) ||
+  existsSync(join(localTarget, "i686-pc-windows-msvc", "release", "bundle", "nsis"))
     ? localTarget
     : join(process.env.TEMP || process.env.TMP || "/tmp", "pops-launcher-cargo-target"));
-const nsisDir = join(cargoTarget, "release", "bundle", "nsis");
+
+function resolveNsisDir() {
+  const candidates = tauriTarget
+    ? [join(cargoTarget, tauriTarget, "release", "bundle", "nsis")]
+    : [
+        join(cargoTarget, "release", "bundle", "nsis"),
+        join(cargoTarget, "i686-pc-windows-msvc", "release", "bundle", "nsis"),
+      ];
+  return candidates.find((dir) => existsSync(dir)) ?? candidates.at(-1);
+}
+
+const nsisDir = resolveNsisDir();
 if (!existsSync(nsisDir)) {
   console.error(`[write-update-manifest] Missing NSIS dir: ${nsisDir}`);
   process.exit(1);
@@ -57,14 +72,13 @@ if (setupFiles.length === 0) {
   process.exit(1);
 }
 
-// Prefer the newest matching installer for this edition's product name.
 const productHints = {
-  suite: /universal/i,
-  restaurant: /restaurant/i,
+  suite: /zivra universal|pops universal|universal management/i,
+  restaurant: /zivra restaurant|restaurant management/i,
   "ice-cream-bar": /scoops|ice\s*cream/i,
-  "general-store": /general\s*store|retail/i,
-  pharmacy: /pharmacy/i,
-  distribution: /distribution|medical/i,
+  "general-store": /zivra general|general\s*store|retail/i,
+  pharmacy: /zivra pharmacy|pharmacy management/i,
+  distribution: /zivra distribution|medical distribution|distribution system/i,
 };
 const hint = productHints[edition];
 function versionTuple(name) {
@@ -73,22 +87,38 @@ function versionTuple(name) {
   return [Number(m[1]), Number(m[2]), Number(m[3])];
 }
 
+const preferX86 =
+  /i686|x86/i.test(tauriTarget) || /i686-pc-windows-msvc/i.test(nsisDir);
+
 const ranked = setupFiles
   .filter((f) => hint.test(f))
+  .filter((f) => (preferX86 ? /_x86-setup\.exe$/i.test(f) : /_x64-setup\.exe$/i.test(f) || !/_x86-setup\.exe$/i.test(f)))
   .sort((a, b) => {
     const va = versionTuple(a);
     const vb = versionTuple(b);
     for (let i = 0; i < 3; i++) {
       if (vb[i] !== va[i]) return vb[i] - va[i];
     }
-    // Same version: newest file wins.
     try {
       return statSync(join(nsisDir, b)).mtimeMs - statSync(join(nsisDir, a)).mtimeMs;
     } catch {
       return b.localeCompare(a);
     }
   });
-const setupName = ranked[0] ?? setupFiles.sort().at(-1);
+
+const setupName =
+  ranked[0] ??
+  setupFiles
+    .filter((f) => hint.test(f))
+    .sort((a, b) => {
+      try {
+        return statSync(join(nsisDir, b)).mtimeMs - statSync(join(nsisDir, a)).mtimeMs;
+      } catch {
+        return b.localeCompare(a);
+      }
+    })[0] ??
+  setupFiles.sort().at(-1);
+
 const setupPath = join(nsisDir, setupName);
 const sigPath = `${setupPath}.sig`;
 if (!existsSync(sigPath)) {
@@ -104,8 +134,16 @@ const version =
   setupName.match(/_(\d+\.\d+\.\d+)_/)?.[1] ||
   "0.0.0";
 
+const isX86 = /_x86-setup\.exe$/i.test(setupName) || preferX86;
+const platformKey = isX86 ? "windows-i686" : "windows-x86_64";
+
 const safeAsset = setupName.replace(/\s+/g, "-");
-const repo = edition === "ice-cream-bar" ? ICE_CREAM_REPO : DEFAULT_REPO;
+const repo =
+  edition === "ice-cream-bar"
+    ? ICE_CREAM_REPO
+    : edition === "distribution"
+      ? DISTRIBUTION_REPO
+      : DESKTOP_REPO;
 const tagPrefix = edition === "ice-cream-bar" ? "ice-cream" : "desktop";
 const base =
   (process.env.UPDATE_DOWNLOAD_BASE ?? "").trim().replace(/\/$/, "") ||
@@ -113,30 +151,46 @@ const base =
 
 const signature = readFileSync(sigPath, "utf8").trim();
 const notesByEdition = {
-  suite: `POPS Universal Management System update ${version}`,
-  restaurant: `Restaurant Management System update ${version}`,
+  suite: `Zivra Universal Management System update ${version} (BARIQ ERP Solutions)`,
+  restaurant: `Zivra Restaurant Management System update ${version}`,
   "ice-cream-bar": `Scoops Ice Cream Bar update ${version}`,
-  "general-store": `General Store Management System update ${version}`,
-  pharmacy: `Pharmacy Management System update ${version}`,
-  distribution: `Medical Distribution System update ${version}`,
+  "general-store": `Zivra General Store Management System update ${version}`,
+  pharmacy: `Zivra Pharmacy Management System update ${version}`,
+  distribution: `Zivra Distribution System update ${version} (BARIQ ERP Solutions)`,
 };
+
+const platforms = {
+  [platformKey]: {
+    signature,
+    url: `${base}/${safeAsset}`,
+  },
+};
+
+// Keep prior 64-bit / 32-bit entry if this release folder already has one.
+const outDir = join(process.cwd(), "..", "..", "dist-installers", "updates");
+mkdirSync(outDir, { recursive: true });
+const manifestName = `latest-${edition}.json`;
+const manifestPath = join(outDir, manifestName);
+if (existsSync(manifestPath)) {
+  try {
+    const prev = JSON.parse(readFileSync(manifestPath, "utf8"));
+    if (prev?.version === version && prev?.platforms && typeof prev.platforms === "object") {
+      for (const [key, value] of Object.entries(prev.platforms)) {
+        if (key !== platformKey) platforms[key] = value;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 const manifest = {
   version,
   notes: notesByEdition[edition] ?? `Desktop ${edition} update ${version}`,
   pub_date: new Date().toISOString(),
-  platforms: {
-    "windows-x86_64": {
-      signature,
-      url: `${base}/${safeAsset}`,
-    },
-  },
+  platforms,
 };
 
-const outDir = join(process.cwd(), "..", "..", "dist-installers", "updates");
-mkdirSync(outDir, { recursive: true });
-
-const manifestName = `latest-${edition}.json`;
-const manifestPath = join(outDir, manifestName);
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
 const releaseDir = join(outDir, `${tagPrefix}-v${version}`);
@@ -144,12 +198,12 @@ mkdirSync(releaseDir, { recursive: true });
 copyFileSync(setupPath, join(releaseDir, safeAsset));
 copyFileSync(sigPath, join(releaseDir, `${safeAsset}.sig`));
 copyFileSync(manifestPath, join(releaseDir, manifestName));
-// Also keep copies at updates/ root for convenience
 copyFileSync(setupPath, join(outDir, safeAsset));
 copyFileSync(sigPath, join(outDir, `${safeAsset}.sig`));
 
 console.log(`[write-update-manifest] ${manifestName}`);
-console.log(`  version: ${version}`);
-console.log(`  url:     ${manifest.platforms["windows-x86_64"].url}`);
-console.log(`  out:     ${manifestPath}`);
-console.log(`  release: ${releaseDir}`);
+console.log(`  version:  ${version}`);
+console.log(`  platform: ${platformKey}`);
+console.log(`  url:      ${platforms[platformKey].url}`);
+console.log(`  out:      ${manifestPath}`);
+console.log(`  release:  ${releaseDir}`);

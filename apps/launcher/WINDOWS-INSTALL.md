@@ -1,6 +1,6 @@
-# POPS Launcher — Windows installation guide
+# Zivra Launcher — Windows installation guide
 
-This guide explains how to **download**, **run**, and **use** the Windows setup file (`.exe`) for POPS Launcher and related business-system installers.
+This guide explains how to **download**, **run**, and **use** the Windows setup file (`.exe`) for Zivra Launcher and related business-system installers.
 
 ---
 
@@ -10,7 +10,7 @@ The setup file is a standard Windows installer. It is **not** the app itself —
 
 | Edition | Setup file name (example) | App name after install |
 | --- | --- | --- |
-| **Suite** (all systems) | `POPS-Launcher_0.1.0_x64-setup.exe` | POPS Launcher |
+| **Suite** (all systems) | `Zivra-Launcher_0.1.0_x64-setup.exe` | Zivra Launcher |
 | **Restaurant** | `Restaurant-Management-System_0.1.0_x64-setup.exe` | Restaurant Management System |
 | **Pharmacy** | `Pharmacy-Management-System_0.1.0_x64-setup.exe` | Pharmacy Management System |
 | **General Store** | `General-Store-Management-System_0.1.0_x64-setup.exe` | General Store Management System |
@@ -50,7 +50,7 @@ pnpm installer:suite
 Output path:
 
 ```
-apps/launcher/src-tauri/target/release/bundle/nsis/POPS-Launcher_0.1.0_x64-setup.exe
+apps/launcher/src-tauri/target/release/bundle/nsis/Zivra-Launcher_0.1.0_x64-setup.exe
 ```
 
 ### Option C — Download from GitHub Actions (developers on Mac/Linux)
@@ -70,7 +70,7 @@ apps/launcher/src-tauri/target/release/bundle/nsis/POPS-Launcher_0.1.0_x64-setup
 After download, the file is usually in your **Downloads** folder:
 
 ```
-C:\Users\<YourName>\Downloads\POPS-Launcher_0.1.0_x64-setup.exe
+C:\Users\<YourName>\Downloads\Zivra-Launcher_0.1.0_x64-setup.exe
 ```
 
 ### 2.2 Windows SmartScreen warning
@@ -104,7 +104,7 @@ Follow the on-screen steps:
 
 On the last screen you will typically see:
 
-- **Run POPS Launcher** (or the product name for your edition) — checked by default. Leave checked to open the app immediately after install.
+- **Run Zivra Launcher** (or the product name for your edition) — checked by default. Leave checked to open the app immediately after install.
 - **Create desktop shortcut** — checked by default. Creates a shortcut on your desktop.
 
 Click **Finish**.
@@ -116,7 +116,7 @@ Click **Finish**.
 After installation, files are placed in your user profile (no system-wide admin install):
 
 ```
-C:\Users\<YourName>\AppData\Local\POPS Launcher\
+C:\Users\<YourName>\AppData\Local\Zivra Launcher\
 ```
 
 (For single-system editions, the folder name matches the product, e.g. `Restaurant Management System`.)
@@ -125,14 +125,14 @@ Shortcuts are created at:
 
 | Location | Name |
 | --- | --- |
-| **Desktop** | `POPS Launcher` (or your edition name) |
-| **Start menu** | `POPS Launcher` under the Start menu programs list |
+| **Desktop** | `Zivra Launcher` (or your edition name) |
+| **Start menu** | `Zivra Launcher` under the Start menu programs list |
 
 To open the install folder quickly:
 
 1. Press `Win + R`.
 2. Type `%LOCALAPPDATA%` and press Enter.
-3. Open the `POPS Launcher` (or edition) folder.
+3. Open the `Zivra Launcher` (or edition) folder.
 
 ---
 
@@ -140,11 +140,11 @@ To open the install folder quickly:
 
 You can start the launcher in any of these ways:
 
-1. **Desktop shortcut** — double-click **POPS Launcher** on the desktop.
-2. **Start menu** — search for **POPS Launcher** and click it.
-3. **Run dialog** — `Win + R`, then browse to the install folder and run `POPS Launcher.exe`.
+1. **Desktop shortcut** — double-click **Zivra Launcher** on the desktop.
+2. **Start menu** — search for **Zivra Launcher** and click it.
+3. **Run dialog** — `Win + R`, then browse to the install folder and run `Zivra Launcher.exe`.
 
-The app window opens at **1280×800** with the title **POPS Launcher**.
+The app window opens at **1280×800** with the title **Zivra Launcher**.
 
 ---
 
@@ -188,13 +188,13 @@ You can install **more than one** single-system edition side by side (separate s
 ### Method 1 — Windows Settings
 
 1. Open **Settings** → **Apps** → **Installed apps** (or **Apps & features** on Windows 10).
-2. Search for **POPS Launcher** (or your edition name).
+2. Search for **Zivra Launcher** (or your edition name).
 3. Click the **⋮** menu → **Uninstall**.
 4. Follow the prompts.
 
 ### Method 2 — Start menu
 
-1. Open **Start** → find **POPS Launcher**.
+1. Open **Start** → find **Zivra Launcher**.
 2. Right-click → **Uninstall**.
 
 Uninstall removes the app, shortcuts, and registry entries created by the installer. Local SQLite/offline data in the app data folder may remain until manually deleted.
@@ -209,7 +209,7 @@ To upgrade to a newer version:
 2. Run it on the same PC (you do not need to uninstall first in most cases).
 3. The installer updates files in place and refreshes shortcuts.
 
-To switch from a **single-system** edition to **all systems**, install the **Suite** (`POPS-Launcher_*_x64-setup.exe`) build.
+To switch from a **single-system** edition to **all systems**, install the **Suite** (`Zivra-Launcher_*_x64-setup.exe`) build.
 
 ---
 
@@ -247,7 +247,7 @@ The desktop app must reach your hosted API. Confirm:
 ### Need the exact setup path on a build machine
 
 ```
-<project-root>\apps\launcher\src-tauri\target\release\bundle\nsis\POPS-Launcher_0.1.0_x64-setup.exe
+<project-root>\apps\launcher\src-tauri\target\release\bundle\nsis\Zivra-Launcher_0.1.0_x64-setup.exe
 ```
 
 ---
@@ -257,9 +257,9 @@ The desktop app must reach your hosted API. Confirm:
 | Task | Action |
 | --- | --- |
 | Install | Double-click `*-setup.exe` → Next → Install → Finish |
-| Open app | Desktop shortcut or Start menu → **POPS Launcher** |
-| Install location | `%LOCALAPPDATA%\POPS Launcher\` |
-| Uninstall | Settings → Apps → POPS Launcher → Uninstall |
+| Open app | Desktop shortcut or Start menu → **Zivra Launcher** |
+| Install location | `%LOCALAPPDATA%\Zivra Launcher\` |
+| Uninstall | Settings → Apps → Zivra Launcher → Uninstall |
 | Reinstall / update | Run a newer `*-setup.exe` |
 | API / backend | Configured at build time; no user setup during install |
 

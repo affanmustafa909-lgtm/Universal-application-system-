@@ -1,19 +1,19 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "General Store Management System",
+  "productName": "Zivra General Store Management System",
   "identifier": "com.platform.generalstore",
-  "version": "0.3.74",
+  "version": "1.0.1",
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "General Store Management System"
+        "title": "Zivra General Store Management System"
       }
     ]
   },
   "bundle": {
-    "shortDescription": "Retail POS & ERP",
-    "longDescription": "General Store / Retail Management System — checkout, products, purchases, warehouses, and reports.",
+    "shortDescription": "Retail POS & ERP by BARIQ ERP Solutions",
+    "longDescription": "Zivra General Store Management System by BARIQ ERP Solutions — checkout, products, purchases, warehouses, and reports.",
     "windows": {
       "nsis": {
         "installMode": "currentUser",
@@ -24,8 +24,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-general-store.json",
-        "https://github.com/basir2353/Desktop-application-Multiple-System/releases/latest/download/latest-general-store.json"
+        "https://github.com/basir2353/zivra-desktop-updates/releases/latest/download/latest-general-store.json"
       ]
     }
   }

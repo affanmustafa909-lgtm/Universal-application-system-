@@ -403,7 +403,7 @@ export function OrdersPage(): JSX.Element {
     setQuickPrintBillId(bill.id);
     void (async () => {
       const branchCode = branch?.code ?? "—";
-      const branchName = branch?.name ?? "POPS";
+      const branchName = branch?.name ?? "Zivra";
       const printUserId = resolvePrintUserId(claims?.sub, bill.waiterId);
       const profile = resolveReceiptPrinter(branch?.code, printUserId);
       const assigned = getWaiterPrinter(branch?.code, printUserId);
@@ -933,7 +933,7 @@ export function OrdersPage(): JSX.Element {
                         onClick={() => {
                           const ok = shareBillViaWhatsApp(
                             r.bill,
-                            branch?.name ?? "POPS",
+                            branch?.name ?? "Zivra",
                             phoneFromBillNotes(r.bill.notes),
                           );
                           setNotice(ok ? `WhatsApp share opened for ${r.bill.billRef}` : "Could not open WhatsApp.");

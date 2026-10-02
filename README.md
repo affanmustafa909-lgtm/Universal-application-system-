@@ -116,16 +116,19 @@ Windows `.exe` files must be built on Windows. Use the included workflow:
 
 | Installer | Command | End-user product |
 | --- | --- | --- |
-| **Suite** (all systems) | `pnpm installer:suite` | Platform Launcher |
-| **Restaurant** | `pnpm installer:restaurant` | Restaurant Management System |
+| **Suite** (all systems) | `pnpm installer:suite` | Zivra Universal Management System |
+| **Restaurant** | `pnpm installer:restaurant` | Zivra Restaurant Management System |
 | **Ice Cream Bar** | `pnpm --filter @platform/launcher build:ice-cream-bar` | Scoops Ice Cream Bar |
-| **Pharmacy** | `pnpm installer:pharmacy` | Pharmacy Management System |
-| **General Store** | `pnpm installer:general-store` | General Store Management System |
+| **Pharmacy** | `pnpm installer:pharmacy` | Zivra Pharmacy Management System |
+| **General Store** | `pnpm installer:general-store` | Zivra General Store Management System |
+| **Distribution** | `pnpm installer:distribution` | Zivra Distribution System |
 
-Ice Cream Bar auto-update is a **separate GitHub repo** (not this app repo):
+**Zivra** is the product brand from **BARIQ ERP Solutions**. Auto-update feeds (separate public GitHub repos):
 
-- Updates: https://github.com/affanmustafa909-lgtm/ice-cream-bar-updates
-- API: https://github.com/affanmustafa909-lgtm/backend-system · https://backend-system-production-28a3.up.railway.app
+- Desktop (suite / restaurant / store / pharmacy): https://github.com/basir2353/zivra-desktop-updates
+- Distribution: https://github.com/basir2353/zivra-distribution-updates
+- Mobile APKs: https://github.com/basir2353/zivra-mobile-updates
+- Ice Cream Bar (Scoops, separate): https://github.com/basir2353/ice-cream-bar-updates
 
 Details: [apps/launcher/INSTALLER.md](./apps/launcher/INSTALLER.md)
 

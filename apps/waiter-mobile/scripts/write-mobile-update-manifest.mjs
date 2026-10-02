@@ -44,14 +44,14 @@ const versionCode = Number(
   process.argv[4] ?? appJson.expo?.android?.versionCode ?? 0,
 );
 
-const repo = "basir2353/pops-mobile-updates";
+const repo = "basir2353/zivra-mobile-updates";
 const tag = `mobile-v${version}`;
 const url = `https://github.com/${repo}/releases/download/${tag}/${apkName}`;
 
 const manifest = {
   version,
   versionCode,
-  notes: `POPS ${variant} ${version} — auto-update`,
+  notes: `Zivra ${variant} ${version} — auto-update (BARIQ ERP Solutions)`,
   pub_date: new Date().toISOString(),
   url,
 };

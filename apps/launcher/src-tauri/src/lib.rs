@@ -698,7 +698,7 @@ fn pra_http_post(url: String, token: String, body: String) -> Result<String, Str
         .map_err(|e| format!("PRA response read failed: {e}"))
 }
 
-/// Download a signed setup EXE to `%LOCALAPPDATA%\POPS\updates\` and open it.
+/// Download a signed setup EXE to `%LOCALAPPDATA%\Zivra\updates\` and open it.
 #[tauri::command]
 fn download_and_open_setup_exe(url: String, file_name: String) -> Result<String, String> {
     let url = url.trim();
@@ -727,12 +727,12 @@ fn download_and_open_setup_exe(url: String, file_name: String) -> Result<String,
     let base = std::env::var("LOCALAPPDATA")
         .or_else(|_| std::env::var("TEMP"))
         .map_err(|_| "LOCALAPPDATA not set".to_string())?;
-    let dir = std::path::PathBuf::from(base).join("POPS").join("updates");
+    let dir = std::path::PathBuf::from(base).join("Zivra").join("updates");
     std::fs::create_dir_all(&dir).map_err(|e| format!("Create updates folder failed: {e}"))?;
     let dest = dir.join(&safe_name);
 
     let resp = ureq::get(url)
-        .set("User-Agent", "POPS-Desktop-Updater")
+        .set("User-Agent", "Zivra-Desktop-Updater")
         .timeout(std::time::Duration::from_secs(600))
         .call()
         .map_err(|e| format!("Download failed: {e}"))?;
@@ -755,13 +755,13 @@ fn download_and_open_setup_exe(url: String, file_name: String) -> Result<String,
     Ok(path_str)
 }
 
-/// Reveal `%LOCALAPPDATA%\POPS\updates` in Explorer (creates it if missing).
+/// Reveal `%LOCALAPPDATA%\Zivra\updates` in Explorer (creates it if missing).
 #[tauri::command]
 fn open_updates_folder() -> Result<String, String> {
     let base = std::env::var("LOCALAPPDATA")
         .or_else(|_| std::env::var("TEMP"))
         .map_err(|_| "LOCALAPPDATA not set".to_string())?;
-    let dir = std::path::PathBuf::from(base).join("POPS").join("updates");
+    let dir = std::path::PathBuf::from(base).join("Zivra").join("updates");
     std::fs::create_dir_all(&dir).map_err(|e| format!("Create updates folder failed: {e}"))?;
     let path_str = dir.to_string_lossy().to_string();
     command_no_window("explorer")
