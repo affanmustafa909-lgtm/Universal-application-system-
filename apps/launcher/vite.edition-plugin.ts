@@ -5,13 +5,14 @@ import type { Plugin } from "vite";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const routesDir = path.resolve(__dirname, "src", "routes");
 
-type SystemKey = "restaurant" | "pharmacy" | "distribution" | "general-store";
+type SystemKey = "restaurant" | "pharmacy" | "distribution" | "general-store" | "education";
 
 const ROUTE_MODULES: Record<SystemKey, string> = {
   restaurant: path.join(routesDir, "restaurantRoutes.tsx"),
   pharmacy: path.join(routesDir, "pharmacyRoutes.tsx"),
   distribution: path.join(routesDir, "distributionRoutes.tsx"),
   "general-store": path.join(routesDir, "generalStoreRoutes.tsx"),
+  education: path.join(routesDir, "educationRoutes.tsx"),
 };
 
 const STUBS: Record<SystemKey, string> = {
@@ -19,6 +20,7 @@ const STUBS: Record<SystemKey, string> = {
   pharmacy: "export function pharmacyRoutes(){return null}",
   distribution: "export function distributionRoutes(){return null}",
   "general-store": "export function generalStoreRoutes(){return null}",
+  education: "export function educationRoutes(){return null}",
 };
 
 function normalize(id: string): string {

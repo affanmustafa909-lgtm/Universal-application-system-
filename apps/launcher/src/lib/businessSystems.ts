@@ -7,6 +7,7 @@ import {
 import { pharmacyNavItems } from "../pharmacy/spec/nav";
 import { distributionNavItems } from "../distribution/spec/nav";
 import { storeNavItems } from "../store/spec/nav";
+import { educationNavItems } from "../education/spec/nav";
 import { frontendIdToSystemType, systemTypeToFrontendId, type SystemType } from "@platform/contracts";
 
 export type BusinessSystemId =
@@ -14,7 +15,8 @@ export type BusinessSystemId =
   | "ice-cream-bar"
   | "pharmacy"
   | "distribution"
-  | "general-store";
+  | "general-store"
+  | "education";
 
 export type BusinessSystem = {
   id: BusinessSystemId;
@@ -65,6 +67,20 @@ const generalStoreHidden = new Set([
   "kitchen",
   "waiter",
   "delivery",
+  "inventory/recipes",
+  "inventory/ingredients",
+  "manufacturing",
+  "content",
+]);
+const educationHidden = new Set([
+  "menu",
+  "tables",
+  "kitchen",
+  "waiter",
+  "delivery",
+  "pos",
+  "orders",
+  "bills",
   "inventory/recipes",
   "inventory/ingredients",
   "manufacturing",
@@ -133,6 +149,19 @@ export const businessSystems: Record<BusinessSystemId, BusinessSystem> = {
     routePrefix: "/pops",
     hiddenNavPaths: generalStoreHidden,
   },
+  education: {
+    id: "education",
+    name: "EducationFlow ERP",
+    shortName: "EducationFlow",
+    tagline: "School • Academy • College Management System",
+    description:
+      "Admissions, students, academics, fees, teachers, attendance, and campus administration.",
+    accentClass: "text-blue-400",
+    iconLetter: "Ed",
+    gradientClass: "from-blue-500 to-slate-700",
+    routePrefix: "/pops",
+    hiddenNavPaths: educationHidden,
+  },
 };
 
 export const businessSystemList: BusinessSystem[] = [
@@ -141,6 +170,7 @@ export const businessSystemList: BusinessSystem[] = [
   businessSystems.pharmacy,
   businessSystems.distribution,
   businessSystems["general-store"],
+  businessSystems.education,
 ];
 
 /** Backend-provisioned ERP types Super Admin can create. */
@@ -152,7 +182,8 @@ export function isBusinessSystemId(value: string): value is BusinessSystemId {
     value === "ice-cream-bar" ||
     value === "pharmacy" ||
     value === "distribution" ||
-    value === "general-store"
+    value === "general-store" ||
+    value === "education"
   );
 }
 
@@ -209,6 +240,9 @@ export function getErpEntryPath(systemId: BusinessSystemId, hasBranch: boolean):
   if (systemId === "general-store") {
     return "/pops/store/pos";
   }
+  if (systemId === "education") {
+    return "/pops/education/dashboard";
+  }
   // Restaurant dashboard is admin-only; callers with a role should use erpEntryPathForRole.
   return "/pops/pos";
 }
@@ -244,10 +278,13 @@ export function resolveBusinessSystemFromPath(pathname: string): BusinessSystemI
   if (pathname.startsWith("/pops/store/") || pathname === "/pops/store") {
     return "general-store";
   }
+  if (pathname.startsWith("/pops/education/") || pathname === "/pops/education") {
+    return "education";
+  }
   return null;
 }
 
-/** True for restaurant-only screens (not pharmacy, store, distribution, or shared ERP modules). */
+/** True for restaurant-only screens (not pharmacy, store, distribution, education, or shared ERP modules). */
 export function isRestaurantExclusivePath(pathname: string): boolean {
   const sub = String(pathname ?? "")
     .replace(/^\/pops\/?/, "")
@@ -255,6 +292,7 @@ export function isRestaurantExclusivePath(pathname: string): boolean {
   if (sub.startsWith("pharmacy/") || sub === "pharmacy") return false;
   if (sub.startsWith("distribution/") || sub === "distribution") return false;
   if (sub.startsWith("store/") || sub === "store") return false;
+  if (sub.startsWith("education/") || sub === "education") return false;
   if (isSharedErpSubpath(sub)) return false;
   return true;
 }
@@ -283,6 +321,9 @@ export function getNavItemsForSystem(id: BusinessSystemId): PopsNavItem[] {
   }
   if (id === "general-store") {
     return storeNavItems;
+  }
+  if (id === "education") {
+    return educationNavItems;
   }
   const hidden = businessSystems[id].hiddenNavPaths;
   const out: PopsNavItem[] = [];

@@ -30,6 +30,7 @@ const VALID = new Set([
   "general-store",
   "pharmacy",
   "distribution",
+  "education",
 ]);
 if (!VALID.has(edition)) {
   console.error(`Usage: node scripts/write-update-manifest.mjs <${[...VALID].join("|")}> [version]`);
@@ -79,6 +80,7 @@ const productHints = {
   "general-store": /zivra general|general\s*store|retail/i,
   pharmacy: /zivra pharmacy|pharmacy management/i,
   distribution: /zivra distribution|medical distribution|distribution system/i,
+  education: /educationflow|education\s*flow|education erp|school.*academy.*college/i,
 };
 const hint = productHints[edition];
 function versionTuple(name) {
@@ -157,6 +159,7 @@ const notesByEdition = {
   "general-store": `Zivra General Store Management System update ${version}`,
   pharmacy: `Zivra Pharmacy Management System update ${version}`,
   distribution: `Zivra Distribution System update ${version} (BARIQ ERP Solutions)`,
+  education: `EducationFlow ERP update ${version} (BARIQ ERP Solutions)`,
 };
 
 const platforms = {

@@ -102,13 +102,13 @@ export const countBadgeClass =
   "rounded-full bg-[var(--brand-cream)] px-2.5 py-1 text-[11px] tabular-nums text-[color:var(--muted)] dark:bg-slate-800/80 dark:text-slate-400";
 
 export const noticeSuccessClass =
-  "rounded-lg border border-[color:var(--success)]/40 bg-[var(--success)]/15 px-3 py-2 text-sm text-[color:var(--ink)]";
+  "rounded-lg border border-[color:var(--success)]/40 bg-[var(--success)]/15 px-3 py-2 text-sm text-[color:var(--ink)] dark:border-emerald-500/40 dark:bg-emerald-950/40 dark:text-emerald-200";
 
 export const noticeWarningClass =
-  "rounded-lg border border-[color:var(--warning)]/50 bg-[var(--brand-cream)] px-3 py-2 text-sm text-[color:var(--brand-dark)]";
+  "rounded-lg border border-[color:var(--warning)]/50 bg-[var(--brand-cream)] px-3 py-2 text-sm text-[color:var(--brand-dark)] dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-200";
 
 export const noticeErrorClass =
-  "rounded-lg border border-[#DC2626]/25 bg-red-50 px-3 py-2 text-sm text-[#DC2626]";
+  "rounded-lg border border-[#DC2626]/25 bg-red-50 px-3 py-2 text-sm text-[#DC2626] dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-300";
 
 export const screenCenterClass =
   "flex min-h-screen items-center justify-center bg-[var(--bg)] text-sm text-[color:var(--muted)] dark:bg-slate-950 dark:text-slate-400";

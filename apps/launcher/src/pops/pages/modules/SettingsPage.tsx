@@ -89,7 +89,9 @@ const DATA_RESET_OPTIONS: {
   title: string;
   detail: string;
   /** When set, only these systems see the option. Omit = all systems. */
-  systems?: Array<"restaurant" | "ice-cream-bar" | "pharmacy" | "distribution" | "general-store">;
+  systems?: Array<
+    "restaurant" | "ice-cream-bar" | "pharmacy" | "distribution" | "general-store" | "education"
+  >;
 }[] = [
   {
     scope: "hr",

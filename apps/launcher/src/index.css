@@ -216,6 +216,36 @@
     --pos-accent-fg: #1a1612;
   }
 
+  /* Default dark tokens for all ERPs except ice-cream (which has its own scoop palettes). */
+  html[data-theme="dark"]:not([data-erp="ice-cream-bar"]),
+  html.dark:not([data-erp="ice-cream-bar"]) {
+    --brand: #fbbf24;
+    --brand-dark: #fcd34d;
+    --brand-fg: #0f172a;
+    --brand-yellow: #fbbf24;
+    --brand-peach: #334155;
+    --brand-cream: #1e293b;
+    --brand-mint: #34d399;
+    --brand-sage: #94a3b8;
+    --bg: #0b1220;
+    --card: #111827;
+    --ink: #e5eefb;
+    --muted: #94a3b8;
+    --line: #243044;
+    --sidebar: #0a101c;
+    --sidebar-fg: #e5eefb;
+    --sidebar-muted: #94a3b8;
+    --sidebar-line: #1e293b;
+    --nav-active: #f59e0b;
+    --nav-active-fg: #0f172a;
+    --pos-accent: #fbbf24;
+    --pos-accent-fg: #0f172a;
+    --success: #34d399;
+    --success-fg: #0b1220;
+    --danger: #f87171;
+    --warning: #fbbf24;
+  }
+
   html,
   body,
   #root {

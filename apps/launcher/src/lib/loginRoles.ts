@@ -18,6 +18,9 @@ const POPS_ROLES: readonly PopsRole[] = [
   "accountant",
   "hr",
   "rider",
+  "teacher",
+  "student",
+  "parent",
 ];
 
 function isPopsRole(value: string | undefined | null): value is PopsRole {
@@ -32,6 +35,9 @@ const STAFF_DESCRIPTIONS: Record<Exclude<PopsRole, "admin">, string> = {
   accountant: "Accounting, ledgers, and closing reports",
   hr: "Employees, attendance, and payroll",
   rider: "Delivery orders and rider mobile access",
+  teacher: "Classes, attendance, assignments, and marks",
+  student: "Own timetable, attendance, fees, and results",
+  parent: "Linked children attendance, fees, and results",
 };
 
 const DEMO_EMAIL: Partial<Record<PopsRole, string>> = {
@@ -43,6 +49,9 @@ const DEMO_EMAIL: Partial<Record<PopsRole, string>> = {
   accountant: "accountant1@platform.local",
   hr: "hr1@platform.local",
   rider: "rider1@platform.local",
+  teacher: "teacher.education@pops.demo",
+  student: "student.education@pops.demo",
+  parent: "parent.education@pops.demo",
 };
 
 /** Demo password matching Railway / production seed (SEED_USER_PASSWORD). */
@@ -58,6 +67,7 @@ const DEMO_ADMIN_EMAIL_BY_SYSTEM: Record<BusinessSystemId, string> = {
   pharmacy: "admin.pharmacy@pops.demo",
   distribution: "admin.distribution@pops.demo",
   "general-store": "admin.store@pops.demo",
+  education: "admin.education@pops.demo",
 };
 
 function restaurantStaff(): LoginRoleOption[] {
@@ -197,6 +207,61 @@ export function loginRolesForSystem(systemId: BusinessSystemId): {
           label: "Warehouse manager",
           description: STAFF_DESCRIPTIONS.hr,
           demoEmail: DEMO_EMAIL.hr,
+        },
+      ],
+    };
+  }
+
+  if (systemId === "education") {
+    return {
+      admin: {
+        id: "admin",
+        label: "Admin",
+        description: "Full EducationFlow control, users, fees, and academics",
+        demoEmail: DEMO_ADMIN_EMAIL_BY_SYSTEM.education,
+      },
+      staff: [
+        {
+          id: "manager",
+          label: "Principal / registrar",
+          description: "Admissions, academics, teachers, and campus oversight",
+          demoEmail: "principal.education@pops.demo",
+        },
+        {
+          id: "teacher",
+          label: "Teacher",
+          description: "Classes, attendance, assignments, exams, and results",
+          demoEmail: "teacher.education@pops.demo",
+        },
+        {
+          id: "accountant",
+          label: "Accountant",
+          description: "Fees, invoices, payments, refunds, and expenses",
+          demoEmail: "accountant.education@pops.demo",
+        },
+        {
+          id: "hr",
+          label: "HR / Payroll",
+          description: "Staff, leave, and payroll",
+          demoEmail: "hr.education@pops.demo",
+        },
+        {
+          id: "cashier",
+          label: "Receptionist",
+          description: "Front desk enquiries and admissions intake",
+          demoEmail: "reception.education@pops.demo",
+        },
+        {
+          id: "student",
+          label: "Student",
+          description: "Own timetable, attendance, assignments, fees, results",
+          demoEmail: "student.education@pops.demo",
+        },
+        {
+          id: "parent",
+          label: "Parent",
+          description: "Linked children attendance, fees, results, notices",
+          demoEmail: "parent.education@pops.demo",
         },
       ],
     };

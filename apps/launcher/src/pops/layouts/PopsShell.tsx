@@ -252,8 +252,8 @@ export function PopsShell(): JSX.Element {
               ) : null}
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-[color:var(--ink)] dark:text-white">{branch?.name ?? "—"}</div>
-                <div className="text-xs text-[color:var(--muted)]">
-                  {branch?.city} · Role: <span className="text-[color:var(--ink)] dark:text-slate-300">{displayRole}</span>
+                <div className="text-xs text-[color:var(--muted)] dark:text-slate-400">
+                  {branch?.city} · Role: <span className="text-[color:var(--ink)] dark:text-slate-200">{displayRole}</span>
                 </div>
               </div>
             </div>

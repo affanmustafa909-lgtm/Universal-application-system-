@@ -33,7 +33,7 @@ const mobilePillClass = ({ isActive }: { isActive: boolean }) =>
     "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap",
     isActive
       ? "bg-[var(--nav-active,var(--brand))] text-[color:var(--nav-active-fg,var(--brand-fg,var(--ink)))]"
-      : "bg-[var(--card,#ffffff)] text-[color:var(--ink)] ring-1 ring-[color:var(--line)]",
+      : "bg-[var(--card,#ffffff)] text-[color:var(--ink)] ring-1 ring-[color:var(--line)] dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700",
   ].join(" ");
 
 function groupPaths(group: PopsNavGroup): string[] {
