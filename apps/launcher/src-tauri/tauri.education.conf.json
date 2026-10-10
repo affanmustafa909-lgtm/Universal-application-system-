@@ -1,19 +1,19 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "EducationFlow ERP",
+  "productName": "EducationFlow Management System",
   "identifier": "com.platform.education",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "EducationFlow ERP"
+        "title": "EducationFlow Management System"
       }
     ]
   },
   "bundle": {
     "shortDescription": "School • Academy • College Management by BARIQ ERP Solutions",
-    "longDescription": "EducationFlow ERP by BARIQ ERP Solutions — admissions, students, academics, fees, teachers, and campus administration.",
+    "longDescription": "EducationFlow Management System by BARIQ ERP Solutions — separate school/college/academy ERP with admissions, students, academics, fees, exams, certificates, and campus administration. Auto-updates via latest-education.json.",
     "windows": {
       "nsis": {
         "installMode": "currentUser",
@@ -25,7 +25,10 @@
     "updater": {
       "endpoints": [
         "https://github.com/basir2353/zivra-desktop-updates/releases/latest/download/latest-education.json"
-      ]
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

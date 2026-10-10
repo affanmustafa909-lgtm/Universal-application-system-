@@ -1,6 +1,6 @@
 {
   "name": "@platform/launcher",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -30,6 +30,7 @@
     "manifest:education": "node ./scripts/write-update-manifest.mjs education",
     "publish:desktop": "node ./scripts/publish-desktop-update.mjs",
     "publish:desktop:all": "node ./scripts/publish-desktop-update.mjs all",
+    "publish:education": "node ./scripts/publish-desktop-update.mjs education",
     "publish:distribution": "node ./scripts/publish-distribution-update.mjs",
     "publish:ice-cream": "node ./scripts/publish-ice-cream-update.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
