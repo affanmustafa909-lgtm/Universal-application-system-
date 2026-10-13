@@ -1,4 +1,5 @@
 import type { PrinterPaperSize } from "./printerRouting";
+import { printScopedKey, resolvePrintSystemId } from "./printSystemScope";
 
 /** How item lines are laid out on physical thermal printers. */
 export type ThermalReceiptLayout = "clear" | "columns";
@@ -149,21 +150,31 @@ export function normalizeThermalPrintSettings(
   };
 }
 
-function storageKey(branchCode: string): string {
-  return `${STORAGE_KEY}.${branchCode.trim().toUpperCase()}`;
+function storageKey(branchCode: string, systemId?: string | null | undefined): string {
+  const sys = resolvePrintSystemId(systemId);
+  return `${STORAGE_KEY}.${printScopedKey(branchCode, sys).toUpperCase()}`;
 }
 
-export function loadThermalPrintSettings(branchCode: string | undefined | null): ThermalPrintSettings {
+export function loadThermalPrintSettings(
+  branchCode: string | undefined | null,
+  systemId?: string | null | undefined,
+): ThermalPrintSettings {
   if (!branchCode || typeof localStorage === "undefined") return DEFAULT_THERMAL_PRINT_SETTINGS;
   try {
+    const scoped = storageKey(branchCode, systemId);
+    const legacyV2 = `${STORAGE_KEY}.${branchCode.trim().toUpperCase()}`;
     const raw =
-      localStorage.getItem(storageKey(branchCode)) ??
-      // Migrate v1 → v2 (v1 forced Clear on 58mm; Pay receipt should use columns).
-      localStorage.getItem(`pops-thermal-print-settings-v1.${branchCode.trim().toUpperCase()}`);
+      localStorage.getItem(scoped) ??
+      // Restaurant family may migrate pre-segregation branch keys.
+      (resolvePrintSystemId(systemId) === "restaurant" ||
+      resolvePrintSystemId(systemId) === "ice-cream-bar"
+        ? localStorage.getItem(legacyV2) ??
+          localStorage.getItem(`pops-thermal-print-settings-v1.${branchCode.trim().toUpperCase()}`)
+        : null);
     if (!raw) return DEFAULT_THERMAL_PRINT_SETTINGS;
     const parsed = normalizeThermalPrintSettings(JSON.parse(raw) as Partial<ThermalPrintSettings>);
     // Prefer columns for customer Pay receipts unless user explicitly kept Clear in v2.
-    if (!localStorage.getItem(storageKey(branchCode)) && parsed.receiptLayout === "clear") {
+    if (!localStorage.getItem(scoped) && parsed.receiptLayout === "clear") {
       return normalizeThermalPrintSettings({
         ...parsed,
         receiptLayout: "columns",
@@ -179,7 +190,7 @@ export function loadThermalPrintSettings(branchCode: string | undefined | null):
         charsPerLine80: 48,
       });
       try {
-        localStorage.setItem(storageKey(branchCode), JSON.stringify(migrated));
+        localStorage.setItem(scoped, JSON.stringify(migrated));
       } catch {
         /* ignore */
       }
@@ -187,6 +198,14 @@ export function loadThermalPrintSettings(branchCode: string | undefined | null):
     }
     if (parsed.charsPerLine58 > 0 && parsed.charsPerLine58 < 28) {
       return normalizeThermalPrintSettings({ ...parsed, charsPerLine58: 32 });
+    }
+    // Persist under scoped key when migrating from legacy.
+    if (!localStorage.getItem(scoped)) {
+      try {
+        localStorage.setItem(scoped, JSON.stringify(parsed));
+      } catch {
+        /* ignore */
+      }
     }
     return parsed;
   } catch {
@@ -197,16 +216,19 @@ export function loadThermalPrintSettings(branchCode: string | undefined | null):
 export function saveThermalPrintSettings(
   branchCode: string,
   settings: Partial<ThermalPrintSettings>,
+  systemId?: string | null | undefined,
 ): ThermalPrintSettings {
   const next = normalizeThermalPrintSettings({
-    ...loadThermalPrintSettings(branchCode),
+    ...loadThermalPrintSettings(branchCode, systemId),
     ...settings,
   });
   if (typeof localStorage !== "undefined") {
-    localStorage.setItem(storageKey(branchCode), JSON.stringify(next));
+    localStorage.setItem(storageKey(branchCode, systemId), JSON.stringify(next));
   }
   window.dispatchEvent(
-    new CustomEvent(THERMAL_PRINT_SETTINGS_CHANGED_EVENT, { detail: { branchCode } }),
+    new CustomEvent(THERMAL_PRINT_SETTINGS_CHANGED_EVENT, {
+      detail: { branchCode, systemId: resolvePrintSystemId(systemId) },
+    }),
   );
   return next;
 }

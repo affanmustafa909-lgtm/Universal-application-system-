@@ -3,19 +3,23 @@ import { useMemo, useState } from "react";
 import { PageHeader } from "../../pops/ui/PageHeader";
 import { noticeErrorClass, noticeSuccessClass } from "../../pops/lib/themeClasses";
 import {
+  convertEducationAdmission,
   createEducationAdmission,
   fetchEducationAdmissions,
   fetchEducationClasses,
   fetchEducationLookups,
   fetchEducationSessions,
+  updateEducationAdmission,
 } from "../api/education";
 import { useEducationAccess, useInvalidateEducation } from "../hooks/useEducation";
+import { printEducationCertificate } from "../lib/printCertificate";
 import {
   EducationDataTable,
   EducationField,
   EducationFormSection,
   EducationInput,
   EducationPrimaryButton,
+  EducationSecondaryButton,
   EducationSelect,
 } from "../ui/EducationUi";
 
@@ -23,6 +27,7 @@ export function EducationAdmissionsPage(): JSX.Element {
   const { branch } = useEducationAccess();
   const invalidate = useInvalidateEducation();
   const [notice, setNotice] = useState<string | null>(null);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   const [applicantName, setApplicantName] = useState("");
@@ -34,6 +39,14 @@ export function EducationAdmissionsPage(): JSX.Element {
   const [classId, setClassId] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [notes, setNotes] = useState("");
+
+  const branding = useMemo(
+    () => ({
+      institutionName: "EducationFlow",
+      branchName: branch?.name ?? branch?.code ?? "",
+    }),
+    [branch?.name, branch?.code],
+  );
 
   const admissionsQuery = useQuery({
     queryKey: ["education", "admissions", branch?.code],
@@ -86,6 +99,51 @@ export function EducationAdmissionsPage(): JSX.Element {
     },
   });
 
+  const statusMutation = useMutation({
+    mutationFn: ({ id, statusCode: next }: { id: string; statusCode: string }) =>
+      updateEducationAdmission(id, { statusCode: next }),
+    onSuccess: () => {
+      invalidate(["admissions"]);
+      setNotice("Admission status updated");
+    },
+  });
+
+  const convertMutation = useMutation({
+    mutationFn: (id: string) => convertEducationAdmission(id),
+    onSuccess: () => {
+      invalidate();
+      setNotice("Admission converted to student");
+    },
+  });
+
+  const printAdmissionLetter = async (a: {
+    id: string;
+    applicantName: string;
+    fatherName?: string | null;
+    phone?: string | null;
+    applicationNumber: string;
+    statusCode: string;
+    classId?: string | null;
+    sessionId?: string | null;
+    notes?: string | null;
+  }) => {
+    setErrorNotice(null);
+    const result = await printEducationCertificate({
+      kind: "admission_letter",
+      applicantName: a.applicantName,
+      studentName: a.applicantName,
+      fatherName: a.fatherName ?? undefined,
+      phone: a.phone ?? undefined,
+      applicationNumber: a.applicationNumber,
+      status: a.statusCode,
+      className: (classesQuery.data ?? []).find((c) => c.id === a.classId)?.name,
+      sessionName: (sessionsQuery.data ?? []).find((s) => s.id === a.sessionId)?.name,
+      notes: a.notes ?? undefined,
+      branding,
+    });
+    if (!result.ok) setErrorNotice(result.error ?? "Print failed");
+  };
+
   const filtered = useMemo(() => {
     const list = admissionsQuery.data ?? [];
     const q = search.trim().toLowerCase();
@@ -98,6 +156,16 @@ export function EducationAdmissionsPage(): JSX.Element {
     );
   }, [admissionsQuery.data, search]);
 
+  const statusOptions =
+    statusLookupsQuery.data && statusLookupsQuery.data.length > 0
+      ? statusLookupsQuery.data
+      : [
+          { id: "pending", code: "pending", label: "Pending" },
+          { id: "accepted", code: "accepted", label: "Accepted" },
+          { id: "rejected", code: "rejected", label: "Rejected" },
+          { id: "converted", code: "converted", label: "Converted" },
+        ];
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -105,8 +173,15 @@ export function EducationAdmissionsPage(): JSX.Element {
         subtitle="Capture and track student admission applications for school, academy, or college."
       />
       {notice ? <div className={noticeSuccessClass}>{notice}</div> : null}
+      {errorNotice ? <div className={noticeErrorClass}>{errorNotice}</div> : null}
       {admissionsQuery.isError ? (
         <div className={noticeErrorClass}>{(admissionsQuery.error as Error).message}</div>
+      ) : null}
+      {statusMutation.isError ? (
+        <div className={noticeErrorClass}>{(statusMutation.error as Error).message}</div>
+      ) : null}
+      {convertMutation.isError ? (
+        <div className={noticeErrorClass}>{(convertMutation.error as Error).message}</div>
       ) : null}
 
       <EducationFormSection title="New application">
@@ -134,7 +209,7 @@ export function EducationAdmissionsPage(): JSX.Element {
         </EducationField>
         <EducationField label="Status">
           <EducationSelect value={statusCode} onChange={(e) => setStatusCode(e.target.value)}>
-            {(statusLookupsQuery.data ?? [{ id: "p", code: "pending", label: "Pending" }]).map((s) => (
+            {statusOptions.map((s) => (
               <option key={s.id} value={s.code}>
                 {s.label}
               </option>
@@ -169,6 +244,7 @@ export function EducationAdmissionsPage(): JSX.Element {
             disabled={!applicantName.trim() || createMutation.isPending}
             onClick={() => {
               setNotice(null);
+              setErrorNotice(null);
               createMutation.mutate();
             }}
           >
@@ -190,14 +266,48 @@ export function EducationAdmissionsPage(): JSX.Element {
       </div>
 
       <EducationDataTable
-        columns={["Application #", "Applicant", "Father", "Type", "Status", "Phone"]}
+        columns={["Application #", "Applicant", "Father", "Type", "Status", "Phone", "Actions"]}
         rows={filtered.map((a) => [
           a.applicationNumber,
           a.applicantName,
           a.fatherName ?? "—",
           a.admissionTypeCode,
-          a.statusCode,
+          <EducationSelect
+            key={`status-${a.id}`}
+            value={a.statusCode}
+            disabled={statusMutation.isPending}
+            onChange={(e) => {
+              setNotice(null);
+              setErrorNotice(null);
+              statusMutation.mutate({ id: a.id, statusCode: e.target.value });
+            }}
+          >
+            {statusOptions.map((s) => (
+              <option key={s.id} value={s.code}>
+                {s.label}
+              </option>
+            ))}
+          </EducationSelect>,
           a.phone ?? "—",
+          <div key={`actions-${a.id}`} className="flex flex-wrap gap-1">
+            <EducationSecondaryButton
+              className="px-2 py-1"
+              disabled={convertMutation.isPending || a.statusCode === "converted"}
+              onClick={() => {
+                setNotice(null);
+                setErrorNotice(null);
+                convertMutation.mutate(a.id);
+              }}
+            >
+              Convert to student
+            </EducationSecondaryButton>
+            <EducationSecondaryButton
+              className="px-2 py-1"
+              onClick={() => void printAdmissionLetter(a)}
+            >
+              Print letter
+            </EducationSecondaryButton>
+          </div>,
         ])}
       />
     </div>

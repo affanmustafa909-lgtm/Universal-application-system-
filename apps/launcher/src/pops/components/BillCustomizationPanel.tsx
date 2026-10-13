@@ -3,11 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import { BillReceiptLayoutCanvas } from "./BillReceiptLayoutCanvas";
 import { BillReceiptPreview } from "./BillReceiptPreview";
 import {
-  BILL_FIELD_GROUPS,
-  BILL_FIELD_LABELS,
+  billFieldGroupsForSystem,
+  billFieldLabelsForSystem,
   BILL_FONT_SIZE_MAX,
   BILL_FONT_SIZE_MIN,
-  DEFAULT_BILL_PRINT_SETTINGS,
+  defaultBillPrintSettingsFor,
   loadActiveBillTemplateId,
   newBillCustomLine,
   normalizeBillPrintSettings,
@@ -48,6 +48,8 @@ import {
   THERMAL_PRINT_SETTINGS_CHANGED_EVENT,
 } from "../lib/thermalPrintSettings";
 import { fieldInputClass, fieldSelectClass } from "../lib/themeClasses";
+import { useActiveSystemId } from "../../hooks/useActiveSystemId";
+import { isRestaurantFamilySystem } from "../../lib/businessSystems";
 
 type Props = {
   branchName: string;
@@ -67,9 +69,11 @@ export function BillCustomizationPanel({
   onSave,
   onNotice,
 }: Props): JSX.Element {
+  const systemId = useActiveSystemId();
+  const restaurantStarters = isRestaurantFamilySystem(systemId);
   const [draft, setDraft] = useState<BillPrintSettings>(() => normalizeBillPrintSettings(settings));
   const [templates, setTemplates] = useState<BillPrintTemplate[]>(() =>
-    loadBillPrintTemplates(branchCode),
+    loadBillPrintTemplates(branchCode, systemId),
   );
   const [templateName, setTemplateName] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState(
@@ -91,22 +95,22 @@ export function BillCustomizationPanel({
   }, [settings]);
 
   useEffect(() => {
-    setTemplates(loadBillPrintTemplates(branchCode));
-    setSelectedTemplateId(loadActiveBillTemplateId(branchCode) ?? "");
-    setAssignments(loadBillReceiptTemplateAssignments(branchCode));
+    setTemplates(loadBillPrintTemplates(branchCode, systemId));
+    setSelectedTemplateId(loadActiveBillTemplateId(branchCode, systemId) ?? "");
+    setAssignments(loadBillReceiptTemplateAssignments(branchCode, systemId));
     setViewingTemplateId(null);
     const profile = resolveReceiptPrinter(branchCode);
     setReceiptPaperSize(
-      profile?.paperSize ?? loadThermalPrintSettings(branchCode).defaultPaperSize,
+      profile?.paperSize ?? loadThermalPrintSettings(branchCode, systemId).defaultPaperSize,
     );
-  }, [branchCode]);
+  }, [branchCode, systemId]);
 
   useEffect(() => {
-    const refresh = () => setAssignments(loadBillReceiptTemplateAssignments(branchCode));
+    const refresh = () => setAssignments(loadBillReceiptTemplateAssignments(branchCode, systemId));
     const refreshPaper = () => {
       const profile = resolveReceiptPrinter(branchCode);
       setReceiptPaperSize(
-        profile?.paperSize ?? loadThermalPrintSettings(branchCode).defaultPaperSize,
+        profile?.paperSize ?? loadThermalPrintSettings(branchCode, systemId).defaultPaperSize,
       );
     };
     window.addEventListener(BILL_RECEIPT_TEMPLATE_ASSIGN_CHANGED_EVENT, refresh);
@@ -115,11 +119,11 @@ export function BillCustomizationPanel({
       window.removeEventListener(BILL_RECEIPT_TEMPLATE_ASSIGN_CHANGED_EVENT, refresh);
       window.removeEventListener(THERMAL_PRINT_SETTINGS_CHANGED_EVENT, refreshPaper);
     };
-  }, [branchCode]);
+  }, [branchCode, systemId]);
 
   function setAssignedReceiptPaper(paperSize: PrinterPaperSize): void {
     setReceiptPaperSize(paperSize);
-    saveThermalPrintSettings(branchCode, { defaultPaperSize: paperSize });
+    saveThermalPrintSettings(branchCode, { defaultPaperSize: paperSize }, systemId);
     const profile = resolveReceiptPrinter(branchCode);
     if (profile) {
       updatePrinterProfile(branchCode, profile.id, { paperSize });
@@ -138,8 +142,8 @@ export function BillCustomizationPanel({
   }
 
   const previewInput = useMemo(
-    () => sampleBillPrintInput(branchName, branchCode),
-    [branchName, branchCode],
+    () => sampleBillPrintInput(branchName, branchCode, systemId),
+    [branchName, branchCode, systemId],
   );
 
   function patch(partial: Partial<BillPrintSettings>): void {
@@ -159,7 +163,7 @@ export function BillCustomizationPanel({
   }
 
   function resetDefaults(): void {
-    const next = normalizeBillPrintSettings(DEFAULT_BILL_PRINT_SETTINGS);
+    const next = normalizeBillPrintSettings(defaultBillPrintSettingsFor(systemId));
     setDraft(next);
     onChange(next);
     saveActiveBillTemplateId(branchCode, null);
@@ -173,7 +177,7 @@ export function BillCustomizationPanel({
   function handleSaveCustomization(): void {
     const next = normalizeBillPrintSettings(draft);
     try {
-      saveBillPrintSettings(branchCode, next);
+      saveBillPrintSettings(branchCode, next, systemId);
       onChange(next);
 
       const assign = loadBillReceiptTemplateAssignments(branchCode);
@@ -230,7 +234,7 @@ export function BillCustomizationPanel({
   }
 
   function refreshTemplates(): void {
-    setTemplates(loadBillPrintTemplates(branchCode));
+    setTemplates(loadBillPrintTemplates(branchCode, systemId));
   }
 
   function saveAsTemplate(): void {
@@ -441,11 +445,12 @@ export function BillCustomizationPanel({
                 Inspiration templates
               </div>
               <p className="mb-2 text-[10px] leading-snug text-slate-500">
-                Cafe / bakery / restaurant styles for ideas only — click to clone, then edit your
-                name, address, and footer.
+                {restaurantStarters
+                  ? "Cafe / bakery / restaurant styles for this system only — click to clone, then edit your name, address, and footer."
+                  : "Templates for this business system only — other systems (restaurant kitchen, etc.) stay separate."}
               </p>
               <div className="grid gap-1.5 sm:grid-cols-1">
-                {starterBillPrintTemplates().map((starter) => (
+                {starterBillPrintTemplates(systemId).map((starter) => (
                   <button
                     key={starter.name}
                     type="button"
@@ -663,7 +668,7 @@ export function BillCustomizationPanel({
 
           {showAdvanced ? (
             <section className="space-y-4">
-              {BILL_FIELD_GROUPS.map((group) => (
+              {billFieldGroupsForSystem(systemId).map((group) => (
                 <div key={group.label}>
                   <div className="text-xs font-medium text-slate-600 dark:text-slate-300">{group.label}</div>
                   <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -678,7 +683,7 @@ export function BillCustomizationPanel({
                           checked={draft.fields[key]}
                           onChange={(e) => patchField(key, e.target.checked)}
                         />
-                        {BILL_FIELD_LABELS[key]}
+                        {billFieldLabelsForSystem(systemId)[key]}
                       </label>
                     ))}
                   </div>
@@ -707,12 +712,14 @@ export function BillCustomizationPanel({
             selectedId={selectedBlockId}
             onSelect={setSelectedBlockId}
             onChange={replaceDraft}
+            systemId={systemId}
           />
           <BillReceiptPreview
             input={previewInput}
             branchCode={branchCode}
             printSettings={draft}
             title="Print preview (matches printer)"
+            systemId={systemId}
           />
         </div>
       </div>

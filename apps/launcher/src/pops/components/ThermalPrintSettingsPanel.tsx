@@ -30,6 +30,7 @@ import { resolveBillPrintSettingsForReceipt } from "../lib/billReceiptTemplateAs
 import { BillCustomizationPanel } from "./BillCustomizationPanel";
 import { KotCustomizationPanel } from "./KotCustomizationPanel";
 import { usePopsStore } from "../../stores/popsStore";
+import { useActiveSystemId } from "../../hooks/useActiveSystemId";
 import {
   loadPrinterRouting,
   resolveReceiptPrinter,
@@ -87,8 +88,9 @@ export function ThermalPrintSettingsPanel({
   variant = "full",
 }: Props): JSX.Element {
   const branchName = usePopsStore((s) => s.branch?.name) ?? "BuchaSoft";
+  const systemId = useActiveSystemId();
   const [draft, setDraft] = useState<ThermalPrintSettings>(() =>
-    loadThermalPrintSettings(branchCode),
+    loadThermalPrintSettings(branchCode, systemId),
   );
   const [dirty, setDirty] = useState(false);
   const [testPrinter, setTestPrinter] = useState("");
@@ -96,27 +98,27 @@ export function ThermalPrintSettingsPanel({
   const [busy, setBusy] = useState(false);
   const [selfTest, setSelfTest] = useState<ThermalSelfTestResult | null>(null);
   const [billSettings, setBillSettings] = useState<BillPrintSettings>(() =>
-    loadBillPrintSettings(branchCode),
+    loadBillPrintSettings(branchCode, systemId),
   );
 
   useEffect(() => {
-    setDraft(loadThermalPrintSettings(branchCode));
-    setBillSettings(loadBillPrintSettings(branchCode));
+    setDraft(loadThermalPrintSettings(branchCode, systemId));
+    setBillSettings(loadBillPrintSettings(branchCode, systemId));
     setDirty(false);
-  }, [branchCode]);
+  }, [branchCode, systemId]);
 
   useEffect(() => {
     function onThermalChanged(event: Event): void {
       const detail = (event as CustomEvent<{ branchCode?: string }>).detail;
       if (detail?.branchCode === branchCode) {
-        setDraft(loadThermalPrintSettings(branchCode));
+        setDraft(loadThermalPrintSettings(branchCode, systemId));
         setDirty(false);
       }
     }
     function onBillChanged(event: Event): void {
       const detail = (event as CustomEvent<{ branchCode?: string }>).detail;
       if (!detail?.branchCode || detail.branchCode === branchCode) {
-        setBillSettings(loadBillPrintSettings(branchCode));
+        setBillSettings(loadBillPrintSettings(branchCode, systemId));
       }
     }
     window.addEventListener(THERMAL_PRINT_SETTINGS_CHANGED_EVENT, onThermalChanged);
@@ -125,7 +127,7 @@ export function ThermalPrintSettingsPanel({
       window.removeEventListener(THERMAL_PRINT_SETTINGS_CHANGED_EVENT, onThermalChanged);
       window.removeEventListener(BILL_PRINT_SETTINGS_CHANGED_EVENT, onBillChanged);
     };
-  }, [branchCode]);
+  }, [branchCode, systemId]);
 
   useEffect(() => {
     void listSystemPrintersDetailed().then((result) => {
@@ -138,15 +140,15 @@ export function ThermalPrintSettingsPanel({
 
   const previewHtml = useMemo(() => {
     const settings =
-      resolveBillPrintSettingsForReceipt(branchCode) ?? billSettings;
+      resolveBillPrintSettingsForReceipt(branchCode, null, null, systemId) ?? billSettings;
     return buildPrintPreviewHtml({
-      ...sampleBillPrintInput(branchName, branchCode),
+      ...sampleBillPrintInput(branchName, branchCode, systemId),
       kind: "receipt",
       paperSize: draft.defaultPaperSize,
       thermal: draft,
       billPrintSettings: settings,
     });
-  }, [branchCode, branchName, billSettings, draft]);
+  }, [branchCode, branchName, billSettings, draft, systemId]);
 
   function syncReceiptPrinterPaper(paperSize: ThermalPrintSettings["defaultPaperSize"]): void {
     const routing = loadPrinterRouting(branchCode);
@@ -242,6 +244,7 @@ export function ThermalPrintSettingsPanel({
         paperSize: draft.defaultPaperSize,
         thermal: draft,
         copies: 1,
+        systemId,
       });
       notify?.(ok ? `Test bill sent to ${testPrinter}.` : `Test print failed for ${testPrinter}.`);
     } finally {
@@ -257,6 +260,7 @@ export function ThermalPrintSettingsPanel({
       branchName,
       thermal: saved,
       profilePaperSize: "80mm", // prove Custom still wins over stale profile
+      systemId,
     });
     setSelfTest(result);
     notify?.(result.summary);
@@ -278,6 +282,7 @@ export function ThermalPrintSettingsPanel({
         thermal: saved,
         copies: 1,
         completeTestLabel: true,
+        systemId,
       });
       notify?.(
         ok

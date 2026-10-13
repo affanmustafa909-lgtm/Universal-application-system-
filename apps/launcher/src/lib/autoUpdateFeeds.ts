@@ -38,6 +38,12 @@ const DESKTOP_FEEDS = {
     downloadTag: (v: string) =>
       `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/Zivra-Pharmacy-Management-System_${v}_x64-setup.exe`,
   },
+  education: {
+    manifest: "latest-education.json",
+    label: "Desktop · EducationFlow",
+    downloadTag: (v: string) =>
+      `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/EducationFlow-Management-System_${v}_x64-setup.exe`,
+  },
 } as const;
 
 const DISTRIBUTION_FEED = {

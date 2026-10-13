@@ -122,10 +122,13 @@ function billSettingsForKind(
   };
 }
 
+const STORE_SYSTEM = "general-store" as const;
+
 function cartToTicketInput(input: StoreCartReceiptInput): Omit<PrintTicketInput, "kind"> {
   const discountPct =
     input.subtotal > 0 ? Math.round((input.discount / input.subtotal) * 100) : 0;
   return {
+    systemId: STORE_SYSTEM,
     branchName: input.branchName,
     branchCode: input.branchCode,
     orderRef: input.kind === "order" ? `ORD-${Date.now().toString().slice(-6)}` : "PREVIEW",
@@ -155,6 +158,7 @@ function saleToTicketInput(
 ): Omit<PrintTicketInput, "kind"> {
   const discountPct = sale.subtotal > 0 ? Math.round((sale.discount / sale.subtotal) * 100) : 0;
   return {
+    systemId: STORE_SYSTEM,
     branchName,
     branchCode,
     orderRef: sale.invoiceNumber,

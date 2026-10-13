@@ -11,17 +11,21 @@ import {
   fetchEducationExams,
   fetchEducationLookups,
   fetchEducationMarks,
+  fetchEducationSections,
   fetchEducationSessions,
   fetchEducationStudents,
   fetchEducationSubjects,
 } from "../api/education";
 import { useEducationAccess, useInvalidateEducation } from "../hooks/useEducation";
+import { printEducationAdmitCard } from "../lib/printAdmitCard";
+import { printEducationMarksheet } from "../lib/printMarksheet";
 import {
   EducationDataTable,
   EducationField,
   EducationFormSection,
   EducationInput,
   EducationPrimaryButton,
+  EducationSecondaryButton,
   EducationSelect,
 } from "../ui/EducationUi";
 
@@ -47,6 +51,17 @@ export function EducationExaminationsPage(): JSX.Element {
   const [markExamSubjectId, setMarkExamSubjectId] = useState("");
   const [markStudentId, setMarkStudentId] = useState("");
   const [obtainedMarks, setObtainedMarks] = useState("");
+  const [admitExamId, setAdmitExamId] = useState("");
+  const [admitStudentId, setAdmitStudentId] = useState("");
+  const [printError, setPrintError] = useState<string | null>(null);
+
+  const branding = useMemo(
+    () => ({
+      institutionName: "EducationFlow",
+      branchName: branch?.name ?? branch?.code ?? "",
+    }),
+    [branch?.name, branch?.code],
+  );
 
   const examsQuery = useQuery({
     queryKey: ["education", "exams", branch?.code],
@@ -82,6 +97,11 @@ export function EducationExaminationsPage(): JSX.Element {
     queryKey: ["education", "students", branch?.code],
     enabled: Boolean(branch?.code),
     queryFn: () => fetchEducationStudents(branch!.code),
+  });
+  const sectionsQuery = useQuery({
+    queryKey: ["education", "sections", branch?.code],
+    enabled: Boolean(branch?.code),
+    queryFn: () => fetchEducationSections(branch!.code),
   });
 
   const createExamMutation = useMutation({
@@ -143,6 +163,30 @@ export function EducationExaminationsPage(): JSX.Element {
     );
   }, [examsQuery.data, search]);
 
+  const printAdmitCard = async () => {
+    setPrintError(null);
+    const exam = (examsQuery.data ?? []).find((e) => e.id === admitExamId);
+    const student = (studentsQuery.data ?? []).find((s) => s.id === admitStudentId);
+    if (!exam || !student) {
+      setPrintError("Select exam and student to print admit card");
+      return;
+    }
+    const className = (classesQuery.data ?? []).find((c) => c.id === (exam.classId ?? student.classId))?.name;
+    const sectionName = (sectionsQuery.data ?? []).find((s) => s.id === student.sectionId)?.name;
+    const result = await printEducationAdmitCard({
+      examName: exam.name,
+      examType: exam.examTypeCode,
+      studentName: [student.firstName, student.lastName].filter(Boolean).join(" "),
+      studentNumber: student.studentNumber,
+      className,
+      sectionName,
+      startDate: exam.startDate ?? undefined,
+      endDate: exam.endDate ?? undefined,
+      branding,
+    });
+    if (!result.ok) setPrintError(result.error ?? "Print failed");
+  };
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -150,6 +194,7 @@ export function EducationExaminationsPage(): JSX.Element {
         subtitle="Exam schedules, subject papers, and marks entry."
       />
       {notice ? <div className={noticeSuccessClass}>{notice}</div> : null}
+      {printError ? <div className={noticeErrorClass}>{printError}</div> : null}
       {examsQuery.isError ? (
         <div className={noticeErrorClass}>{(examsQuery.error as Error).message}</div>
       ) : null}
@@ -327,6 +372,37 @@ export function EducationExaminationsPage(): JSX.Element {
         </div>
       </EducationFormSection>
 
+      <EducationFormSection title="Print admit card">
+        <EducationField label="Exam" required>
+          <EducationSelect value={admitExamId} onChange={(e) => setAdmitExamId(e.target.value)}>
+            <option value="">—</option>
+            {(examsQuery.data ?? []).map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+          </EducationSelect>
+        </EducationField>
+        <EducationField label="Student" required>
+          <EducationSelect value={admitStudentId} onChange={(e) => setAdmitStudentId(e.target.value)}>
+            <option value="">—</option>
+            {(studentsQuery.data ?? []).map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.firstName} {s.lastName ?? ""}
+              </option>
+            ))}
+          </EducationSelect>
+        </EducationField>
+        <div className="col-span-full">
+          <EducationSecondaryButton
+            disabled={!admitExamId || !admitStudentId}
+            onClick={() => void printAdmitCard()}
+          >
+            Print admit card
+          </EducationSecondaryButton>
+        </div>
+      </EducationFormSection>
+
       <EducationInput
         className="max-w-xs"
         placeholder="Search exams…"
@@ -350,7 +426,17 @@ export function EducationExaminationsPage(): JSX.Element {
 export function EducationResultsPage(): JSX.Element {
   const { branch } = useEducationAccess();
   const [examId, setExamId] = useState("");
+  const [studentId, setStudentId] = useState("");
   const [search, setSearch] = useState("");
+  const [printError, setPrintError] = useState<string | null>(null);
+
+  const branding = useMemo(
+    () => ({
+      institutionName: "EducationFlow",
+      branchName: branch?.name ?? branch?.code ?? "",
+    }),
+    [branch?.name, branch?.code],
+  );
 
   const examsQuery = useQuery({
     queryKey: ["education", "exams", branch?.code],
@@ -367,6 +453,31 @@ export function EducationResultsPage(): JSX.Element {
     enabled: Boolean(branch?.code),
     queryFn: () => fetchEducationStudents(branch!.code),
   });
+  const examSubjectsQuery = useQuery({
+    queryKey: ["education", "exam-subjects", branch?.code, examId],
+    enabled: Boolean(branch?.code) && Boolean(examId),
+    queryFn: () => fetchEducationExamSubjects(branch!.code, examId),
+  });
+  const subjectsQuery = useQuery({
+    queryKey: ["education", "subjects", branch?.code],
+    enabled: Boolean(branch?.code),
+    queryFn: () => fetchEducationSubjects(branch!.code),
+  });
+  const classesQuery = useQuery({
+    queryKey: ["education", "classes", branch?.code],
+    enabled: Boolean(branch?.code),
+    queryFn: () => fetchEducationClasses(branch!.code),
+  });
+  const sectionsQuery = useQuery({
+    queryKey: ["education", "sections", branch?.code],
+    enabled: Boolean(branch?.code),
+    queryFn: () => fetchEducationSections(branch!.code),
+  });
+  const sessionsQuery = useQuery({
+    queryKey: ["education", "sessions", branch?.code],
+    enabled: Boolean(branch?.code),
+    queryFn: () => fetchEducationSessions(branch!.code),
+  });
 
   const studentName = useMemo(() => {
     const map = new Map(
@@ -378,29 +489,87 @@ export function EducationResultsPage(): JSX.Element {
   const filtered = useMemo(() => {
     const list = marksQuery.data ?? [];
     const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter(
-      (m) =>
+    return list.filter((m) => {
+      if (studentId && m.studentId !== studentId) return false;
+      if (!q) return true;
+      return (
         studentName(m.studentId).toLowerCase().includes(q) ||
         (m.gradeCode ?? "").toLowerCase().includes(q) ||
-        (m.passFail ?? "").toLowerCase().includes(q),
+        (m.passFail ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [marksQuery.data, search, studentName, studentId]);
+
+  const printMarksheet = async () => {
+    setPrintError(null);
+    if (!examId || !studentId) {
+      setPrintError("Select exam and student to print marksheet");
+      return;
+    }
+    const exam = (examsQuery.data ?? []).find((e) => e.id === examId);
+    const student = (studentsQuery.data ?? []).find((s) => s.id === studentId);
+    if (!exam || !student) {
+      setPrintError("Exam or student not found");
+      return;
+    }
+    const subjectNameByExamSubjectId = new Map<string, string>();
+    const subjectsById = new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.name]));
+    for (const es of examSubjectsQuery.data ?? []) {
+      subjectNameByExamSubjectId.set(
+        es.id,
+        (es.subjectId && subjectsById.get(es.subjectId)) || es.id.slice(0, 8),
+      );
+    }
+    const studentMarks = (marksQuery.data ?? []).filter(
+      (m) => m.examId === examId && m.studentId === studentId,
     );
-  }, [marksQuery.data, search, studentName]);
+    const marks = studentMarks.map((m) => {
+      const es = (examSubjectsQuery.data ?? []).find((x) => x.id === m.examSubjectId);
+      return {
+        subjectName: subjectNameByExamSubjectId.get(m.examSubjectId) ?? m.examSubjectId.slice(0, 8),
+        obtained: m.obtainedMarks,
+        total: es?.totalMarks ?? 100,
+        grade: m.gradeCode ?? undefined,
+      };
+    });
+    const result = await printEducationMarksheet({
+      examName: exam.name,
+      sessionName: (sessionsQuery.data ?? []).find((s) => s.id === exam.sessionId)?.name,
+      studentName: [student.firstName, student.lastName].filter(Boolean).join(" "),
+      studentNumber: student.studentNumber,
+      className: (classesQuery.data ?? []).find((c) => c.id === (student.classId ?? exam.classId))?.name,
+      sectionName: (sectionsQuery.data ?? []).find((s) => s.id === student.sectionId)?.name,
+      marks,
+      branding,
+    });
+    if (!result.ok) setPrintError(result.error ?? "Print failed");
+  };
 
   return (
     <div className="space-y-5">
       <PageHeader title="Results" subtitle="Marks and results by exam." />
+      {printError ? <div className={noticeErrorClass}>{printError}</div> : null}
       {marksQuery.isError ? (
         <div className={noticeErrorClass}>{(marksQuery.error as Error).message}</div>
       ) : null}
 
-      <EducationFormSection title="Filter">
+      <EducationFormSection title="Filter & print">
         <EducationField label="Exam">
           <EducationSelect value={examId} onChange={(e) => setExamId(e.target.value)}>
             <option value="">All exams</option>
             {(examsQuery.data ?? []).map((e) => (
               <option key={e.id} value={e.id}>
                 {e.name}
+              </option>
+            ))}
+          </EducationSelect>
+        </EducationField>
+        <EducationField label="Student">
+          <EducationSelect value={studentId} onChange={(e) => setStudentId(e.target.value)}>
+            <option value="">All students</option>
+            {(studentsQuery.data ?? []).map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.firstName} {s.lastName ?? ""}
               </option>
             ))}
           </EducationSelect>
@@ -412,6 +581,14 @@ export function EducationResultsPage(): JSX.Element {
             placeholder="Student, grade…"
           />
         </EducationField>
+        <div className="col-span-full">
+          <EducationSecondaryButton
+            disabled={!examId || !studentId}
+            onClick={() => void printMarksheet()}
+          >
+            Print marksheet
+          </EducationSecondaryButton>
+        </div>
       </EducationFormSection>
 
       <EducationDataTable

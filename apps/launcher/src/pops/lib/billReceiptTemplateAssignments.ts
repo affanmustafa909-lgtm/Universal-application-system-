@@ -1,10 +1,15 @@
 import { getBillPrintTemplate, loadBillPrintTemplates } from "./billPrintTemplates";
 import {
-  DEFAULT_BILL_PRINT_SETTINGS,
+  defaultBillPrintSettingsFor,
   loadBillPrintSettings,
   normalizeBillPrintSettings,
   type BillPrintSettings,
 } from "./billPrintSettings";
+import {
+  printScopedKey,
+  readScopedMapEntry,
+  resolvePrintSystemId,
+} from "./printSystemScope";
 
 /** POS receipt actions that can use different saved templates. */
 export type BillPosReceiptAction = "order" | "pay";
@@ -78,11 +83,13 @@ function normalizePosActions(
 
 export function loadBillReceiptTemplateAssignments(
   branchCode: string | undefined,
+  systemId?: string | null | undefined,
 ): BillReceiptTemplateAssignmentStore {
   if (!branchCode) return emptyStore();
-  const row = readRoot()[branchCode];
+  const root = readRoot();
+  const { value: row, scopedKey } = readScopedMapEntry(root, branchCode, systemId);
   if (!row || typeof row !== "object") return emptyStore();
-  return {
+  const normalized: BillReceiptTemplateAssignmentStore = {
     branchDefaultTemplateId:
       typeof row.branchDefaultTemplateId === "string" ? row.branchDefaultTemplateId : null,
     byReceiptPrinterId:
@@ -91,14 +98,21 @@ export function loadBillReceiptTemplateAssignments(
         : {},
     byPosAction: normalizePosActions(row.byPosAction),
   };
+  if (scopedKey && !root[scopedKey]) {
+    root[scopedKey] = normalized;
+    writeRoot(root, branchCode);
+  }
+  return normalized;
 }
 
 export function saveBillReceiptTemplateAssignments(
   branchCode: string,
   store: BillReceiptTemplateAssignmentStore,
+  systemId?: string | null | undefined,
 ): void {
   const root = readRoot();
-  root[branchCode] = {
+  const key = printScopedKey(branchCode, systemId);
+  root[key] = {
     branchDefaultTemplateId: store.branchDefaultTemplateId,
     byReceiptPrinterId: { ...store.byReceiptPrinterId },
     byPosAction: { ...store.byPosAction },
@@ -114,8 +128,9 @@ export function assignBillTemplateToReceiptTargets(
   branchCode: string,
   templateId: string,
   targets: { branchDefault: boolean; receiptPrinterIds: string[] },
+  systemId?: string | null | undefined,
 ): BillReceiptTemplateAssignmentStore {
-  const current = loadBillReceiptTemplateAssignments(branchCode);
+  const current = loadBillReceiptTemplateAssignments(branchCode, systemId);
   const byReceiptPrinterId = { ...current.byReceiptPrinterId };
 
   for (const [printerId, tid] of Object.entries(byReceiptPrinterId)) {
@@ -135,7 +150,7 @@ export function assignBillTemplateToReceiptTargets(
     byPosAction: { ...current.byPosAction },
   };
 
-  saveBillReceiptTemplateAssignments(branchCode, next);
+  saveBillReceiptTemplateAssignments(branchCode, next, systemId);
   return next;
 }
 
@@ -144,8 +159,9 @@ export function assignBillTemplateToPosAction(
   branchCode: string,
   action: BillPosReceiptAction,
   templateId: string | null,
+  systemId?: string | null | undefined,
 ): BillReceiptTemplateAssignmentStore {
-  const current = loadBillReceiptTemplateAssignments(branchCode);
+  const current = loadBillReceiptTemplateAssignments(branchCode, systemId);
   const byPosAction = { ...current.byPosAction };
   if (templateId) byPosAction[action] = templateId;
   else delete byPosAction[action];
@@ -153,20 +169,21 @@ export function assignBillTemplateToPosAction(
     ...current,
     byPosAction,
   };
-  saveBillReceiptTemplateAssignments(branchCode, next);
+  saveBillReceiptTemplateAssignments(branchCode, next, systemId);
   return next;
 }
 
 export function setBranchDefaultBillTemplate(
   branchCode: string,
   templateId: string | null,
+  systemId?: string | null | undefined,
 ): BillReceiptTemplateAssignmentStore {
-  const current = loadBillReceiptTemplateAssignments(branchCode);
+  const current = loadBillReceiptTemplateAssignments(branchCode, systemId);
   const next: BillReceiptTemplateAssignmentStore = {
     ...current,
     branchDefaultTemplateId: templateId,
   };
-  saveBillReceiptTemplateAssignments(branchCode, next);
+  saveBillReceiptTemplateAssignments(branchCode, next, systemId);
   return next;
 }
 
@@ -206,9 +223,11 @@ export function resolveBillPrintSettingsForReceipt(
   branchCode: string | undefined,
   receiptPrinterId?: string | null,
   posAction?: BillPosReceiptAction | null,
+  systemId?: string | null | undefined,
 ): BillPrintSettings {
-  if (!branchCode) return DEFAULT_BILL_PRINT_SETTINGS;
-  const assign = loadBillReceiptTemplateAssignments(branchCode);
+  const sys = resolvePrintSystemId(systemId);
+  if (!branchCode) return defaultBillPrintSettingsFor(sys);
+  const assign = loadBillReceiptTemplateAssignments(branchCode, sys);
   const templateId =
     (posAction && assign.byPosAction[posAction]) ||
     (receiptPrinterId && assign.byReceiptPrinterId[receiptPrinterId]) ||
@@ -216,11 +235,11 @@ export function resolveBillPrintSettingsForReceipt(
     null;
 
   if (templateId) {
-    const tpl = getBillPrintTemplate(branchCode, templateId);
+    const tpl = getBillPrintTemplate(branchCode, templateId, sys);
     if (tpl) return normalizeBillPrintSettings(tpl.settings);
-    const still = loadBillPrintTemplates(branchCode).find((t) => t.id === templateId);
+    const still = loadBillPrintTemplates(branchCode, sys).find((t) => t.id === templateId);
     if (still) return normalizeBillPrintSettings(still.settings);
   }
 
-  return loadBillPrintSettings(branchCode);
+  return loadBillPrintSettings(branchCode, sys);
 }

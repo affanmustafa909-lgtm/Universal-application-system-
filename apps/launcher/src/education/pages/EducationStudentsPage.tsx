@@ -10,14 +10,17 @@ import {
   fetchEducationSections,
   fetchEducationSessions,
   fetchEducationStudents,
+  updateEducationStudent,
 } from "../api/education";
 import { useEducationAccess, useInvalidateEducation } from "../hooks/useEducation";
+import { printEducationIdCard } from "../lib/printIdCard";
 import {
   EducationDataTable,
   EducationField,
   EducationFormSection,
   EducationInput,
   EducationPrimaryButton,
+  EducationSecondaryButton,
   EducationSelect,
 } from "../ui/EducationUi";
 
@@ -39,6 +42,15 @@ export function EducationStudentsPage(): JSX.Element {
   const [sectionId, setSectionId] = useState("");
   const [feeStructureId, setFeeStructureId] = useState("");
   const [admissionNumber, setAdmissionNumber] = useState("");
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
+
+  const branding = useMemo(
+    () => ({
+      institutionName: "EducationFlow",
+      branchName: branch?.name ?? branch?.code ?? "",
+    }),
+    [branch?.name, branch?.code],
+  );
 
   const studentsQuery = useQuery({
     queryKey: ["education", "students", branch?.code],
@@ -59,6 +71,11 @@ export function EducationStudentsPage(): JSX.Element {
     queryKey: ["education", "sections", branch?.code, classId],
     enabled: Boolean(branch?.code) && Boolean(classId),
     queryFn: () => fetchEducationSections(branch!.code, classId),
+  });
+  const allSectionsQuery = useQuery({
+    queryKey: ["education", "sections", branch?.code, "all"],
+    enabled: Boolean(branch?.code),
+    queryFn: () => fetchEducationSections(branch!.code),
   });
   const feeStructuresQuery = useQuery({
     queryKey: ["education", "fee-structures", branch?.code],
@@ -115,6 +132,47 @@ export function EducationStudentsPage(): JSX.Element {
     return map;
   }, [classesQuery.data]);
 
+  const sectionNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of allSectionsQuery.data ?? sectionsQuery.data ?? []) map.set(s.id, s.name);
+    return map;
+  }, [allSectionsQuery.data, sectionsQuery.data]);
+
+  const sessionNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of sessionsQuery.data ?? []) map.set(s.id, s.name);
+    return map;
+  }, [sessionsQuery.data]);
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, statusCode: next }: { id: string; statusCode: string }) =>
+      updateEducationStudent(id, { statusCode: next }),
+    onSuccess: () => {
+      invalidate(["students"]);
+      setNotice("Student status updated");
+    },
+  });
+
+  const printIdCard = async (s: {
+    firstName: string;
+    lastName?: string | null;
+    studentNumber: string;
+    classId?: string | null;
+    sectionId?: string | null;
+    sessionId?: string | null;
+  }) => {
+    setErrorNotice(null);
+    const result = await printEducationIdCard({
+      studentName: [s.firstName, s.lastName].filter(Boolean).join(" "),
+      studentNumber: s.studentNumber,
+      className: s.classId ? classNameById.get(s.classId) : undefined,
+      sectionName: s.sectionId ? sectionNameById.get(s.sectionId) : undefined,
+      sessionName: s.sessionId ? sessionNameById.get(s.sessionId) : undefined,
+      branding,
+    });
+    if (!result.ok) setErrorNotice(result.error ?? "Print failed");
+  };
+
   const filtered = useMemo(() => {
     const list = studentsQuery.data ?? [];
     const q = search.trim().toLowerCase();
@@ -135,11 +193,15 @@ export function EducationStudentsPage(): JSX.Element {
         subtitle="Enroll students with class assignment, basic profile, and optional fee structure hooks."
       />
       {notice ? <div className={noticeSuccessClass}>{notice}</div> : null}
+      {errorNotice ? <div className={noticeErrorClass}>{errorNotice}</div> : null}
       {studentsQuery.isError ? (
         <div className={noticeErrorClass}>{(studentsQuery.error as Error).message}</div>
       ) : null}
       {enrollMutation.isError ? (
         <div className={noticeErrorClass}>{(enrollMutation.error as Error).message}</div>
+      ) : null}
+      {statusMutation.isError ? (
+        <div className={noticeErrorClass}>{(statusMutation.error as Error).message}</div>
       ) : null}
 
       <EducationFormSection title="Basic profile" description="Core identity fields for the student record.">
@@ -258,14 +320,40 @@ export function EducationStudentsPage(): JSX.Element {
       </div>
 
       <EducationDataTable
-        columns={["Number", "Name", "Father", "Class", "Phone", "Status"]}
+        columns={["Number", "Name", "Father", "Class", "Phone", "Status", "Actions"]}
         rows={filtered.map((s) => [
           s.studentNumber,
           [s.firstName, s.lastName].filter(Boolean).join(" "),
           s.fatherName ?? "—",
           s.classId ? (classNameById.get(s.classId) ?? "—") : "—",
           s.phone ?? "—",
-          s.statusCode,
+          <EducationSelect
+            key={`status-${s.id}`}
+            value={s.statusCode}
+            disabled={statusMutation.isPending}
+            onChange={(e) => {
+              setNotice(null);
+              setErrorNotice(null);
+              statusMutation.mutate({ id: s.id, statusCode: e.target.value });
+            }}
+          >
+            {(statusLookupsQuery.data ?? [
+              { id: "active", code: "active", label: "Active" },
+              { id: "inactive", code: "inactive", label: "Inactive" },
+              { id: "alumni", code: "alumni", label: "Alumni" },
+            ]).map((opt) => (
+              <option key={opt.id} value={opt.code}>
+                {opt.label}
+              </option>
+            ))}
+          </EducationSelect>,
+          <EducationSecondaryButton
+            key={`id-${s.id}`}
+            className="px-2 py-1"
+            onClick={() => void printIdCard(s)}
+          >
+            Print ID card
+          </EducationSecondaryButton>,
         ])}
       />
     </div>

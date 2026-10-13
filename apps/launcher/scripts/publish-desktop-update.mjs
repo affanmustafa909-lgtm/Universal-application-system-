@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
  *   node scripts/publish-desktop-update.mjs <edition> [version]
  *   node scripts/publish-desktop-update.mjs all [version]
  *
- * Editions: suite | restaurant | general-store | pharmacy | all
+ * Editions: suite | restaurant | general-store | pharmacy | education | all
  */
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -21,7 +21,7 @@ const updatesDir = join(repoRoot, "dist-installers", "updates");
 const editionArg = (process.argv[2] ?? "").trim();
 const versionArg = (process.argv[3] ?? "").trim();
 
-const DESKTOP_EDITIONS = ["suite", "restaurant", "general-store", "pharmacy"];
+const DESKTOP_EDITIONS = ["suite", "restaurant", "general-store", "pharmacy", "education"];
 const owner = "basir2353";
 const repo = "zivra-desktop-updates";
 
@@ -185,7 +185,13 @@ function resolveEditionPackage(edition) {
       if (name.endsWith("-setup.exe") || name.endsWith("-setup.exe.sig")) {
         // Prefer assets listed in this edition's manifest URL.
         const url = manifest?.platforms?.["windows-x86_64"]?.url ?? "";
-        return url.includes(name) || name.toLowerCase().includes(edition.replace(/-/g, ""));
+        const editionKey = edition.replace(/-/g, "");
+        const nameLower = name.toLowerCase();
+        return (
+          url.includes(name) ||
+          nameLower.includes(editionKey) ||
+          (edition === "education" && nameLower.includes("educationflow"))
+        );
       }
       return false;
     })

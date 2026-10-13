@@ -1,9 +1,10 @@
-/** One place for receipt / KOT / paper customization. */
+/** One place for receipt / KOT / paper customization — per business system, no duplicates. */
 
 import { useEffect, useState } from "react";
 import { BillCustomizationPanel } from "./BillCustomizationPanel";
 import { KotCustomizationPanel } from "./KotCustomizationPanel";
 import { ThermalPrintSettingsPanel } from "./ThermalPrintSettingsPanel";
+import { DistPrintCustomizePanel } from "../../distribution/components/DistPrintCustomizePanel";
 import { IconPalette, IconPrinter, IconReceipt } from "./printerUiIcons";
 import { usePopsStore } from "../../stores/popsStore";
 import { useActiveSystemId } from "../../hooks/useActiveSystemId";
@@ -17,16 +18,75 @@ import { isRestaurantFamilySystem } from "../../lib/businessSystems";
 
 export type CustomizeSub = "receipt" | "kot" | "paper";
 
-const RESTAURANT_SUBS: { id: CustomizeSub; label: string; hint: string; Icon: typeof IconReceipt }[] = [
-  { id: "receipt", label: "Receipt / Bill", hint: "Customer slip layout & fields", Icon: IconReceipt },
-  { id: "kot", label: "Kitchen (KOT)", hint: "Station ticket layout", Icon: IconPrinter },
-  { id: "paper", label: "Paper & preview", hint: "Width, margins, test print", Icon: IconPalette },
-];
+type SubDef = { id: CustomizeSub; label: string; hint: string; Icon: typeof IconReceipt };
 
-const NON_RESTAURANT_SUBS: { id: CustomizeSub; label: string; hint: string; Icon: typeof IconReceipt }[] = [
-  { id: "receipt", label: "Invoice / slip", hint: "Booking & invoice layout", Icon: IconReceipt },
-  { id: "paper", label: "Paper & preview", hint: "Width, margins, test print", Icon: IconPalette },
-];
+function subsForSystem(systemId: string): SubDef[] {
+  if (systemId === "ice-cream-bar") {
+    return [
+      { id: "receipt", label: "Receipt / Bill", hint: "Customer parlour slip", Icon: IconReceipt },
+      { id: "kot", label: "Station ticket", hint: "Scoop / parlour station", Icon: IconPrinter },
+      { id: "paper", label: "Paper & preview", hint: "Width, margins, test", Icon: IconPalette },
+    ];
+  }
+  if (systemId === "restaurant") {
+    return [
+      { id: "receipt", label: "Receipt / Bill", hint: "Customer bill layout", Icon: IconReceipt },
+      { id: "kot", label: "Kitchen (KOT)", hint: "Kitchen / bar ticket", Icon: IconPrinter },
+      { id: "paper", label: "Paper & preview", hint: "Width, margins, test", Icon: IconPalette },
+    ];
+  }
+  if (systemId === "general-store") {
+    return [
+      { id: "receipt", label: "Sales slip", hint: "POS order / pay slip", Icon: IconReceipt },
+      { id: "paper", label: "Paper & preview", hint: "Width, margins, test", Icon: IconPalette },
+    ];
+  }
+  if (systemId === "pharmacy") {
+    return [
+      { id: "receipt", label: "Pharmacy invoice", hint: "Rx / counter invoice", Icon: IconReceipt },
+      { id: "paper", label: "Paper & preview", hint: "Width, margins, test", Icon: IconPalette },
+    ];
+  }
+  if (systemId === "distribution") {
+    return [
+      {
+        id: "receipt",
+        label: "A4 documents",
+        hint: "Booking / invoice / challan / reports",
+        Icon: IconReceipt,
+      },
+    ];
+  }
+  if (systemId === "education") {
+    return [
+      { id: "receipt", label: "Fee receipt", hint: "Fee / payment slip", Icon: IconReceipt },
+      { id: "paper", label: "Paper & preview", hint: "Width, margins, test", Icon: IconPalette },
+    ];
+  }
+  return [
+    { id: "receipt", label: "Invoice / slip", hint: "Document layout", Icon: IconReceipt },
+    { id: "paper", label: "Paper & preview", hint: "Width, margins, test", Icon: IconPalette },
+  ];
+}
+
+function hubBlurb(systemId: string): string {
+  switch (systemId) {
+    case "restaurant":
+      return "Restaurant only — customer bill + kitchen KOT. Other systems keep their own templates.";
+    case "ice-cream-bar":
+      return "Ice Cream Bar only — parlour receipt + station ticket (not restaurant kitchen).";
+    case "general-store":
+      return "General Store only — one sales slip. No kitchen / cafe options.";
+    case "pharmacy":
+      return "Pharmacy only — invoice templates. No table / kitchen / service charge.";
+    case "distribution":
+      return "Distribution only — A4 report / wholesale invoice design (not thermal restaurant slips).";
+    case "education":
+      return "Education only — fee receipt. No restaurant print options.";
+    default:
+      return "Print layout for this business system only.";
+  }
+}
 
 type Props = {
   branchCode: string;
@@ -39,32 +99,40 @@ export function PrintCustomizeHub({ branchCode, notify, initialSub = "receipt" }
   const branchName = usePopsStore((s) => s.branch?.name) ?? branchCode;
   const systemId = useActiveSystemId();
   const restaurantUi = isRestaurantFamilySystem(systemId);
-  const subs = restaurantUi ? RESTAURANT_SUBS : NON_RESTAURANT_SUBS;
-  const kotVariant = systemId === "general-store" ? "store" : "restaurant";
+  const subs = subsForSystem(systemId);
+  const useStoreSlipEditor = systemId === "general-store";
+  const useDistReportEditor = systemId === "distribution";
+  const kotVariant: "restaurant" | "store" | "ice-cream-bar" =
+    systemId === "general-store"
+      ? "store"
+      : systemId === "ice-cream-bar"
+        ? "ice-cream-bar"
+        : "restaurant";
   const [billSettings, setBillSettings] = useState<BillPrintSettings>(() =>
-    loadBillPrintSettings(branchCode),
+    loadBillPrintSettings(branchCode, systemId),
   );
 
   useEffect(() => {
-    setBillSettings(loadBillPrintSettings(branchCode));
-    setSub(initialSub === "kot" && !restaurantUi ? "receipt" : initialSub);
-  }, [branchCode, initialSub, restaurantUi]);
+    setBillSettings(loadBillPrintSettings(branchCode, systemId));
+    const allowed = new Set(subs.map((s) => s.id));
+    setSub(allowed.has(initialSub) ? initialSub : "receipt");
+  }, [branchCode, initialSub, systemId]);
 
   useEffect(() => {
     function onBillChanged(event: Event): void {
       const detail = (event as CustomEvent<{ branchCode?: string }>).detail;
       if (!detail?.branchCode || detail.branchCode === branchCode) {
-        setBillSettings(loadBillPrintSettings(branchCode));
+        setBillSettings(loadBillPrintSettings(branchCode, systemId));
       }
     }
     window.addEventListener(BILL_PRINT_SETTINGS_CHANGED_EVENT, onBillChanged);
     return () => window.removeEventListener(BILL_PRINT_SETTINGS_CHANGED_EVENT, onBillChanged);
-  }, [branchCode]);
+  }, [branchCode, systemId]);
 
   function persistBill(next: BillPrintSettings): void {
-    saveBillPrintSettings(branchCode, next);
+    saveBillPrintSettings(branchCode, next, systemId);
     setBillSettings(next);
-    notify?.("Receipt layout saved.");
+    notify?.("Receipt layout saved for this system.");
   }
 
   return (
@@ -76,16 +144,12 @@ export function PrintCustomizeHub({ branchCode, notify, initialSub = "receipt" }
           </span>
           <div>
             <h2 className="text-sm font-semibold text-white">Print customization</h2>
-            <p className="mt-0.5 text-xs leading-relaxed text-slate-400">
-              {restaurantUi
-                ? "Receipt, kitchen ticket, aur paper — ek hi section."
-                : "Invoice slip aur paper settings — is system ke hisaab se."}
-            </p>
+            <p className="mt-0.5 text-xs leading-relaxed text-slate-400">{hubBlurb(systemId)}</p>
           </div>
         </div>
       </div>
 
-      <div className={`grid gap-2 ${restaurantUi ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+      <div className={`grid gap-2 ${subs.length >= 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
         {subs.map(({ id, label, hint, Icon }) => {
           const on = sub === id;
           return (
@@ -118,7 +182,22 @@ export function PrintCustomizeHub({ branchCode, notify, initialSub = "receipt" }
       </div>
 
       <div className="min-h-[12rem]">
-        {sub === "receipt" ? (
+        {sub === "receipt" && useDistReportEditor ? (
+          <DistPrintCustomizePanel
+            branchName={branchName}
+            branchCode={branchCode}
+            notify={notify}
+          />
+        ) : null}
+        {sub === "receipt" && useStoreSlipEditor ? (
+          <KotCustomizationPanel
+            branchCode={branchCode}
+            branchName={branchName}
+            variant="store"
+            onNotice={notify}
+          />
+        ) : null}
+        {sub === "receipt" && !useStoreSlipEditor && !useDistReportEditor ? (
           <BillCustomizationPanel
             branchName={branchName}
             branchCode={branchCode}

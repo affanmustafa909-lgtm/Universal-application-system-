@@ -1,4 +1,16 @@
 import { printHtmlDocumentAndWait } from "../../pops/lib/printTicket";
+import {
+  DEFAULT_DIST_PRINT_DESIGN,
+  loadDistPrintDesign,
+  resolveDistTemplateIdFromTitle,
+  type DistPrintDesignSettings,
+} from "./distPrintDesign";
+import {
+  DEFAULT_DIST_REPORT_PRINT,
+  loadDistReportPrintSettings,
+  type DistReportLookId,
+  type DistReportPrintSettings,
+} from "./distReportSettings";
 
 export type DistPrintLine = {
   label: string;
@@ -29,6 +41,84 @@ function formatRs(n: number): string {
 function formatQty(n: number): string {
   const v = Number(n) || 0;
   return Number.isInteger(v) ? String(v) : v.toFixed(2);
+}
+
+function formatReportCell(value: unknown): string {
+  if (value == null || value === "") return "—";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Number.isInteger(value)
+      ? value.toLocaleString("en-PK")
+      : value.toLocaleString("en-PK", { maximumFractionDigits: 2 });
+  }
+  if (value instanceof Date) return value.toLocaleString("en-PK");
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  const s = String(value);
+  // ISO date → short
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) return d.toLocaleString("en-PK");
+  }
+  return s;
+}
+
+function lookTheme(report: DistReportPrintSettings): {
+  look: DistReportLookId;
+  brand: string;
+  headBg: string;
+  headFg: string;
+  barBg: string;
+  barFg: string;
+  accent: string;
+  stripe: string;
+  watermarkCss: string;
+} {
+  const look = report.look;
+  const brand = report.brandColor || DEFAULT_DIST_REPORT_PRINT.brandColor;
+  if (look === "classic") {
+    return {
+      look,
+      brand: "#000000",
+      headBg: "#000000",
+      headFg: "#ffffff",
+      barBg: "#ffffff",
+      barFg: "#000000",
+      accent: "#000000",
+      stripe: "#f3f3f3",
+      watermarkCss: "",
+    };
+  }
+  const showWm = look === "watermark" && report.showWatermark && report.watermarkText.trim();
+  const wm = showWm
+    ? `.sheet { position: relative; }
+       .sheet::before {
+         content: ${JSON.stringify(report.watermarkText.trim())};
+         position: absolute;
+         left: 50%;
+         top: 48%;
+         transform: translate(-50%, -50%) rotate(-32deg);
+         font-size: 54px;
+         font-weight: 800;
+         letter-spacing: 0.12em;
+         color: ${brand};
+         opacity: ${report.watermarkOpacity};
+         white-space: nowrap;
+         pointer-events: none;
+         z-index: 0;
+         text-transform: uppercase;
+       }
+       .sheet > * { position: relative; z-index: 1; }`
+    : "";
+  return {
+    look,
+    brand,
+    headBg: brand,
+    headFg: "#ffffff",
+    barBg: brand,
+    barFg: "#ffffff",
+    accent: brand,
+    stripe: `${brand}14`,
+    watermarkCss: wm,
+  };
 }
 
 const ONES = [
@@ -82,7 +172,7 @@ export function amountInWordsPkr(n: number): string {
 }
 
 /** Shared Dist wholesale document chrome (A4) — booking, invoice, PO, GRN, collection, reports. */
-function buildDistDocumentHtml(opts: {
+export function buildDistDocumentHtml(opts: {
   title: string;
   documentNumber: string;
   branchName?: string;
@@ -100,10 +190,34 @@ function buildDistDocumentHtml(opts: {
   discountPkr?: number;
   taxPkr?: number;
   footerNote?: string;
+  /** Which Customize template design to load (per-template save). */
+  templateId?: string | null;
+  /** Customize → Design editor settings (falls back to defaults / branch storage). */
+  design?: Partial<DistPrintDesignSettings> | null;
+  /** Report look (classic / brand / watermark) — Customize → Report print. */
+  reportPrint?: Partial<DistReportPrintSettings> | null;
 }): string {
+  const templateId =
+    opts.templateId ||
+    resolveDistTemplateIdFromTitle(opts.title) ||
+    "booking-invoice";
+  const design: DistPrintDesignSettings = {
+    ...DEFAULT_DIST_PRINT_DESIGN,
+    ...(opts.branchCode ? loadDistPrintDesign(opts.branchCode, templateId) : {}),
+    ...(opts.design ?? {}),
+  };
+  const reportPrint = {
+    ...loadDistReportPrintSettings(opts.branchCode),
+    ...(opts.reportPrint ?? {}),
+  };
+  const theme = lookTheme(reportPrint);
   const printedAt = new Date().toLocaleString("en-PK");
-  const companyName = (opts.branchName || "Medical Distribution").trim();
-  const companySub = [opts.branchCode ? `Branch ${opts.branchCode}` : "", "Wholesale Medical Distribution"]
+  const companyName =
+    (design.companyName || opts.branchName || "Medical Distribution").trim();
+  const companySub = [
+    design.showBranchCode && opts.branchCode ? `Branch ${opts.branchCode}` : "",
+    design.companySubtitle.trim(),
+  ]
     .filter(Boolean)
     .join(" · ");
 
@@ -116,18 +230,36 @@ function buildDistDocumentHtml(opts: {
       )
       .join("");
 
+  const showPack = design.showPackColumn;
+  const showBonus = design.showBonusColumn;
+  const colSpan =
+    2 + (showPack ? 1 : 0) + 1 + (showBonus ? 1 : 0) + 2; /* sr+product + pack? + qty + bonus? + rate+amt */
+
   let bodyTable: string;
   if (opts.report) {
-    const head = opts.report.columns.map((c) => `<th>${escapeHtml(c)}</th>`).join("");
-    const rows = opts.report.rows
-      .map(
-        (r) =>
-          `<tr>${opts.report!.columns.map((c) => `<td>${escapeHtml(r[c])}</td>`).join("")}</tr>`,
-      )
+    const cols = opts.report.columns;
+    const head = cols
+      .map((c) => `<th>${escapeHtml(c)}</th>`)
       .join("");
-    bodyTable = `<table class="grid">
+    const numericHint = /pkr|qty|total|sales|amount|count|orders|bonus|stock|free|net|over|credit|days|pct|price|rate/i;
+    const rows = opts.report.rows
+      .map((r) => {
+        const cells = cols
+          .map((c) => {
+            const raw = r[c];
+            const formatted = formatReportCell(raw);
+            const isNum =
+              typeof raw === "number" ||
+              (typeof raw === "string" && raw.trim() !== "" && !Number.isNaN(Number(raw)) && numericHint.test(c));
+            return `<td class="${isNum ? "n" : ""}">${escapeHtml(formatted)}</td>`;
+          })
+          .join("");
+        return `<tr>${cells}</tr>`;
+      })
+      .join("");
+    bodyTable = `<table class="grid report-grid">
       <thead><tr>${head}</tr></thead>
-      <tbody>${rows || `<tr><td colspan="${Math.max(1, opts.report.columns.length)}">No rows</td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="${Math.max(1, cols.length)}">No rows</td></tr>`}</tbody>
     </table>`;
   } else {
     const lines = opts.lines ?? [];
@@ -140,9 +272,9 @@ function buildDistDocumentHtml(opts: {
         return `<tr>
           <td class="c">${i + 1}</td>
           <td>${escapeHtml(l.label)}${extra ? `<div class="sub">${escapeHtml(extra)}</div>` : ""}</td>
-          <td class="c">${escapeHtml(l.pack || "—")}</td>
+          ${showPack ? `<td class="c">${escapeHtml(l.pack || "—")}</td>` : ""}
           <td class="n">${formatQty(l.qty)}</td>
-          <td class="n">${l.freeQty && l.freeQty > 0 ? formatQty(l.freeQty) : "—"}</td>
+          ${showBonus ? `<td class="n">${l.freeQty && l.freeQty > 0 ? formatQty(l.freeQty) : "—"}</td>` : ""}
           <td class="n">${formatRs(l.unitPrice)}</td>
           <td class="n">${formatRs(amount)}</td>
         </tr>`;
@@ -153,14 +285,14 @@ function buildDistDocumentHtml(opts: {
         <tr>
           <th class="c" style="width:28px">Sr</th>
           <th>Product</th>
-          <th class="c" style="width:72px">Pack</th>
+          ${showPack ? `<th class="c" style="width:72px">Pack</th>` : ""}
           <th class="n" style="width:52px">Qty</th>
-          <th class="n" style="width:52px">Bonus</th>
+          ${showBonus ? `<th class="n" style="width:52px">Bonus</th>` : ""}
           <th class="n" style="width:88px">Rate</th>
           <th class="n" style="width:96px">Amount</th>
         </tr>
       </thead>
-      <tbody>${lineRows || `<tr><td colspan="7">No lines</td></tr>`}</tbody>
+      <tbody>${lineRows || `<tr><td colspan="${colSpan}">No lines</td></tr>`}</tbody>
     </table>`;
   }
 
@@ -168,10 +300,14 @@ function buildDistDocumentHtml(opts: {
   const discount = opts.discountPkr ?? 0;
   const tax = opts.taxPkr ?? 0;
   const total = opts.totalPkr;
+  const wordsHtml =
+    design.showAmountInWords && total != null
+      ? `<div class="words"><b>Amount in words:</b> ${escapeHtml(amountInWordsPkr(total))}</div>`
+      : `<div class="words"></div>`;
   const totalsBlock =
     total != null
       ? `<div class="bottom">
-          <div class="words"><b>Amount in words:</b> ${escapeHtml(amountInWordsPkr(total))}</div>
+          ${wordsHtml}
           <table class="totals">
             ${subtotal != null ? `<tr><td>Gross Amount</td><td class="n">${formatRs(subtotal)}</td></tr>` : ""}
             ${discount > 0 ? `<tr><td>Discount</td><td class="n">− ${formatRs(discount)}</td></tr>` : ""}
@@ -181,61 +317,102 @@ function buildDistDocumentHtml(opts: {
         </div>`
       : "";
 
+  const signsHtml = design.showSignatures
+    ? `<div class="signs">
+      <div class="sign">${escapeHtml(design.signPrepared)}</div>
+      <div class="sign">${escapeHtml(design.signChecked)}</div>
+      <div class="sign">${escapeHtml(design.signReceived)}</div>
+    </div>`
+    : "";
+
+  const footerText = (opts.footerNote || design.footerNote || DEFAULT_DIST_PRINT_DESIGN.footerNote).trim();
+  const stripeCss = design.stripedRows
+    ? `table.grid tbody tr:nth-child(even) td { background: ${theme.stripe}; }`
+    : "";
+  const fontPx = design.baseFontSize;
+  const borderColor = theme.look === "classic" ? "#000" : theme.accent;
+  const colCount = opts.report?.columns.length ?? 0;
+  const compactReport = Boolean(opts.report && colCount >= 8);
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <title>${escapeHtml(opts.title)} ${escapeHtml(opts.documentNumber)}</title>
 <style>
-  @page { size: A4; margin: 10mm; }
+  @page { size: A4 ${compactReport ? "landscape" : "portrait"}; margin: 8mm; }
   * { box-sizing: border-box; }
   body {
     font-family: Arial, Tahoma, sans-serif;
-    color: #000;
+    color: #111;
     margin: 0;
-    padding: 8mm 8mm;
-    font-size: 11px;
+    padding: 6mm 7mm;
+    font-size: ${compactReport ? Math.max(9, fontPx - 1) : fontPx}px;
     line-height: 1.3;
   }
-  .sheet { max-width: 190mm; margin: 0 auto; }
-  .head { text-align: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 0; }
-  .co { font-size: 18px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; margin: 0; }
-  .co-sub { font-size: 10px; margin: 2px 0 0; }
+  .sheet { max-width: ${compactReport ? "277mm" : "190mm"}; margin: 0 auto; }
+  ${theme.watermarkCss}
+  .head {
+    text-align: center;
+    border-bottom: 3px solid ${borderColor};
+    padding: 8px 10px 8px;
+    margin-bottom: 0;
+    ${theme.look === "classic" ? "" : `background: linear-gradient(180deg, ${theme.brand}18, transparent);`}
+  }
+  .co {
+    font-size: ${fontPx + 7}px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin: 0;
+    color: ${theme.look === "classic" ? "#000" : theme.brand};
+  }
+  .co-sub { font-size: ${Math.max(9, fontPx - 1)}px; margin: 2px 0 0; color: #333; }
   .doc-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border: 1px solid #000;
+    border: 1px solid ${borderColor};
     border-top: none;
-    padding: 5px 8px;
+    padding: 6px 10px;
     font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-size: 13px;
+    letter-spacing: 0.06em;
+    font-size: ${fontPx + 1}px;
+    background: ${theme.barBg};
+    color: ${theme.barFg};
   }
-  .doc-bar .no { font-size: 12px; letter-spacing: 0; font-weight: 700; }
+  .doc-bar .no { font-size: ${fontPx + 1}px; letter-spacing: 0; font-weight: 700; }
   table.info { width: 100%; border-collapse: collapse; margin-top: 0; }
-  table.info td { vertical-align: top; padding: 6px 8px; border: 1px solid #000; width: 50%; }
-  .who .lbl { font-size: 9px; font-weight: 700; text-transform: uppercase; }
-  .who .name { font-size: 13px; font-weight: 800; margin: 2px 0; }
-  .who .extra { white-space: pre-line; font-size: 10px; }
+  table.info td { vertical-align: top; padding: 6px 8px; border: 1px solid ${borderColor}; width: 50%; }
+  .who .lbl { font-size: 9px; font-weight: 700; text-transform: uppercase; color: ${theme.look === "classic" ? "#000" : theme.brand}; }
+  .who .name { font-size: ${fontPx + 2}px; font-weight: 800; margin: 2px 0; }
+  .who .extra { white-space: pre-line; font-size: ${Math.max(9, fontPx - 1)}px; }
   table.kv { width: 100%; border-collapse: collapse; }
-  table.kv td { border: none !important; padding: 1px 0; font-size: 10px; }
+  table.kv td { border: none !important; padding: 1px 0; font-size: ${Math.max(9, fontPx - 1)}px; }
   table.kv td.k { width: 38%; font-weight: 700; }
   table.grid { width: 100%; border-collapse: collapse; margin-top: 0; }
-  table.grid th, table.grid td { border: 1px solid #000; padding: 4px 5px; vertical-align: top; }
-  table.grid th { background: #000; color: #fff; font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; }
-  table.grid td { font-size: 11px; }
+  table.grid th, table.grid td { border: 1px solid ${borderColor}; padding: ${compactReport ? "3px 4px" : "4px 5px"}; vertical-align: top; }
+  table.grid th {
+    background: ${theme.headBg};
+    color: ${theme.headFg};
+    font-size: ${compactReport ? "8px" : "9px"};
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  table.grid td { font-size: ${compactReport ? Math.max(8, fontPx - 2) : fontPx}px; }
+  table.report-grid { table-layout: auto; }
   table.grid .c { text-align: center; }
   table.grid .n, table.totals .n { text-align: right; white-space: nowrap; }
-  table.grid tbody tr:nth-child(even) td { background: #f3f3f3; }
+  ${stripeCss}
   .sub { font-size: 9px; color: #333; margin-top: 1px; }
   .bottom { display: flex; align-items: stretch; gap: 0; }
   table.totals { width: 58mm; border-collapse: collapse; flex-shrink: 0; }
-  table.totals td { border: 1px solid #000; padding: 4px 6px; font-size: 11px; }
+  table.totals td { border: 1px solid ${borderColor}; padding: 4px 6px; font-size: ${fontPx}px; }
   table.totals tr:first-child td { border-top: none; }
-  table.totals tr.net td { font-weight: 800; font-size: 12px; background: #000; color: #fff; }
-  .words { flex: 1; border: 1px solid #000; border-top: none; border-right: none; padding: 6px 8px; font-size: 10px; }
+  table.totals tr.net td { font-weight: 800; font-size: ${fontPx + 1}px; background: ${theme.headBg}; color: ${theme.headFg}; }
+  .words { flex: 1; border: 1px solid ${borderColor}; border-top: none; border-right: none; padding: 6px 8px; font-size: ${Math.max(9, fontPx - 1)}px; }
   .signs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-top: 28px; }
-  .sign { border-top: 1px solid #000; padding-top: 4px; font-size: 10px; text-align: center; }
-  .foot { margin-top: 14px; border-top: 1px solid #000; padding-top: 4px; font-size: 9px; display: flex; justify-content: space-between; gap: 12px; }
+  .sign { border-top: 1px solid ${borderColor}; padding-top: 4px; font-size: ${Math.max(9, fontPx - 1)}px; text-align: center; }
+  .foot { margin-top: 14px; border-top: 1px solid ${borderColor}; padding-top: 4px; font-size: 9px; display: flex; justify-content: space-between; gap: 12px; }
+  .look-tag { font-size: 8px; opacity: 0.75; text-transform: none; letter-spacing: 0; font-weight: 600; }
   @media print {
     body { padding: 0; }
     .sheet { max-width: none; }
@@ -244,10 +421,10 @@ function buildDistDocumentHtml(opts: {
   <div class="sheet">
     <div class="head">
       <p class="co">${escapeHtml(companyName)}</p>
-      <p class="co-sub">${escapeHtml(companySub)}</p>
+      ${companySub ? `<p class="co-sub">${escapeHtml(companySub)}</p>` : ""}
     </div>
     <div class="doc-bar">
-      <span>${escapeHtml(opts.title)}</span>
+      <span>${escapeHtml(opts.title)} <span class="look-tag">· ${escapeHtml(theme.look)}</span></span>
       <span class="no">No. ${escapeHtml(opts.documentNumber)}</span>
     </div>
 
@@ -272,15 +449,10 @@ function buildDistDocumentHtml(opts: {
 
     ${bodyTable}
     ${totalsBlock}
-
-    <div class="signs">
-      <div class="sign">Prepared by</div>
-      <div class="sign">Checked / Authorized</div>
-      <div class="sign">Received by</div>
-    </div>
+    ${signsHtml}
 
     <div class="foot">
-      <span>${escapeHtml(opts.footerNote || "Computer-generated distribution document")}</span>
+      <span>${escapeHtml(footerText)}</span>
       <span>Printed ${escapeHtml(printedAt)}</span>
     </div>
   </div>
@@ -294,26 +466,44 @@ async function openDistPrint(html: string, title: string): Promise<void> {
   }
 }
 
-/** Report / register print — Dist A4 table document. */
+/** Report / register print — Dist A4 table document (3 looks + brand/watermark). */
 export async function printDistReportDocument(opts: {
   title: string;
   subtitle?: string;
+  /** Assigned report number e.g. CR-0001 — shown as document No. */
+  reportNumber?: string;
   columns: string[];
   rows: Record<string, unknown>[];
   branchName?: string;
   branchCode?: string;
+  meta?: Array<{ label: string; value: string }>;
 }): Promise<void> {
+  const reportSettings = loadDistReportPrintSettings(opts.branchCode);
+  const docNo =
+    opts.reportNumber?.trim() ||
+    opts.subtitle?.trim() ||
+    `${opts.rows.length} row(s)`;
   const html = buildDistDocumentHtml({
     title: opts.title,
-    documentNumber: opts.subtitle || `${opts.rows.length} row(s)`,
+    documentNumber: docNo,
     branchName: opts.branchName,
     branchCode: opts.branchCode,
-    partyLabel: "Register",
+    templateId: "sales-register",
+    partyLabel: "Report",
     partyName: opts.title,
+    partyExtra: opts.subtitle || undefined,
+    meta: [
+      ...(opts.reportNumber ? [{ label: "Report #", value: opts.reportNumber }] : []),
+      { label: "Rows", value: String(opts.rows.length) },
+      { label: "Columns", value: String(opts.columns.length) },
+      { label: "Look", value: reportSettings.look },
+      ...(opts.meta ?? []),
+    ],
     report: { columns: opts.columns, rows: opts.rows },
-    footerNote: "Distribution report register",
+    footerNote: "Distribution report — computer generated",
+    reportPrint: reportSettings,
   });
-  await openDistPrint(html, opts.title);
+  await openDistPrint(html, opts.reportNumber ? `${opts.reportNumber} ${opts.title}` : opts.title);
 }
 
 /**
@@ -370,6 +560,7 @@ export async function printDistBookingSlip(opts: {
     documentNumber: opts.orderNumber,
     branchName: opts.branchName,
     branchCode: opts.branchCode,
+    templateId: "booking-invoice",
     partyLabel: "Trade customer",
     partyName: opts.customerName,
     partyExtra: partyExtra || undefined,
@@ -495,6 +686,7 @@ export async function printDistDocument(opts: {
     documentNumber: opts.documentNumber,
     branchName: opts.branchName,
     branchCode: opts.branchCode,
+    templateId: resolveDistTemplateIdFromTitle(opts.title),
     partyLabel: opts.partyLabel,
     partyName: opts.partyName,
     partyExtra: opts.partyExtra,

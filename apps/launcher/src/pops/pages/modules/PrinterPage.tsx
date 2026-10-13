@@ -7,14 +7,6 @@ import {
   isPosPrintStationEnabled,
   setPosPrintStationEnabled,
 } from "../../lib/canDirectThermalPrint";
-import { KotCustomizationPanel } from "../../components/KotCustomizationPanel";
-import {
-  PRINTER_PRESETS,
-  loadPrinterAssignments,
-  setCategoryPrinter,
-  setItemPrinter,
-  setUserPrinter,
-} from "../../lib/printerAssignmentSettings";
 import {
   addPrinterSection,
   deletePrinterSection,
@@ -27,7 +19,6 @@ import {
   type PrinterSectionPreset,
 } from "../../lib/printerSections";
 import { useActiveSystemId } from "../../../hooks/useActiveSystemId";
-import { fetchStoreCategories, fetchStoreProducts } from "../../../store/api/store";
 import {
   addPrinterProfile,
   deletePrinterProfile,
@@ -86,6 +77,7 @@ import {
 } from "../../lib/thermalPrintSettings";
 import { fetchBranchMenuAdmin } from "../../api/menu";
 import { fetchAssignableStaff, fetchOrgUsers } from "../../api/users";
+import { fetchStoreCategories, fetchStoreProducts } from "../../../store/api/store";
 import { PageHeader } from "../../ui/PageHeader";
 import { PrinterBySectionPanel, type AssignablePerson } from "../../components/PrinterBySectionPanel";
 import { EnterprisePrintDashboard } from "../../components/EnterprisePrintDashboard";
@@ -3406,71 +3398,27 @@ function PrinterManagement({ branchCode }: { branchCode: string }): JSX.Element 
 export function PrinterPage(): JSX.Element {
   const branch = usePopsStore((s) => s.branch);
   const systemId = useActiveSystemId();
-  const isStore = systemId === "general-store";
+  const isRestaurantFamily = systemId === "restaurant" || systemId === "ice-cream-bar";
   const [notice, setNotice] = useState<string | null>(null);
-  const [legacyOpen, setLegacyOpen] = useState(false);
   const [posStation, setPosStation] = useState(() => isPosPrintStationEnabled());
-
-  const menuQuery = useQuery({
-    queryKey: ["menu", branch?.code],
-    enabled: Boolean(branch?.code) && !isStore,
-    queryFn: () => fetchBranchMenuAdmin(branch!.code),
-  });
-
-  const storeCategoriesQuery = useQuery({
-    queryKey: ["store", "categories", branch?.code, "printer-page"],
-    enabled: Boolean(branch?.code) && isStore,
-    queryFn: () => fetchStoreCategories(branch!.code),
-  });
-  const storeProductsQuery = useQuery({
-    queryKey: ["store", "products", branch?.code, "printer-page"],
-    enabled: Boolean(branch?.code) && isStore,
-    queryFn: () => fetchStoreProducts(branch!.code),
-  });
-
-  const usersQuery = useQuery({
-    queryKey: ["org-users"],
-    queryFn: () => fetchOrgUsers(),
-  });
-
-  const printerMap = useMemo(
-    () => loadPrinterAssignments(branch?.code),
-    [branch?.code, notice],
-  );
 
   if (!branch?.code) {
     return (
       <PageHeader
         title="Printer"
-        subtitle={
-          isStore
-            ? "Select a General Store branch to configure receipt and counter printers."
-            : "Select a branch to configure printer settings."
-        }
+        subtitle="Select a branch to configure printers and receipt templates for this system."
       />
     );
   }
-
-  const categories = isStore
-    ? (storeCategoriesQuery.data ?? []).map((c) => ({ id: c.id, name: c.name }))
-    : (menuQuery.data?.categories ?? []);
-  const items = isStore
-    ? (storeProductsQuery.data ?? []).map((p) => ({
-        id: p.id,
-        name: p.name,
-        categoryId: p.categoryId ?? "",
-      }))
-    : (menuQuery.data?.items ?? []);
-  const users = usersQuery.data ?? [];
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Printer"
         subtitle={
-          isStore
-            ? `General Store printer setup for ${branch.name} (${branch.code}) — sections, profiles, routing, and receipt slips.`
-            : `Printer configuration for ${branch.name} (${branch.code}) — sections, profiles, routing, and KOT template.`
+          isRestaurantFamily
+            ? `${branch.name} (${branch.code}) — printers, routing, and ${systemId === "ice-cream-bar" ? "station" : "kitchen"} templates in Customize.`
+            : `${branch.name} (${branch.code}) — ${systemId} printers and receipt templates (Customize tab). Separate from restaurant.`
         }
       />
 
@@ -3481,9 +3429,8 @@ export function PrinterPage(): JSX.Element {
               This PC is POS print station
             </div>
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-              Option 19: only enable on the cashier POS that owns the thermal printer. Accountant /
-              Inventory / Owner PCs stay off — use Reports → Export Excel (and PDF) so they never
-              fight the POS spooler.
+              Enable only on the cashier PC that owns the thermal printer. Other PCs should use
+              Reports → Export Excel / PDF.
             </p>
           </div>
           <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-800 dark:text-slate-200">
@@ -3508,141 +3455,8 @@ export function PrinterPage(): JSX.Element {
         {notice ? <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{notice}</p> : null}
       </div>
 
+      {/* Single place for printers + Customize (receipt / KOT / paper) — no duplicate panels below. */}
       <PrinterManagement branchCode={branch.code} />
-
-      <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/40">
-        <div className="text-sm font-semibold text-slate-900 dark:text-white">
-          {isStore ? "Receipt / slip customization" : "Kitchen ticket customization"}
-        </div>
-        <p className="mt-1 text-xs text-slate-500">
-          {isStore
-            ? "Design the slip shown on POS Order / Pay / Print. Click Save store slip template, then print from Point of Sale — layout and assigned printer apply automatically."
-            : "Full kitchen receipt editor — same style as bill customization. Preview matches Auto print. Also available under Print Settings → step 4."}
-        </p>
-        <div className="mt-4">
-          <KotCustomizationPanel
-            branchName={branch.name}
-            branchCode={branch.code}
-            variant={isStore ? "store" : "restaurant"}
-            onNotice={setNotice}
-          />
-        </div>
-      </div>
-
-      <div className="max-w-2xl overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/40">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-slate-900 dark:text-white">Advanced</div>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Legacy single-name printer assignment — only needed for older setups.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-900"
-            aria-expanded={legacyOpen}
-            onClick={() => setLegacyOpen((v) => !v)}
-          >
-            {legacyOpen ? "Hide legacy assignment" : "Show legacy assignment"}
-            <span className="text-[10px] text-slate-400" aria-hidden>
-              {legacyOpen ? "▴" : "▾"}
-            </span>
-          </button>
-        </div>
-
-        {legacyOpen ? (
-          <div className="p-4">
-            <div className="text-sm font-semibold text-slate-900 dark:text-white">
-              Printer assignment (legacy)
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              Original single-printer-name assignment by user, category, or item. Prefer{" "}
-              <span className="text-slate-300">All Printers</span> and{" "}
-              <span className="text-slate-300">Printer by Section</span> above for new setups.
-            </p>
-
-            <div className="mt-4 space-y-4">
-              <div>
-                <div className="text-xs font-medium text-slate-400">User-wise</div>
-                <ul className="mt-2 space-y-2">
-                  {users.slice(0, 8).map((u) => (
-                    <li key={u.id} className="flex items-center gap-2">
-                      <span className="w-40 truncate text-xs text-slate-300">{u.email}</span>
-                      <select
-                        className="flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"
-                        value={printerMap.byUser[u.id]?.printerName ?? ""}
-                        onChange={(e) => {
-                          setUserPrinter(branch.code, u.id, e.target.value);
-                          setNotice(`Printer updated for ${u.email}`);
-                        }}
-                      >
-                        <option value="">Default</option>
-                        {PRINTER_PRESETS.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <div className="text-xs font-medium text-slate-400">Category-wise</div>
-                <ul className="mt-2 space-y-2">
-                  {categories.map((c) => (
-                    <li key={c.id} className="flex items-center gap-2">
-                      <span className="w-40 truncate text-xs text-slate-300">{c.name}</span>
-                      <select
-                        className="flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"
-                        value={printerMap.byCategory[c.id]?.printerName ?? ""}
-                        onChange={(e) => {
-                          setCategoryPrinter(branch.code, c.id, e.target.value);
-                          setNotice(`Printer updated for category ${c.name}`);
-                        }}
-                      >
-                        <option value="">Default</option>
-                        {PRINTER_PRESETS.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <div className="text-xs font-medium text-slate-400">Item-wise</div>
-                <ul className="mt-2 max-h-48 space-y-2 overflow-y-auto">
-                  {items.slice(0, 20).map((item) => (
-                    <li key={item.id} className="flex items-center gap-2">
-                      <span className="w-40 truncate text-xs text-slate-300">{item.name}</span>
-                      <select
-                        className="flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"
-                        value={printerMap.byItem[item.id]?.printerName ?? ""}
-                        onChange={(e) => {
-                          setItemPrinter(branch.code, item.id, e.target.value);
-                          setNotice(`Printer updated for ${item.name}`);
-                        }}
-                      >
-                        <option value="">Default</option>
-                        {PRINTER_PRESETS.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
     </div>
   );
 }

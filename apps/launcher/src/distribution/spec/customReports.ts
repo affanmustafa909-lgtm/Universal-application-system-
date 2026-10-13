@@ -1,5 +1,7 @@
 /** User-built Dist reports — pick any dataset + any columns. */
 
+import { allocateNextReportNumber } from "../lib/distReportSettings";
+
 export type CustomReportField = {
   key: string;
   label: string;
@@ -844,6 +846,11 @@ export const CUSTOM_REPORT_DATASETS: CustomReportDataset[] = [
       f("outstandingPkr", "Outstanding", true),
       f("creditDays", "Credit days", true),
       f("ntnNumber", "NTN"),
+      f("isFocCustomer", "FOC customer"),
+      f("bonusBuyQty", "Bonus buy qty", true),
+      f("bonusFreeQty", "Bonus free qty", true),
+      f("bonusPct", "Bonus %", true),
+      f("bonusPolicyJson", "Bonus policy"),
       f("status", "Status"),
     ],
   },
@@ -901,6 +908,8 @@ export const CUSTOM_DATASET_CATEGORIES = [
 
 export type SavedCustomReport = {
   id: string;
+  /** Stable human number, e.g. CR-0001 — assigned once and kept on every save. */
+  reportNumber: string;
   name: string;
   datasetId: string;
   columns: string[];
@@ -910,12 +919,48 @@ export type SavedCustomReport = {
 
 const STORAGE_KEY = "dist-custom-reports-v1";
 
+function nextReportNumber(_existing: SavedCustomReport[], branchCode?: string): string {
+  return allocateNextReportNumber(branchCode);
+}
+
+function normalizeSavedList(raw: unknown[]): SavedCustomReport[] {
+  const list: SavedCustomReport[] = [];
+  let dirty = false;
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Partial<SavedCustomReport>;
+    if (!r.id || !r.datasetId || !Array.isArray(r.columns)) continue;
+    let reportNumber = typeof r.reportNumber === "string" ? r.reportNumber.trim() : "";
+    if (!reportNumber) {
+      reportNumber = nextReportNumber(list, undefined);
+      dirty = true;
+    }
+    list.push({
+      id: String(r.id),
+      reportNumber,
+      name: String(r.name ?? "My custom report"),
+      datasetId: String(r.datasetId),
+      columns: r.columns.map(String),
+      createdAt: String(r.createdAt ?? new Date().toISOString()),
+      updatedAt: String(r.updatedAt ?? r.createdAt ?? new Date().toISOString()),
+    });
+  }
+  if (dirty) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, 40)));
+    } catch {
+      /* ignore */
+    }
+  }
+  return list;
+}
+
 export function loadSavedCustomReports(): SavedCustomReport[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as SavedCustomReport[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? normalizeSavedList(parsed) : [];
   } catch {
     return [];
   }
@@ -926,6 +971,7 @@ export function saveCustomReportPreset(input: {
   name: string;
   datasetId: string;
   columns: string[];
+  branchCode?: string;
 }): SavedCustomReport {
   const list = loadSavedCustomReports();
   const now = new Date().toISOString();
@@ -933,6 +979,7 @@ export function saveCustomReportPreset(input: {
   const next: SavedCustomReport = existing
     ? {
         ...existing,
+        reportNumber: existing.reportNumber || nextReportNumber(list, input.branchCode),
         name: input.name.trim() || existing.name,
         datasetId: input.datasetId,
         columns: input.columns,
@@ -940,6 +987,7 @@ export function saveCustomReportPreset(input: {
       }
     : {
         id: crypto.randomUUID(),
+        reportNumber: nextReportNumber(list, input.branchCode),
         name: input.name.trim() || "My custom report",
         datasetId: input.datasetId,
         columns: input.columns,

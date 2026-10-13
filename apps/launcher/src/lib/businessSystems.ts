@@ -7,7 +7,7 @@ import {
 import { pharmacyNavItems } from "../pharmacy/spec/nav";
 import { distributionNavItems } from "../distribution/spec/nav";
 import { storeNavItems } from "../store/spec/nav";
-import { educationNavItems } from "../education/spec/nav";
+import { educationNavItems, filterEducationNavByModules } from "../education/spec/nav";
 import { frontendIdToSystemType, systemTypeToFrontendId, type SystemType } from "@platform/contracts";
 
 export type BusinessSystemId =
@@ -151,11 +151,11 @@ export const businessSystems: Record<BusinessSystemId, BusinessSystem> = {
   },
   education: {
     id: "education",
-    name: "EducationFlow ERP",
+    name: "EducationFlow Management System",
     shortName: "EducationFlow",
     tagline: "School • Academy • College Management System",
     description:
-      "Admissions, students, academics, fees, teachers, attendance, and campus administration.",
+      "Separate school/college/academy ERP — admissions, students, academics, fees, exams, certificates, and campus administration.",
     accentClass: "text-blue-400",
     iconLetter: "Ed",
     gradientClass: "from-blue-500 to-slate-700",
@@ -312,7 +312,10 @@ function filterNavItem(item: PopsNavItem, hidden: Set<string>): PopsNavItem | nu
   return group;
 }
 
-export function getNavItemsForSystem(id: BusinessSystemId): PopsNavItem[] {
+export function getNavItemsForSystem(
+  id: BusinessSystemId,
+  options?: { educationModules?: { moduleKey: string; enabled: boolean }[] | null },
+): PopsNavItem[] {
   if (id === "pharmacy") {
     return pharmacyNavItems;
   }
@@ -323,7 +326,7 @@ export function getNavItemsForSystem(id: BusinessSystemId): PopsNavItem[] {
     return storeNavItems;
   }
   if (id === "education") {
-    return educationNavItems;
+    return filterEducationNavByModules(educationNavItems, options?.educationModules);
   }
   const hidden = businessSystems[id].hiddenNavPaths;
   const out: PopsNavItem[] = [];

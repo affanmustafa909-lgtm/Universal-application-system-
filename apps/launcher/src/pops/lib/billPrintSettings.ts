@@ -1,3 +1,10 @@
+import type { BusinessSystemId } from "../../lib/businessSystems";
+import {
+  printScopedKey,
+  readScopedMapEntry,
+  resolvePrintSystemId,
+} from "./printSystemScope";
+
 export type BillReceiptLayout = "standard" | "compact";
 export type BillHeaderAlign = "center" | "left";
 
@@ -159,6 +166,104 @@ export const DEFAULT_BILL_PRINT_SETTINGS: BillPrintSettings = {
   blockStyles: {},
 };
 
+/** Per-system receipt standards — never share restaurant defaults with retail systems. */
+export function defaultBillPrintSettingsFor(
+  systemId?: string | null | undefined,
+): BillPrintSettings {
+  const sys = resolvePrintSystemId(systemId);
+  const clone = (partial: Partial<BillPrintSettings> & { fields?: BillReceiptFields }): BillPrintSettings =>
+    normalizeBillPrintSettings({
+      ...DEFAULT_BILL_PRINT_SETTINGS,
+      ...partial,
+      fields: partial.fields ?? DEFAULT_BILL_RECEIPT_FIELDS,
+    });
+
+  switch (sys as BusinessSystemId) {
+    case "pharmacy":
+      return clone({
+        documentTitle: "PHARMACY INVOICE",
+        footerText: "Thank you — get well soon",
+        footerSecondaryText: "Medicines once sold are not returnable unless defective",
+        fields: {
+          ...DEFAULT_BILL_RECEIPT_FIELDS,
+          tableLabel: true,
+          waiterName: true,
+          service: false,
+          delivery: false,
+          orderType: true,
+          documentTitle: true,
+        },
+      });
+    case "general-store":
+      return clone({
+        documentTitle: "SALES RECEIPT",
+        footerText: "Thank you for shopping!",
+        footerSecondaryText: "",
+        fields: {
+          ...DEFAULT_BILL_RECEIPT_FIELDS,
+          tableLabel: false,
+          waiterName: true,
+          service: false,
+          delivery: false,
+          orderType: true,
+          documentTitle: true,
+        },
+      });
+    case "distribution":
+      return clone({
+        documentTitle: "BOOKING / INVOICE",
+        footerText: "Thank you for your business",
+        footerSecondaryText: "",
+        layout: "standard",
+        fields: {
+          ...DEFAULT_BILL_RECEIPT_FIELDS,
+          tableLabel: false,
+          waiterName: true,
+          service: false,
+          delivery: false,
+          orderType: true,
+          documentTitle: true,
+        },
+      });
+    case "education":
+      return clone({
+        documentTitle: "FEE RECEIPT",
+        footerText: "This is a computer-generated receipt",
+        footerSecondaryText: "",
+        layout: "standard",
+        fields: {
+          ...DEFAULT_BILL_RECEIPT_FIELDS,
+          tableLabel: false,
+          waiterName: true,
+          service: false,
+          delivery: false,
+          discount: true,
+          tax: false,
+          orderType: false,
+          documentTitle: true,
+        },
+      });
+    case "ice-cream-bar":
+      return clone({
+        documentTitle: "RECEIPT",
+        footerText: "Thank you — enjoy!",
+        footerSecondaryText: "",
+        fields: {
+          ...DEFAULT_BILL_RECEIPT_FIELDS,
+          tableLabel: true,
+          service: false,
+          delivery: true,
+          documentTitle: false,
+        },
+      });
+    default:
+      return {
+        ...DEFAULT_BILL_PRINT_SETTINGS,
+        fields: { ...DEFAULT_BILL_RECEIPT_FIELDS },
+      };
+  }
+}
+
 export const BILL_CUSTOM_LINE_ZONE_LABELS: Record<BillCustomLineZone, string> = {
   header: "After header",
   beforeItems: "Before items",
@@ -285,6 +390,41 @@ export const BILL_FIELD_GROUPS: { label: string; keys: (keyof BillReceiptFields)
   },
 ];
 
+/** Fields that belong only to restaurant / parlour receipts — hide elsewhere. */
+const RESTAURANT_ONLY_BILL_FIELDS = new Set<keyof BillReceiptFields>([
+  "service",
+  "delivery",
+]);
+
+export function billFieldGroupsForSystem(
+  systemId?: string | null | undefined,
+): { label: string; keys: (keyof BillReceiptFields)[] }[] {
+  const sys = resolvePrintSystemId(systemId);
+  const restaurantFamily = sys === "restaurant" || sys === "ice-cream-bar";
+  return BILL_FIELD_GROUPS.map((group) => {
+    let keys = group.keys.filter((key) => key !== "branchCode" && key !== "printerName");
+    if (!restaurantFamily) {
+      keys = keys.filter((key) => !RESTAURANT_ONLY_BILL_FIELDS.has(key));
+    }
+    if (sys === "pharmacy") {
+      // Station stays; rename via labels. No dine-in delivery/service.
+      keys = keys.filter((key) => key !== "delivery" && key !== "service");
+    }
+    if (sys === "education") {
+      keys = keys.filter(
+        (key) => key !== "tableLabel" && key !== "orderType" && key !== "delivery" && key !== "service",
+      );
+    }
+    if (sys === "distribution") {
+      keys = keys.filter((key) => key !== "tableLabel" && key !== "delivery" && key !== "service");
+    }
+    if (sys === "general-store") {
+      keys = keys.filter((key) => key !== "service" && key !== "delivery");
+    }
+    return { ...group, keys };
+  }).filter((group) => group.keys.length > 0);
+}
+
 export const BILL_FIELD_LABELS: Record<keyof BillReceiptFields, string> = {
   branchName: "Business name",
   headerSubtitle: "Header subtitle",
@@ -310,6 +450,62 @@ export const BILL_FIELD_LABELS: Record<keyof BillReceiptFields, string> = {
   footer: "Footer message",
   footerSecondary: "Footer secondary line",
 };
+
+/** Field labels that match the active ERP (no restaurant wording on pharmacy/store). */
+export function billFieldLabelsForSystem(
+  systemId?: string | null | undefined,
+): Record<keyof BillReceiptFields, string> {
+  const sys = resolvePrintSystemId(systemId);
+  const base = { ...BILL_FIELD_LABELS };
+  if (sys === "pharmacy") {
+    return {
+      ...base,
+      orderRef: "Invoice #",
+      orderType: "Channel",
+      tableLabel: "Station / counter",
+      billRef: "Rx / Invoice #",
+      waiterName: "Pharmacist / staff",
+    };
+  }
+  if (sys === "general-store") {
+    return {
+      ...base,
+      orderRef: "Sale #",
+      orderType: "Sale type",
+      tableLabel: "Till / counter",
+      billRef: "Invoice #",
+      waiterName: "Cashier",
+    };
+  }
+  if (sys === "distribution") {
+    return {
+      ...base,
+      orderRef: "Booking #",
+      orderType: "Doc type",
+      tableLabel: "Desk",
+      billRef: "Invoice #",
+      waiterName: "Staff",
+    };
+  }
+  if (sys === "education") {
+    return {
+      ...base,
+      orderRef: "Receipt #",
+      orderType: "Type",
+      tableLabel: "Counter",
+      billRef: "Fee receipt #",
+      waiterName: "Staff",
+    };
+  }
+  if (sys === "ice-cream-bar") {
+    return {
+      ...base,
+      tableLabel: "Station",
+      waiterName: "Cashier",
+    };
+  }
+  return base;
+}
 
 function clampFontSize(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_BILL_PRINT_SETTINGS.baseFontSize;
@@ -475,60 +671,92 @@ export function normalizeBillPrintSettings(input: Partial<BillPrintSettings>): B
   };
 }
 
-export function loadBillPrintSettings(branchCode: string | undefined): BillPrintSettings {
-  if (!branchCode) return { ...DEFAULT_BILL_PRINT_SETTINGS, fields: { ...DEFAULT_BILL_RECEIPT_FIELDS } };
+export function loadBillPrintSettings(
+  branchCode: string | undefined,
+  systemId?: string | null | undefined,
+): BillPrintSettings {
+  const defaults = defaultBillPrintSettingsFor(systemId);
+  if (!branchCode) return defaults;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
       const legacyRaw = localStorage.getItem("pops-bill-print-settings-v1");
       if (legacyRaw) {
         const legacy = JSON.parse(legacyRaw) as Record<string, Partial<BillPrintSettings>>;
-        return normalizeBillPrintSettings(migrateLegacy(legacy[branchCode]));
+        const { value } = readScopedMapEntry(legacy, branchCode, systemId);
+        if (value) return normalizeBillPrintSettings(migrateLegacy(value));
       }
-      return { ...DEFAULT_BILL_PRINT_SETTINGS, fields: { ...DEFAULT_BILL_RECEIPT_FIELDS } };
+      return defaults;
     }
     const parsed = JSON.parse(raw) as Record<string, Partial<BillPrintSettings>>;
-    const next = normalizeBillPrintSettings(migrateLegacy(parsed[branchCode]));
-    // One-time: hide TAX INVOICE on thermal slips (was on by default).
-    if (next.fields.documentTitle && /^tax\s*invoice$/i.test(next.documentTitle.trim())) {
+    const { value, scopedKey, systemId: sys } = readScopedMapEntry(parsed, branchCode, systemId);
+    if (!value) return defaults;
+    const next = normalizeBillPrintSettings(migrateLegacy(value));
+    // One-time: hide TAX INVOICE on thermal slips (restaurant family only).
+    if (
+      (sys === "restaurant" || sys === "ice-cream-bar") &&
+      next.fields.documentTitle &&
+      /^tax\s*invoice$/i.test(next.documentTitle.trim())
+    ) {
       next.fields = { ...next.fields, documentTitle: false };
+    }
+    // Persist under scoped key so suite systems stop sharing one blob.
+    if (scopedKey && !parsed[scopedKey]) {
+      parsed[scopedKey] = next;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
     }
     return next;
   } catch {
-    return { ...DEFAULT_BILL_PRINT_SETTINGS, fields: { ...DEFAULT_BILL_RECEIPT_FIELDS } };
+    return defaults;
   }
 }
 
-export function saveBillPrintSettings(branchCode: string, settings: BillPrintSettings): void {
+export function saveBillPrintSettings(
+  branchCode: string,
+  settings: BillPrintSettings,
+  systemId?: string | null | undefined,
+): void {
   const next = normalizeBillPrintSettings(settings);
   const raw = localStorage.getItem(STORAGE_KEY);
   const parsed = raw ? (JSON.parse(raw) as Record<string, BillPrintSettings>) : {};
-  parsed[branchCode] = next;
+  const key = printScopedKey(branchCode, systemId);
+  parsed[key] = next;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
   window.dispatchEvent(
-    new CustomEvent(BILL_PRINT_SETTINGS_CHANGED_EVENT, { detail: { branchCode, settings: next } }),
+    new CustomEvent(BILL_PRINT_SETTINGS_CHANGED_EVENT, {
+      detail: { branchCode, systemId: resolvePrintSystemId(systemId), settings: next },
+    }),
   );
 }
 
-export function loadActiveBillTemplateId(branchCode: string | undefined): string | null {
+export function loadActiveBillTemplateId(
+  branchCode: string | undefined,
+  systemId?: string | null | undefined,
+): string | null {
   if (!branchCode || typeof localStorage === "undefined") return null;
   try {
     const raw = localStorage.getItem(ACTIVE_TEMPLATE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Record<string, string>;
-    return parsed[branchCode] || null;
+    const { value } = readScopedMapEntry(parsed, branchCode, systemId);
+    return value || null;
   } catch {
     return null;
   }
 }
 
-export function saveActiveBillTemplateId(branchCode: string, templateId: string | null): void {
+export function saveActiveBillTemplateId(
+  branchCode: string,
+  templateId: string | null,
+  systemId?: string | null | undefined,
+): void {
   if (typeof localStorage === "undefined") return;
   try {
     const raw = localStorage.getItem(ACTIVE_TEMPLATE_KEY);
     const parsed = raw ? (JSON.parse(raw) as Record<string, string>) : {};
-    if (templateId) parsed[branchCode] = templateId;
-    else delete parsed[branchCode];
+    const key = printScopedKey(branchCode, systemId);
+    if (templateId) parsed[key] = templateId;
+    else delete parsed[key];
     localStorage.setItem(ACTIVE_TEMPLATE_KEY, JSON.stringify(parsed));
   } catch {
     // ignore

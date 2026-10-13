@@ -12,6 +12,7 @@ import {
   fetchPharmacyWholesaleReturns,
 } from "../../pharmacy/api/pharmacy-erp";
 import { listMedicinesPaged } from "../../pharmacy/api/pharmacy-masters";
+import { parseCustomerBonusPolicy } from "../components/TradeCustomerFormFields";
 import {
   getDataset,
   type CustomReportDataset,
@@ -52,6 +53,9 @@ function asRows(raw: unknown): Record<string, unknown>[] {
 }
 
 function normalizeListRow(row: Record<string, unknown>): Record<string, unknown> {
+  const bonus = parseCustomerBonusPolicy(
+    typeof row.bonusPolicyJson === "string" ? row.bonusPolicyJson : null,
+  );
   // Soft aliases so templates stay stable across API shapes / report vs list.
   return {
     ...row,
@@ -78,6 +82,11 @@ function normalizeListRow(row: Record<string, unknown>): Record<string, unknown>
     cityName: row.cityName ?? row.city ?? null,
     area: row.area ?? row.areaName ?? null,
     salesPkr: row.salesPkr ?? row.totalPkr ?? null,
+    isFocCustomer: row.isFocCustomer ?? false,
+    bonusBuyQty: row.bonusBuyQty ?? bonus.buyQty,
+    bonusFreeQty: row.bonusFreeQty ?? bonus.freeQty,
+    bonusPct: row.bonusPct ?? bonus.bonusPct,
+    bonusPolicyJson: row.bonusPolicyJson ?? (bonus.notes || null),
   };
 }
 
@@ -182,17 +191,24 @@ function filterRows(
 
   if (filters.salesmanIds?.length || filters.salesmanNames?.length) {
     const idSet = new Set((filters.salesmanIds ?? []).map(String));
-    const nameSet = new Set((filters.salesmanNames ?? []).map((n) => n.toLowerCase().trim()).filter(Boolean));
+    const nameSet = new Set(
+      (filters.salesmanNames ?? []).map((n) => n.toLowerCase().trim()).filter(Boolean),
+    );
     list = list.filter((r) => {
+      // Aggregated catalog rows (company×SKU, stock, aging, …) have no salesman
+      // dimension — keep them. Salesman scope must be applied upstream / in API.
+      if (!rowHasSalesmanField(r)) return true;
       const id = String(r.salesmanEmployeeId ?? r.employeeId ?? r.salesmanId ?? "");
-      const name = String(r.salesman ?? r.salesmanName ?? r.employee ?? "").toLowerCase().trim();
+      const name = String(r.salesman ?? r.salesmanName ?? r.employee ?? "")
+        .toLowerCase()
+        .trim();
       if (id && idSet.has(id)) return true;
-      if (name && (nameSet.has(name) || [...nameSet].some((n) => name.includes(n) || n.includes(name)))) {
+      if (
+        name &&
+        (nameSet.has(name) || [...nameSet].some((n) => name.includes(n) || n.includes(name)))
+      ) {
         return true;
       }
-      // If row has no salesman info at all, drop it when filter is active
-      // (otherwise employee select appears to do nothing).
-      if (!rowHasSalesmanField(r)) return false;
       return false;
     });
   }
@@ -216,6 +232,8 @@ export async function runCustomReport(opts: {
   if (!columns.length) throw new Error("Select at least one column");
 
   let rows: Record<string, unknown>[] = [];
+  /** Catalog API already applies date/geo/company/salesman — only search locally. */
+  let clientFilters: CustomReportRunFilters = opts.filters;
 
   if (dataset.reportId) {
     const res = await runCatalogReport(dataset.reportId, {
@@ -228,11 +246,12 @@ export async function runCustomReport(opts: {
       salesmanIds: opts.filters.salesmanIds,
     });
     rows = asRows(res.rows).map(normalizeListRow);
+    clientFilters = { q: opts.filters.q };
   } else if (dataset.listKind) {
     rows = await loadListRows(dataset, opts.filters);
   }
 
-  rows = filterRows(rows, opts.filters).map((r) => pick(r, columns));
+  rows = filterRows(rows, clientFilters).map((r) => pick(r, columns));
 
   const columnLabels: Record<string, string> = {};
   for (const field of dataset.fields) {

@@ -8,6 +8,11 @@
  */
 import type { PosCartLine } from "./posCart";
 import { loadPrinterSections, savePrinterSections, type PrinterSection } from "./printerSections";
+import {
+  printScopedKey,
+  readScopedMapEntry,
+  resolvePrintSystemId,
+} from "./printSystemScope";
 
 export type PrinterPaperSize = "58mm" | "80mm" | "100mm" | "A4" | "custom";
 
@@ -223,15 +228,30 @@ function writeAll(data: Record<string, PrinterRoutingState>, branchCode: string)
   }
 }
 
-export function loadPrinterRouting(branchCode: string | undefined): PrinterRoutingState {
+export function loadPrinterRouting(
+  branchCode: string | undefined,
+  systemId?: string | null | undefined,
+): PrinterRoutingState {
   if (!branchCode) return emptyState();
   const all = readAll();
-  return normalizeState(all[branchCode]);
+  const { value, scopedKey } = readScopedMapEntry(all, branchCode, systemId);
+  const state = normalizeState(value);
+  // Migrate restaurant-family legacy routing into scoped key once.
+  if (value && scopedKey && !all[scopedKey]) {
+    all[scopedKey] = state;
+    writeAll(all, branchCode);
+  }
+  return state;
 }
 
-function saveState(branchCode: string, state: PrinterRoutingState): void {
+function saveState(
+  branchCode: string,
+  state: PrinterRoutingState,
+  systemId?: string | null | undefined,
+): void {
   const all = readAll();
-  all[branchCode] = state;
+  const key = printScopedKey(branchCode, systemId ?? resolvePrintSystemId());
+  all[key] = state;
   writeAll(all, branchCode);
 }
 

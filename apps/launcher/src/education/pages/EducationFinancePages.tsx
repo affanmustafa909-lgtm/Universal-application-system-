@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { PageHeader } from "../../pops/ui/PageHeader";
 import { noticeErrorClass, noticeSuccessClass } from "../../pops/lib/themeClasses";
 import {
+  approveEducationExpense,
   createEducationExpense,
   createEducationFinanceTxn,
   createEducationPayrollRun,
@@ -11,10 +12,12 @@ import {
   fetchEducationFinanceTxns,
   fetchEducationPayrollRuns,
   fetchEducationPayslips,
+  generateEducationPayslips,
   updateEducationExpense,
   updateEducationPayrollRun,
 } from "../api/education";
 import { formatPkr, useEducationAccess, useInvalidateEducation } from "../hooks/useEducation";
+import { printEducationPayslip } from "../lib/printEducationPayslip";
 import {
   EducationDataTable,
   EducationField,
@@ -213,7 +216,9 @@ export function EducationExpensesPage(): JSX.Element {
 
   const workflowMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
-      updateEducationExpense(id, { status }),
+      status === "approved"
+        ? approveEducationExpense(id)
+        : updateEducationExpense(id, { status }),
     onSuccess: (_d, vars) => {
       invalidate(["expenses"]);
       setNotice(`Expense marked ${vars.status}`);
@@ -316,8 +321,17 @@ export function EducationPayrollPage(): JSX.Element {
   const { branch } = useEducationAccess();
   const invalidate = useInvalidateEducation();
   const [notice, setNotice] = useState<string | null>(null);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [periodLabel, setPeriodLabel] = useState("");
   const [selectedRunId, setSelectedRunId] = useState("");
+
+  const branding = useMemo(
+    () => ({
+      institutionName: "EducationFlow",
+      branchName: branch?.name ?? branch?.code ?? "",
+    }),
+    [branch?.name, branch?.code],
+  );
 
   const runsQuery = useQuery({
     queryKey: ["education", "payroll-runs", branch?.code],
@@ -354,17 +368,55 @@ export function EducationPayrollPage(): JSX.Element {
     },
   });
 
+  const generateMutation = useMutation({
+    mutationFn: (runId: string) => generateEducationPayslips(runId),
+    onSuccess: (_d, runId) => {
+      setSelectedRunId(runId);
+      invalidate(["payslips", "payroll-runs"]);
+      setNotice("Payslips generated");
+    },
+  });
+
   const runs = useMemo(() => runsQuery.data ?? [], [runsQuery.data]);
+  const selectedRun = runs.find((r) => r.id === selectedRunId);
+
+  const printPayslip = async (p: {
+    personId: string;
+    personType: string;
+    basicPkr: number;
+    allowancesPkr: number;
+    deductionsPkr: number;
+    netPkr: number;
+    status: string;
+  }) => {
+    setErrorNotice(null);
+    const result = await printEducationPayslip({
+      periodLabel: selectedRun?.periodLabel ?? "—",
+      personName: p.personId.slice(0, 8),
+      personType: p.personType,
+      basicPkr: p.basicPkr,
+      allowancesPkr: p.allowancesPkr,
+      deductionsPkr: p.deductionsPkr,
+      netPkr: p.netPkr,
+      status: p.status,
+      branding,
+    });
+    if (!result.ok) setErrorNotice(result.error ?? "Print failed");
+  };
 
   return (
     <div className="space-y-5">
       <PageHeader title="Payroll" subtitle="Teacher and staff payroll runs and payslips." />
       {notice ? <div className={noticeSuccessClass}>{notice}</div> : null}
+      {errorNotice ? <div className={noticeErrorClass}>{errorNotice}</div> : null}
       {runsQuery.isError ? (
         <div className={noticeErrorClass}>{(runsQuery.error as Error).message}</div>
       ) : null}
       {createMutation.isError ? (
         <div className={noticeErrorClass}>{(createMutation.error as Error).message}</div>
+      ) : null}
+      {generateMutation.isError ? (
+        <div className={noticeErrorClass}>{(generateMutation.error as Error).message}</div>
       ) : null}
 
       <EducationFormSection title="New payroll run">
@@ -379,6 +431,7 @@ export function EducationPayrollPage(): JSX.Element {
             title={runsQuery.isError ? "Payroll API unavailable" : undefined}
             onClick={() => {
               setNotice(null);
+              setErrorNotice(null);
               createMutation.mutate();
             }}
           >
@@ -396,6 +449,16 @@ export function EducationPayrollPage(): JSX.Element {
           <div key={r.id} className="flex flex-wrap gap-1">
             <EducationSecondaryButton onClick={() => setSelectedRunId(r.id)}>
               Payslips
+            </EducationSecondaryButton>
+            <EducationSecondaryButton
+              disabled={generateMutation.isPending}
+              onClick={() => {
+                setNotice(null);
+                setErrorNotice(null);
+                generateMutation.mutate(r.id);
+              }}
+            >
+              Generate payslips
             </EducationSecondaryButton>
             {r.status === "draft" ? (
               <EducationSecondaryButton
@@ -434,7 +497,7 @@ export function EducationPayrollPage(): JSX.Element {
             <div className={noticeErrorClass}>{(payslipsQuery.error as Error).message}</div>
           ) : null}
           <EducationDataTable
-            columns={["Person", "Type", "Basic", "Allowances", "Deductions", "Net", "Status"]}
+            columns={["Person", "Type", "Basic", "Allowances", "Deductions", "Net", "Status", "Print"]}
             rows={(payslipsQuery.data ?? []).map((p) => [
               p.personId.slice(0, 8),
               p.personType,
@@ -443,6 +506,13 @@ export function EducationPayrollPage(): JSX.Element {
               formatPkr(p.deductionsPkr),
               formatPkr(p.netPkr),
               p.status,
+              <EducationSecondaryButton
+                key={`print-${p.id}`}
+                className="px-2 py-1"
+                onClick={() => void printPayslip(p)}
+              >
+                Print payslip
+              </EducationSecondaryButton>,
             ])}
           />
         </>

@@ -9,6 +9,26 @@ const DistributionModulesPage = lazy(() =>
 const DistributionOrdersPage = lazy(() =>
   import("../distribution/pages/DistributionPages").then((m) => ({ default: m.DistributionOrdersPage })),
 );
+const DistributionTodaySalesPage = lazy(() =>
+  import("../distribution/pages/DistributionPages").then((m) => ({
+    default: m.DistributionTodaySalesPage,
+  })),
+);
+const DistributionBonusReportsPage = lazy(() =>
+  import("../distribution/pages/DistributionPages").then((m) => ({
+    default: m.DistributionBonusReportsPage,
+  })),
+);
+const DistributionBonusAttachPage = lazy(() =>
+  import("../distribution/pages/DistributionPages").then((m) => ({
+    default: m.DistributionBonusAttachPage,
+  })),
+);
+const DistributionCustomerReportsPage = lazy(() =>
+  import("../distribution/pages/DistributionPages").then((m) => ({
+    default: m.DistributionCustomerReportsPage,
+  })),
+);
 const DistributionTradeCustomersPage = lazy(() =>
   import("../distribution/pages/DistributionPages").then((m) => ({
     default: m.DistributionTradeCustomersPage,
@@ -297,6 +317,10 @@ export function distributionRoutes(): JSX.Element {
       <Route path="distribution/aging" element={<DistributionAgingPage />} />
       <Route path="distribution/modules" element={<DistributionModulesPage />} />
       <Route path="distribution/orders" element={<DistributionOrdersPage />} />
+      <Route path="distribution/today-sales" element={<DistributionTodaySalesPage />} />
+      <Route path="distribution/bonus-reports" element={<DistributionBonusReportsPage />} />
+      <Route path="distribution/bonus-attach" element={<DistributionBonusAttachPage />} />
+      <Route path="distribution/customer-reports" element={<DistributionCustomerReportsPage />} />
       <Route path="distribution/trade-customers" element={<DistributionTradeCustomersPage />} />
       <Route path="distribution/trade-customers/:id" element={<DistributionTradeCustomerDetailPage />} />
       <Route path="distribution/wholesale-returns" element={<DistributionWholesaleReturnsPage />} />

@@ -26,6 +26,8 @@ function compareSemver(a: string, b: string): number {
 export function isSafeDesktopUpdate(version: string, notes = ""): boolean {
   // Ice Cream Bar EXE uses its own GitHub feed — never the old suite/restaurant channel.
   if (PLATFORM_EDITION === "ice-cream-bar") return true;
+  // EducationFlow is a separate single-system installer with its own latest-education.json feed.
+  if (PLATFORM_EDITION === "education") return true;
   const body = notes.toLowerCase();
   if (body.includes("ice cream") || body.includes("ice-cream") || body.includes("scoops")) {
     return true;

@@ -1,6 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { applyOrgModuleCeiling, canManageOrgUsers, permissionsForPopsRole } from "@platform/contracts";
+import { fetchEducationModules } from "../../education/api/education";
 import { getNavItemsForSystem } from "../../lib/businessSystems";
 import { useActiveSystemId } from "../../hooks/useActiveSystemId";
 import { useSessionStore } from "../../stores/sessionStore";
@@ -174,8 +176,20 @@ function useSystemNavItems(): PopsNavItem[] {
   const taxEnabled = isTaxAuthorityEnabled(taxFeatures.data);
   const orgCeiling = useOrgModuleCeiling();
 
+  const educationModulesQuery = useQuery({
+    queryKey: ["education", "modules"],
+    queryFn: fetchEducationModules,
+    enabled: systemId === "education",
+    staleTime: 60_000,
+  });
+
   return useMemo(() => {
-    const items = getNavItemsForSystem(systemId);
+    const items = getNavItemsForSystem(systemId, {
+      educationModules:
+        systemId === "education" && educationModulesQuery.data
+          ? educationModulesQuery.data
+          : null,
+    });
     // Admins can preview another role's workspace; everyone else is locked to JWT permissions.
     const isAdminPreview = jwtPermissions.includes("*") || canManageOrgUsers(jwtPermissions);
     const roleOrJwt = isAdminPreview ? permissionsForPopsRole(displayRole) : jwtPermissions;
@@ -194,7 +208,15 @@ function useSystemNavItems(): PopsNavItem[] {
     // Tax nav only when Super Admin enabled FBR and/or PRA for this business.
     if (taxEnabled) return filtered;
     return stripTaxNavItems(filtered);
-  }, [systemId, jwtPermissions, displayRole, navAllowlist, taxEnabled, orgCeiling]);
+  }, [
+    systemId,
+    jwtPermissions,
+    displayRole,
+    navAllowlist,
+    taxEnabled,
+    orgCeiling,
+    educationModulesQuery.data,
+  ]);
 }
 
 export function PopsSidebarNav(): JSX.Element {

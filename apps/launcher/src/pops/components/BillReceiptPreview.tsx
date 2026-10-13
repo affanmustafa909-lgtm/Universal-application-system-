@@ -10,6 +10,7 @@ import {
   previewPaperWidthPx,
 } from "../lib/thermalPrintSettings";
 import { buildPrintPreviewHtml, type PrintTicketInput } from "../lib/printTicket";
+import { resolvePrintSystemId } from "../lib/printSystemScope";
 
 type Props = {
   input: Omit<PrintTicketInput, "kind">;
@@ -18,6 +19,7 @@ type Props = {
   printSettings?: BillPrintSettings;
   className?: string;
   title?: string;
+  systemId?: string | null;
 };
 
 export function BillReceiptPreview({
@@ -26,9 +28,11 @@ export function BillReceiptPreview({
   printSettings,
   className = "",
   title = "Print preview (matches printer)",
+  systemId,
 }: Props): JSX.Element {
+  const sys = resolvePrintSystemId(systemId ?? input.systemId);
   const [settings, setSettings] = useState<BillPrintSettings>(
-    () => printSettings ?? loadBillPrintSettings(branchCode),
+    () => printSettings ?? loadBillPrintSettings(branchCode, sys),
   );
   const [thermalTick, setThermalTick] = useState(0);
 
@@ -37,16 +41,16 @@ export function BillReceiptPreview({
       setSettings(printSettings);
       return;
     }
-    setSettings(loadBillPrintSettings(branchCode));
+    setSettings(loadBillPrintSettings(branchCode, sys));
     function onChanged(event: Event): void {
       const detail = (event as CustomEvent<{ branchCode?: string }>).detail;
       if (!detail?.branchCode || detail.branchCode === branchCode) {
-        setSettings(loadBillPrintSettings(branchCode));
+        setSettings(loadBillPrintSettings(branchCode, sys));
       }
     }
     window.addEventListener(BILL_PRINT_SETTINGS_CHANGED_EVENT, onChanged);
     return () => window.removeEventListener(BILL_PRINT_SETTINGS_CHANGED_EVENT, onChanged);
-  }, [branchCode, printSettings]);
+  }, [branchCode, printSettings, sys]);
 
   useEffect(() => {
     function onThermal(event: Event): void {
@@ -61,18 +65,19 @@ export function BillReceiptPreview({
 
   const html = useMemo(() => {
     // Touch thermal settings so paper/width changes refresh the preview.
-    void loadThermalPrintSettings(branchCode);
+    void loadThermalPrintSettings(branchCode, sys);
     return buildPrintPreviewHtml({
       ...input,
+      systemId: sys,
       kind: "receipt",
       billPrintSettings: settings,
     });
-  }, [input, settings, branchCode, thermalTick]);
+  }, [input, settings, branchCode, thermalTick, sys]);
 
   const paperPx = useMemo(() => {
-    const thermal = loadThermalPrintSettings(branchCode);
+    const thermal = loadThermalPrintSettings(branchCode, sys);
     return previewPaperWidthPx(thermal.defaultPaperSize, thermal.customPaperWidthMm);
-  }, [branchCode, thermalTick]);
+  }, [branchCode, thermalTick, sys]);
 
   return (
     <div className={className}>

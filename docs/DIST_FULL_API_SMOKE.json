@@ -2,10 +2,10 @@
   "api": "https://backend-system-production-28a3.up.railway.app",
   "email": "admin.distribution@pops.demo",
   "branch": "DIST-HQ",
-  "at": "2026-09-13T09:01:05.483Z",
+  "at": "2026-10-10T17:41:53.597Z",
   "total": 103,
-  "passed": 100,
-  "failed": 3,
+  "passed": 103,
+  "failed": 0,
   "byGroup": {
     "auth": {
       "pass": 1,
@@ -92,47 +92,20 @@
       "fail": 0
     },
     "write": {
-      "pass": 2,
-      "fail": 3
+      "pass": 5,
+      "fail": 0
     }
   },
-  "failures": [
-    {
-      "group": "write",
-      "name": "POST field-force/targets",
-      "passed": false,
-      "status": 0,
-      "ms": 0,
-      "error": "no salesman",
-      "note": ""
-    },
-    {
-      "group": "write",
-      "name": "POST field-force/visits/generate",
-      "passed": false,
-      "status": 500,
-      "ms": 367,
-      "error": "Internal server error",
-      "note": ""
-    },
-    {
-      "group": "write",
-      "name": "POST sales/pricing/quote",
-      "passed": false,
-      "status": 500,
-      "ms": 297,
-      "error": "Internal server error",
-      "note": ""
-    }
-  ],
+  "failures": [],
   "ids": {
-    "warehouseId": "dcd037da-a89a-4b23-b22c-f9d8f92c8619",
-    "customerId": "402f1043-bbe2-4a55-86cf-402e7294232e",
+    "warehouseId": "17e27333-581a-45e9-aff4-c326fdbbeb84",
+    "customerId": "20118aa9-c6b6-4725-aa8b-c9c3747c7ce0",
     "medicineId": "ee3c862f-4c73-4dec-8b7b-6b48bbc8acd5",
-    "poId": "ae215713-f9fe-47a9-9e2f-b56c8e91710b",
-    "routeId": "3204ab17-8993-4c35-84cc-eec6d697a204",
-    "pjpId": "93ff1b6a-548a-4fdf-bcc5-76464c935b1b",
-    "newPoId": "a06a9c29-2559-42b1-a920-f49ffe3a9981"
+    "poId": "e603a815-65c5-46f3-b594-37e0f101ba68",
+    "routeId": "b8086502-468f-4004-9dfc-17ac2a87815e",
+    "pjpId": "3ded07e3-ef79-4631-a971-7d7256f4f6e4",
+    "targetId": "65fa0900-ec75-413a-bf9e-fd67cf8ea6e6",
+    "newPoId": "4af087c1-f3ac-44b9-bc07-ab7060592be9"
   },
   "results": [
     {
@@ -140,7 +113,7 @@
       "name": "POST /v1/auth/login",
       "passed": true,
       "status": 201,
-      "ms": 1589,
+      "ms": 1376,
       "error": null,
       "note": ""
     },
@@ -149,7 +122,7 @@
       "name": "GET /v1/pharmacy/lookup",
       "passed": true,
       "status": 200,
-      "ms": 3567,
+      "ms": 576,
       "error": null,
       "note": ""
     },
@@ -158,7 +131,7 @@
       "name": "GET /v1/pharmacy/code-catalog",
       "passed": true,
       "status": 200,
-      "ms": 317,
+      "ms": 473,
       "error": null,
       "note": ""
     },
@@ -167,7 +140,7 @@
       "name": "GET /v1/pharmacy/masters/overview",
       "passed": true,
       "status": 200,
-      "ms": 1383,
+      "ms": 281,
       "error": null,
       "note": ""
     },
@@ -176,7 +149,7 @@
       "name": "GET /v1/pharmacy/masters/data-quality",
       "passed": true,
       "status": 200,
-      "ms": 1340,
+      "ms": 312,
       "error": null,
       "note": ""
     },
@@ -185,7 +158,7 @@
       "name": "GET /v1/pharmacy/masters/generics",
       "passed": true,
       "status": 200,
-      "ms": 862,
+      "ms": 280,
       "error": null,
       "note": ""
     },
@@ -194,7 +167,7 @@
       "name": "GET /v1/pharmacy/masters/brands",
       "passed": true,
       "status": 200,
-      "ms": 552,
+      "ms": 285,
       "error": null,
       "note": ""
     },
@@ -203,7 +176,7 @@
       "name": "GET /v1/pharmacy/masters/categories",
       "passed": true,
       "status": 200,
-      "ms": 547,
+      "ms": 288,
       "error": null,
       "note": ""
     },
@@ -212,7 +185,7 @@
       "name": "GET /v1/pharmacy/masters/units",
       "passed": true,
       "status": 200,
-      "ms": 542,
+      "ms": 319,
       "error": null,
       "note": ""
     },
@@ -221,7 +194,7 @@
       "name": "GET /v1/pharmacy/masters/medicines",
       "passed": true,
       "status": 200,
-      "ms": 722,
+      "ms": 281,
       "error": null,
       "note": ""
     },
@@ -230,7 +203,7 @@
       "name": "GET /v1/pharmacy/companies",
       "passed": true,
       "status": 200,
-      "ms": 815,
+      "ms": 281,
       "error": null,
       "note": ""
     },
@@ -239,7 +212,7 @@
       "name": "GET /v1/pharmacy/warehouses",
       "passed": true,
       "status": 200,
-      "ms": 672,
+      "ms": 293,
       "error": null,
       "note": ""
     },
@@ -248,7 +221,7 @@
       "name": "GET /v1/pharmacy/provinces",
       "passed": true,
       "status": 200,
-      "ms": 424,
+      "ms": 293,
       "error": null,
       "note": ""
     },
@@ -257,7 +230,7 @@
       "name": "GET /v1/pharmacy/cities",
       "passed": true,
       "status": 200,
-      "ms": 435,
+      "ms": 283,
       "error": null,
       "note": ""
     },
@@ -266,7 +239,7 @@
       "name": "GET /v1/pharmacy/areas",
       "passed": true,
       "status": 200,
-      "ms": 428,
+      "ms": 283,
       "error": null,
       "note": ""
     },
@@ -275,7 +248,7 @@
       "name": "GET /v1/pharmacy/routes",
       "passed": true,
       "status": 200,
-      "ms": 408,
+      "ms": 285,
       "error": null,
       "note": ""
     },
@@ -284,7 +257,7 @@
       "name": "GET /v1/pharmacy/territories",
       "passed": true,
       "status": 200,
-      "ms": 405,
+      "ms": 296,
       "error": null,
       "note": ""
     },
@@ -293,7 +266,7 @@
       "name": "GET /v1/pharmacy/trade-customers",
       "passed": true,
       "status": 200,
-      "ms": 558,
+      "ms": 298,
       "error": null,
       "note": ""
     },
@@ -302,7 +275,7 @@
       "name": "GET /v1/pharmacy/medicines",
       "passed": true,
       "status": 200,
-      "ms": 820,
+      "ms": 301,
       "error": null,
       "note": ""
     },
@@ -311,7 +284,7 @@
       "name": "GET /v1/pharmacy/medicines/:id/batches",
       "passed": true,
       "status": 200,
-      "ms": 670,
+      "ms": 294,
       "error": null,
       "note": ""
     },
@@ -320,7 +293,7 @@
       "name": "GET /v1/pharmacy/batches",
       "passed": true,
       "status": 200,
-      "ms": 566,
+      "ms": 297,
       "error": null,
       "note": ""
     },
@@ -329,7 +302,7 @@
       "name": "GET inventory/dashboard",
       "passed": true,
       "status": 200,
-      "ms": 3989,
+      "ms": 397,
       "error": null,
       "note": ""
     },
@@ -338,7 +311,7 @@
       "name": "GET inventory/stock",
       "passed": true,
       "status": 200,
-      "ms": 1177,
+      "ms": 296,
       "error": null,
       "note": ""
     },
@@ -347,7 +320,7 @@
       "name": "GET inventory/batches",
       "passed": true,
       "status": 200,
-      "ms": 940,
+      "ms": 293,
       "error": null,
       "note": ""
     },
@@ -356,7 +329,7 @@
       "name": "GET inventory/expiry/buckets",
       "passed": true,
       "status": 200,
-      "ms": 930,
+      "ms": 311,
       "error": null,
       "note": ""
     },
@@ -365,7 +338,7 @@
       "name": "GET inventory/ledger",
       "passed": true,
       "status": 200,
-      "ms": 955,
+      "ms": 292,
       "error": null,
       "note": ""
     },
@@ -374,7 +347,7 @@
       "name": "GET inventory/valuation/summary",
       "passed": true,
       "status": 200,
-      "ms": 822,
+      "ms": 299,
       "error": null,
       "note": ""
     },
@@ -383,7 +356,7 @@
       "name": "GET inventory/reorder",
       "passed": true,
       "status": 200,
-      "ms": 934,
+      "ms": 295,
       "error": null,
       "note": ""
     },
@@ -392,7 +365,7 @@
       "name": "GET inventory/transfers",
       "passed": true,
       "status": 200,
-      "ms": 669,
+      "ms": 293,
       "error": null,
       "note": ""
     },
@@ -401,7 +374,7 @@
       "name": "GET inventory/adjustments",
       "passed": true,
       "status": 200,
-      "ms": 687,
+      "ms": 301,
       "error": null,
       "note": ""
     },
@@ -410,7 +383,7 @@
       "name": "GET inventory/counts",
       "passed": true,
       "status": 200,
-      "ms": 1139,
+      "ms": 294,
       "error": null,
       "note": ""
     },
@@ -419,7 +392,7 @@
       "name": "GET inventory/settings",
       "passed": true,
       "status": 200,
-      "ms": 677,
+      "ms": 298,
       "error": null,
       "note": ""
     },
@@ -428,7 +401,7 @@
       "name": "GET purchase/dashboard",
       "passed": true,
       "status": 200,
-      "ms": 2610,
+      "ms": 354,
       "error": null,
       "note": ""
     },
@@ -437,7 +410,7 @@
       "name": "GET purchase/requisitions",
       "passed": true,
       "status": 200,
-      "ms": 762,
+      "ms": 437,
       "error": null,
       "note": ""
     },
@@ -446,7 +419,7 @@
       "name": "GET purchase/orders",
       "passed": true,
       "status": 200,
-      "ms": 709,
+      "ms": 302,
       "error": null,
       "note": ""
     },
@@ -455,7 +428,7 @@
       "name": "GET purchase/orders/:id",
       "passed": true,
       "status": 200,
-      "ms": 791,
+      "ms": 296,
       "error": null,
       "note": ""
     },
@@ -464,7 +437,7 @@
       "name": "GET purchase/grns",
       "passed": true,
       "status": 200,
-      "ms": 1020,
+      "ms": 324,
       "error": null,
       "note": ""
     },
@@ -473,7 +446,7 @@
       "name": "GET purchase/invoices",
       "passed": true,
       "status": 200,
-      "ms": 1246,
+      "ms": 420,
       "error": null,
       "note": ""
     },
@@ -482,7 +455,7 @@
       "name": "GET purchase/returns",
       "passed": true,
       "status": 200,
-      "ms": 793,
+      "ms": 298,
       "error": null,
       "note": ""
     },
@@ -491,7 +464,7 @@
       "name": "GET purchase/suppliers/search",
       "passed": true,
       "status": 200,
-      "ms": 632,
+      "ms": 292,
       "error": null,
       "note": ""
     },
@@ -500,7 +473,7 @@
       "name": "GET purchase-orders (legacy)",
       "passed": true,
       "status": 200,
-      "ms": 761,
+      "ms": 330,
       "error": null,
       "note": ""
     },
@@ -509,7 +482,7 @@
       "name": "GET grns (legacy)",
       "passed": true,
       "status": 200,
-      "ms": 743,
+      "ms": 371,
       "error": null,
       "note": ""
     },
@@ -518,7 +491,7 @@
       "name": "GET sales/products/search",
       "passed": true,
       "status": 200,
-      "ms": 1088,
+      "ms": 388,
       "error": null,
       "note": ""
     },
@@ -527,7 +500,7 @@
       "name": "GET sales/customers/search",
       "passed": true,
       "status": 200,
-      "ms": 541,
+      "ms": 289,
       "error": null,
       "note": ""
     },
@@ -536,7 +509,7 @@
       "name": "GET sales/held",
       "passed": true,
       "status": 200,
-      "ms": 533,
+      "ms": 281,
       "error": null,
       "note": ""
     },
@@ -545,7 +518,7 @@
       "name": "GET distribution/orders",
       "passed": true,
       "status": 200,
-      "ms": 632,
+      "ms": 329,
       "error": null,
       "note": ""
     },
@@ -554,7 +527,7 @@
       "name": "GET distribution/invoices",
       "passed": true,
       "status": 200,
-      "ms": 1035,
+      "ms": 286,
       "error": null,
       "note": ""
     },
@@ -563,7 +536,7 @@
       "name": "GET distribution/ps-window",
       "passed": true,
       "status": 200,
-      "ms": 1427,
+      "ms": 290,
       "error": null,
       "note": ""
     },
@@ -572,7 +545,7 @@
       "name": "GET distribution/ps-window/widgets",
       "passed": true,
       "status": 200,
-      "ms": 776,
+      "ms": 368,
       "error": null,
       "note": ""
     },
@@ -581,7 +554,7 @@
       "name": "GET distribution/dashboard/summary",
       "passed": true,
       "status": 200,
-      "ms": 1410,
+      "ms": 295,
       "error": null,
       "note": ""
     },
@@ -590,7 +563,7 @@
       "name": "GET …/sales-trend",
       "passed": true,
       "status": 200,
-      "ms": 549,
+      "ms": 297,
       "error": null,
       "note": ""
     },
@@ -599,7 +572,7 @@
       "name": "GET …/top-products",
       "passed": true,
       "status": 200,
-      "ms": 551,
+      "ms": 279,
       "error": null,
       "note": ""
     },
@@ -608,7 +581,7 @@
       "name": "GET …/top-customers",
       "passed": true,
       "status": 200,
-      "ms": 877,
+      "ms": 276,
       "error": null,
       "note": ""
     },
@@ -617,7 +590,7 @@
       "name": "GET …/action-center",
       "passed": true,
       "status": 200,
-      "ms": 563,
+      "ms": 286,
       "error": null,
       "note": ""
     },
@@ -626,7 +599,7 @@
       "name": "GET …/stock-health",
       "passed": true,
       "status": 200,
-      "ms": 549,
+      "ms": 279,
       "error": null,
       "note": ""
     },
@@ -635,7 +608,7 @@
       "name": "GET …/field-force",
       "passed": true,
       "status": 200,
-      "ms": 680,
+      "ms": 293,
       "error": null,
       "note": ""
     },
@@ -644,7 +617,7 @@
       "name": "GET pricing/lists",
       "passed": true,
       "status": 200,
-      "ms": 1341,
+      "ms": 313,
       "error": null,
       "note": ""
     },
@@ -653,7 +626,7 @@
       "name": "GET pricing/schemes",
       "passed": true,
       "status": 200,
-      "ms": 432,
+      "ms": 293,
       "error": null,
       "note": ""
     },
@@ -662,7 +635,7 @@
       "name": "GET pricing/resolve",
       "passed": true,
       "status": 200,
-      "ms": 542,
+      "ms": 280,
       "error": null,
       "note": ""
     },
@@ -671,7 +644,7 @@
       "name": "GET delivery/dashboard",
       "passed": true,
       "status": 200,
-      "ms": 550,
+      "ms": 279,
       "error": null,
       "note": ""
     },
@@ -680,7 +653,7 @@
       "name": "GET delivery/drivers",
       "passed": true,
       "status": 200,
-      "ms": 671,
+      "ms": 288,
       "error": null,
       "note": ""
     },
@@ -689,7 +662,7 @@
       "name": "GET delivery/vehicles",
       "passed": true,
       "status": 200,
-      "ms": 697,
+      "ms": 286,
       "error": null,
       "note": ""
     },
@@ -698,7 +671,7 @@
       "name": "GET delivery/orders",
       "passed": true,
       "status": 200,
-      "ms": 678,
+      "ms": 351,
       "error": null,
       "note": ""
     },
@@ -707,7 +680,7 @@
       "name": "GET distribution/deliveries (legacy)",
       "passed": true,
       "status": 200,
-      "ms": 562,
+      "ms": 304,
       "error": null,
       "note": ""
     },
@@ -716,7 +689,7 @@
       "name": "GET collections/dashboard",
       "passed": true,
       "status": 200,
-      "ms": 591,
+      "ms": 298,
       "error": null,
       "note": ""
     },
@@ -725,7 +698,7 @@
       "name": "GET collections/aging",
       "passed": true,
       "status": 200,
-      "ms": 668,
+      "ms": 291,
       "error": null,
       "note": ""
     },
@@ -734,7 +707,7 @@
       "name": "GET collections/recovery",
       "passed": true,
       "status": 200,
-      "ms": 962,
+      "ms": 301,
       "error": null,
       "note": ""
     },
@@ -743,7 +716,7 @@
       "name": "GET collections/promises",
       "passed": true,
       "status": 200,
-      "ms": 546,
+      "ms": 309,
       "error": null,
       "note": ""
     },
@@ -752,7 +725,7 @@
       "name": "GET /v1/pharmacy/collections",
       "passed": true,
       "status": 200,
-      "ms": 690,
+      "ms": 306,
       "error": null,
       "note": ""
     },
@@ -761,7 +734,7 @@
       "name": "GET distribution/collections (legacy)",
       "passed": true,
       "status": 200,
-      "ms": 671,
+      "ms": 289,
       "error": null,
       "note": ""
     },
@@ -770,7 +743,7 @@
       "name": "GET trade-customers/:id/ledger",
       "passed": true,
       "status": 200,
-      "ms": 712,
+      "ms": 289,
       "error": null,
       "note": ""
     },
@@ -779,7 +752,7 @@
       "name": "GET field-force/dashboard",
       "passed": true,
       "status": 200,
-      "ms": 1734,
+      "ms": 317,
       "error": null,
       "note": ""
     },
@@ -788,7 +761,7 @@
       "name": "GET field-force/performance",
       "passed": true,
       "status": 200,
-      "ms": 1082,
+      "ms": 295,
       "error": null,
       "note": ""
     },
@@ -797,7 +770,7 @@
       "name": "GET field-force/coverage",
       "passed": true,
       "status": 200,
-      "ms": 549,
+      "ms": 286,
       "error": null,
       "note": ""
     },
@@ -806,7 +779,7 @@
       "name": "GET field-force/salesmen",
       "passed": true,
       "status": 200,
-      "ms": 554,
+      "ms": 288,
       "error": null,
       "note": ""
     },
@@ -815,7 +788,7 @@
       "name": "GET field-force/routes/:id",
       "passed": true,
       "status": 200,
-      "ms": 538,
+      "ms": 286,
       "error": null,
       "note": ""
     },
@@ -824,7 +797,7 @@
       "name": "GET field-force/pjp",
       "passed": true,
       "status": 200,
-      "ms": 557,
+      "ms": 292,
       "error": null,
       "note": ""
     },
@@ -833,7 +806,7 @@
       "name": "GET field-force/pjp/:id",
       "passed": true,
       "status": 200,
-      "ms": 711,
+      "ms": 288,
       "error": null,
       "note": ""
     },
@@ -842,7 +815,7 @@
       "name": "GET field-force/visits",
       "passed": true,
       "status": 200,
-      "ms": 686,
+      "ms": 288,
       "error": null,
       "note": ""
     },
@@ -851,7 +824,7 @@
       "name": "GET field-force/targets",
       "passed": true,
       "status": 200,
-      "ms": 2787,
+      "ms": 346,
       "error": null,
       "note": ""
     },
@@ -860,7 +833,7 @@
       "name": "GET employees-picker",
       "passed": true,
       "status": 200,
-      "ms": 415,
+      "ms": 278,
       "error": null,
       "note": ""
     },
@@ -869,7 +842,7 @@
       "name": "GET sales-force",
       "passed": true,
       "status": 200,
-      "ms": 424,
+      "ms": 289,
       "error": null,
       "note": ""
     },
@@ -878,7 +851,7 @@
       "name": "GET finance/dashboard",
       "passed": true,
       "status": 200,
-      "ms": 4283,
+      "ms": 406,
       "error": null,
       "note": ""
     },
@@ -887,7 +860,7 @@
       "name": "GET finance/reconciliation",
       "passed": true,
       "status": 200,
-      "ms": 2520,
+      "ms": 345,
       "error": null,
       "note": ""
     },
@@ -896,7 +869,7 @@
       "name": "GET finance/customer-ledger/:id",
       "passed": true,
       "status": 200,
-      "ms": 1381,
+      "ms": 329,
       "error": null,
       "note": ""
     },
@@ -905,7 +878,7 @@
       "name": "GET accounting/ledger",
       "passed": true,
       "status": 200,
-      "ms": 833,
+      "ms": 308,
       "error": null,
       "note": ""
     },
@@ -914,7 +887,7 @@
       "name": "GET accounting/periods",
       "passed": true,
       "status": 200,
-      "ms": 541,
+      "ms": 290,
       "error": null,
       "note": ""
     },
@@ -923,7 +896,7 @@
       "name": "GET io/modules",
       "passed": true,
       "status": 200,
-      "ms": 407,
+      "ms": 279,
       "error": null,
       "note": ""
     },
@@ -932,7 +905,7 @@
       "name": "GET io/jobs",
       "passed": true,
       "status": 200,
-      "ms": 562,
+      "ms": 640,
       "error": null,
       "note": ""
     },
@@ -941,7 +914,7 @@
       "name": "GET io/audit",
       "passed": true,
       "status": 200,
-      "ms": 551,
+      "ms": 294,
       "error": null,
       "note": ""
     },
@@ -950,7 +923,7 @@
       "name": "GET reports/purchase-statement",
       "passed": true,
       "status": 200,
-      "ms": 553,
+      "ms": 280,
       "error": null,
       "note": ""
     },
@@ -959,7 +932,7 @@
       "name": "GET reports/reorder-suggestions",
       "passed": true,
       "status": 200,
-      "ms": 566,
+      "ms": 289,
       "error": null,
       "note": ""
     },
@@ -968,7 +941,7 @@
       "name": "GET distribution/reports/daily-sales",
       "passed": true,
       "status": 200,
-      "ms": 564,
+      "ms": 288,
       "error": null,
       "note": ""
     },
@@ -977,7 +950,7 @@
       "name": "GET distribution/reports/outstanding-aging",
       "passed": true,
       "status": 200,
-      "ms": 780,
+      "ms": 302,
       "error": null,
       "note": ""
     },
@@ -986,7 +959,7 @@
       "name": "GET distribution/reports/stock-near-expiry",
       "passed": true,
       "status": 200,
-      "ms": 762,
+      "ms": 279,
       "error": null,
       "note": ""
     },
@@ -995,7 +968,7 @@
       "name": "GET distribution/reports/pending-deliveries",
       "passed": true,
       "status": 200,
-      "ms": 548,
+      "ms": 525,
       "error": null,
       "note": ""
     },
@@ -1004,7 +977,7 @@
       "name": "GET distribution/reports/visit-coverage",
       "passed": true,
       "status": 200,
-      "ms": 691,
+      "ms": 285,
       "error": null,
       "note": ""
     },
@@ -1013,26 +986,26 @@
       "name": "GET distribution/reports/po-register",
       "passed": true,
       "status": 200,
-      "ms": 546,
+      "ms": 297,
       "error": null,
       "note": ""
     },
     {
       "group": "write",
       "name": "POST field-force/targets",
-      "passed": false,
-      "status": 0,
-      "ms": 0,
-      "error": "no salesman",
+      "passed": true,
+      "status": 201,
+      "ms": 325,
+      "error": null,
       "note": ""
     },
     {
       "group": "write",
       "name": "POST field-force/visits/generate",
-      "passed": false,
-      "status": 500,
-      "ms": 367,
-      "error": "Internal server error",
+      "passed": true,
+      "status": 201,
+      "ms": 527,
+      "error": null,
       "note": ""
     },
     {
@@ -1040,7 +1013,7 @@
       "name": "POST purchase/orders",
       "passed": true,
       "status": 201,
-      "ms": 1226,
+      "ms": 318,
       "error": null,
       "note": ""
     },
@@ -1049,17 +1022,17 @@
       "name": "GET new purchase/orders/:id",
       "passed": true,
       "status": 200,
-      "ms": 670,
+      "ms": 294,
       "error": null,
       "note": ""
     },
     {
       "group": "write",
       "name": "POST sales/pricing/quote",
-      "passed": false,
-      "status": 500,
-      "ms": 297,
-      "error": "Internal server error",
+      "passed": true,
+      "status": 201,
+      "ms": 329,
+      "error": null,
       "note": ""
     }
   ]

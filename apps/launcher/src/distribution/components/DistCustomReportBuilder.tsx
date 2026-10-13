@@ -8,8 +8,13 @@ import {
   fetchPharmacySalesForce,
 } from "../../pharmacy/api/pharmacy-erp";
 import { usePharmacyAccess } from "../../pharmacy/hooks/usePharmacy";
+import { sessionCanManageUsers } from "../../pops/lib/roleAccess";
+import { usePopsStore } from "../../stores/popsStore";
+import { useSessionStore } from "../../stores/sessionStore";
 import { DistReportSummary } from "./DistReportSummary";
 import { runCustomReport } from "../lib/customReportRunner";
+import { loadDistReportPrintSettings, peekNextReportNumber } from "../lib/distReportSettings";
+import { saveDistReportToArchive } from "../lib/distSavedReports";
 import { printDistReportDocument } from "../lib/printDistOrder";
 import { summarizeReportRows, summarySubtitle } from "../lib/reportSummary";
 import {
@@ -50,7 +55,12 @@ function daysAgoIso(n: number): string {
 
 export function DistCustomReportBuilder({ onBackToCatalog }: Props): JSX.Element {
   const { branch } = usePharmacyAccess();
+  const displayRole = usePopsStore((s) => s.displayRole);
+  const claims = useSessionStore((s) => s.claims);
+  const canAdminDelete =
+    displayRole === "admin" || sessionCanManageUsers(claims);
   const [datasetId, setDatasetId] = useState("sales-report");
+  const [activeReportNumber, setActiveReportNumber] = useState<string | null>(null);
   const dataset = getDataset(datasetId);
   const [columns, setColumns] = useState<string[]>(() =>
     (getDataset("sales-report")?.fields ?? CUSTOM_REPORT_DATASETS[0]?.fields ?? []).map((f) => f.key),
@@ -211,36 +221,83 @@ export function DistCustomReportBuilder({ onBackToCatalog }: Props): JSX.Element
 
   function loadPreset(p: SavedCustomReport) {
     setActivePresetId(p.id);
+    setActiveReportNumber(p.reportNumber);
     setPresetName(p.name);
     setDatasetId(p.datasetId);
     setColumns(p.columns);
     setResult(null);
     setError(null);
-    setNotice(`Loaded “${p.name}”`);
+    setNotice(`Loaded ${p.reportNumber} — “${p.name}”`);
+  }
+
+  function persistReport(opts?: { quiet?: boolean }): SavedCustomReport | null {
+    if (!columns.length) {
+      if (!opts?.quiet) setError("Select at least one column before saving");
+      return null;
+    }
+    const name = presetName || dataset?.label || "My custom report";
+    const savedRow = saveCustomReportPreset({
+      id: activePresetId ?? undefined,
+      name,
+      datasetId,
+      columns,
+      branchCode: branch?.code,
+    });
+    const labels = columns.map((c) => {
+      const field = dataset?.fields.find((f) => f.key === c);
+      return field?.label ?? result?.columnLabels[c] ?? c;
+    });
+    const look = loadDistReportPrintSettings(branch?.code).look;
+    const labeledRows = result
+      ? result.rows.map((r) => {
+          const mapped: Record<string, unknown> = {};
+          for (const c of result.columns) {
+            mapped[result.columnLabels[c] ?? c] = r[c];
+          }
+          return mapped;
+        })
+      : undefined;
+    saveDistReportToArchive({
+      reportNumber: savedRow.reportNumber,
+      branchCode: branch?.code,
+      name: savedRow.name,
+      source: "custom",
+      reportId: datasetId,
+      columns,
+      columnLabels: labels,
+      filters: {
+        from: from || undefined,
+        to: to || undefined,
+        cityId: cityId || undefined,
+        areaId: areaId || undefined,
+        companyId: companyId || undefined,
+        salesmanIds: salesmanIds.length ? salesmanIds : undefined,
+        q: q || undefined,
+      },
+      rows: labeledRows,
+      look,
+    });
+    setActivePresetId(savedRow.id);
+    setActiveReportNumber(savedRow.reportNumber);
+    setPresetName(savedRow.name);
+    setSavedTick((n) => n + 1);
+    if (!opts?.quiet) {
+      setNotice(`Saved ${savedRow.reportNumber} — “${savedRow.name}” (Saved reports section)`);
+      setError(null);
+    }
+    return savedRow;
   }
 
   function savePreset() {
-    if (!columns.length) {
-      setError("Select at least one column before saving");
-      return;
-    }
-    const savedRow = saveCustomReportPreset({
-      id: activePresetId ?? undefined,
-      name: presetName || dataset?.label || "My custom report",
-      datasetId,
-      columns,
-    });
-    setActivePresetId(savedRow.id);
-    setPresetName(savedRow.name);
-    setSavedTick((n) => n + 1);
-    setNotice(`Saved “${savedRow.name}”`);
-    setError(null);
+    persistReport();
   }
 
   async function printResult() {
     if (!result) return;
     setNotice(null);
     try {
+      const saved = persistReport({ quiet: true });
+      const reportNo = saved?.reportNumber ?? activeReportNumber;
       const filterBits = [
         companyId ? `Company: ${selectedCompany?.name ?? companyId}` : null,
         selectedSalesmen.length
@@ -251,21 +308,29 @@ export function DistCustomReportBuilder({ onBackToCatalog }: Props): JSX.Element
           summarizeReportRows(result.columns, result.rows, (key) => result.columnLabels[key] ?? key),
         ),
       ].filter(Boolean);
+      const titleBase = presetName || dataset?.label || "Custom report";
+      const printCols = result.columns.map((c) => result.columnLabels[c] ?? c);
+      const printRows = result.rows.map((r) => {
+        const mapped: Record<string, unknown> = {};
+        for (const c of result.columns) {
+          mapped[result.columnLabels[c] ?? c] = r[c];
+        }
+        return mapped;
+      });
       await printDistReportDocument({
-        title: presetName || dataset?.label || "Custom report",
+        title: titleBase,
         subtitle: filterBits.join(" · "),
-        columns: result.columns.map((c) => result.columnLabels[c] ?? c),
-        rows: result.rows.map((r) => {
-          const mapped: Record<string, unknown> = {};
-          for (const c of result.columns) {
-            mapped[result.columnLabels[c] ?? c] = r[c];
-          }
-          return mapped;
-        }),
+        reportNumber: reportNo ?? undefined,
+        columns: printCols,
+        rows: printRows,
         branchName: branch?.name,
         branchCode: branch?.code,
       });
-      setNotice("Print dialog opened");
+      setNotice(
+        reportNo
+          ? `Print opened for ${reportNo} (${loadDistReportPrintSettings(branch?.code).look} look)`
+          : "Print dialog opened",
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Print failed");
     }
@@ -311,6 +376,11 @@ export function DistCustomReportBuilder({ onBackToCatalog }: Props): JSX.Element
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/40">
           <div className="shrink-0 border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800">
             Saved reports
+            {!canAdminDelete ? (
+              <span className="mt-0.5 block normal-case tracking-normal text-[10px] font-normal text-slate-400">
+                Delete: admin only
+              </span>
+            ) : null}
           </div>
           <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
             {saved.length === 0 ? (
@@ -326,20 +396,29 @@ export function DistCustomReportBuilder({ onBackToCatalog }: Props): JSX.Element
                   }`}
                 >
                   <button type="button" className="min-w-0 flex-1 truncate text-left" onClick={() => loadPreset(p)}>
-                    {p.name}
+                    <span className="mr-1.5 font-mono text-[10px] font-semibold text-[color:var(--brand)]">
+                      {p.reportNumber}
+                    </span>
+                    <span className="truncate">{p.name}</span>
                   </button>
-                  <button
-                    type="button"
-                    className="shrink-0 text-[10px] text-red-600"
-                    title="Delete"
-                    onClick={() => {
-                      deleteCustomReportPreset(p.id);
-                      if (activePresetId === p.id) setActivePresetId(null);
-                      setSavedTick((n) => n + 1);
-                    }}
-                  >
-                    ✕
-                  </button>
+                  {canAdminDelete ? (
+                    <button
+                      type="button"
+                      className="shrink-0 text-[10px] text-red-600"
+                      title={`Delete ${p.reportNumber} (admin)`}
+                      onClick={() => {
+                        if (!window.confirm(`Delete saved report ${p.reportNumber}?`)) return;
+                        deleteCustomReportPreset(p.id);
+                        if (activePresetId === p.id) {
+                          setActivePresetId(null);
+                          setActiveReportNumber(null);
+                        }
+                        setSavedTick((n) => n + 1);
+                      }}
+                    >
+                      ✕
+                    </button>
+                  ) : null}
                 </div>
               ))
             )}
@@ -583,8 +662,9 @@ export function DistCustomReportBuilder({ onBackToCatalog }: Props): JSX.Element
                 )}
               </div>
               <p className="mt-1 text-[10px] text-[color:var(--muted)]">
-                Select users, then click <strong>Run report</strong>. Orders need a salesman assigned
-                for this filter to match.
+                Optional: pick salesmen to scope sales reports. Leave cleared for all users. Only
+                orders with that salesman assigned will match — use <strong>Clear</strong> if the
+                grid stays empty.
               </p>
             </div>
 
@@ -598,10 +678,15 @@ export function DistCustomReportBuilder({ onBackToCatalog }: Props): JSX.Element
               />
             </label>
 
-            <div className="flex flex-wrap gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
               <DistButton disabled={run.isPending || !columns.length} onClick={() => run.mutate()}>
                 {run.isPending ? "Running…" : "Run report"}
               </DistButton>
+              {activeReportNumber ? (
+                <span className="rounded-md bg-[var(--brand-cream)] px-2 py-1 font-mono text-[11px] font-semibold text-[color:var(--brand)]">
+                  {activeReportNumber}
+                </span>
+              ) : null}
               <DistInput
                 className="min-w-[10rem] flex-1"
                 placeholder="Save as name…"
@@ -609,7 +694,9 @@ export function DistCustomReportBuilder({ onBackToCatalog }: Props): JSX.Element
                 onChange={(e) => setPresetName(e.target.value)}
               />
               <DistButton variant="secondary" onClick={savePreset} disabled={!columns.length}>
-                Save
+                {activeReportNumber
+                  ? `Update ${activeReportNumber}`
+                  : `Save → ${peekNextReportNumber(branch?.code)}`}
               </DistButton>
             </div>
 
@@ -622,6 +709,7 @@ export function DistCustomReportBuilder({ onBackToCatalog }: Props): JSX.Element
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[color:var(--line)] px-4 py-3 dark:border-slate-800">
             <div>
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {activeReportNumber ? `${activeReportNumber} · ` : ""}
                 {presetName || dataset?.label || "Result"}
               </h3>
               <p className="text-[11px] text-slate-500">
@@ -644,7 +732,13 @@ export function DistCustomReportBuilder({ onBackToCatalog }: Props): JSX.Element
                 onClick={() => {
                   if (!result) return;
                   exportRowsToCsv(
-                    `${(presetName || dataset?.id || "custom-report").replace(/\s+/g, "-")}.csv`,
+                    `${[
+                      activeReportNumber,
+                      presetName || dataset?.id || "custom-report",
+                    ]
+                      .filter(Boolean)
+                      .join("-")
+                      .replace(/\s+/g, "-")}.csv`,
                     result.columns.map((c) => result.columnLabels[c] ?? c),
                     result.rows.map((r) => result.columns.map((c) => String(r[c] ?? ""))),
                   );
@@ -673,7 +767,11 @@ export function DistCustomReportBuilder({ onBackToCatalog }: Props): JSX.Element
                 rowKey={(r) =>
                   String(r.id ?? r.orderNumber ?? r.code ?? r.invoiceNumber ?? JSON.stringify(r).slice(0, 40))
                 }
-                empty="No rows for these filters"
+                empty={
+                  salesmanIds.length
+                    ? "No rows for these filters — clear Users / salesmen (or pick staff with booked orders), then Run again"
+                    : "No rows for these filters"
+                }
               />
             )}
           </div>

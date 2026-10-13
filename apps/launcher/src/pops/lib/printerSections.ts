@@ -1,5 +1,10 @@
-/** Printer sections (Kitchen, Bar, Grill, ...) — per-branch, localStorage-backed. */
+/** Printer sections (Kitchen, Bar, Grill, ...) — per-system + branch, localStorage-backed. */
 import { KITCHEN_SALE_PRINT_SECTIONS } from "./kitchenSaleReport";
+import {
+  printScopedKey,
+  readScopedMapEntry,
+  resolvePrintSystemId,
+} from "./printSystemScope";
 
 export type PrinterSection = {
   id: string;
@@ -55,7 +60,30 @@ export const DEFAULT_PHARMACY_PRINTER_SECTIONS: PrinterSection[] = [
   { id: "back-office", name: "Back office", icon: "🖨️", color: "#94a3b8", enabled: true, isSystem: true, sortOrder: 5 },
 ];
 
-export type PrinterSectionPreset = "restaurant" | "general-store" | "distribution" | "pharmacy";
+export type PrinterSectionPreset =
+  | "restaurant"
+  | "general-store"
+  | "distribution"
+  | "pharmacy"
+  | "ice-cream-bar"
+  | "education";
+
+/** Ice cream parlour stations — scoop / counter, not grill/bar restaurant defaults. */
+export const DEFAULT_ICE_CREAM_PRINTER_SECTIONS: PrinterSection[] = [
+  { id: "kitchen", name: "Scoop station", icon: "🍦", color: "#f59e0b", enabled: true, isSystem: true, sortOrder: 0 },
+  { id: "dessert", name: "Toppings", icon: "🍒", color: "#f472b6", enabled: true, isSystem: true, sortOrder: 1 },
+  { id: "drinks", name: "Drinks", icon: "🥤", color: "#22d3ee", enabled: true, isSystem: true, sortOrder: 2 },
+  { id: "cashier", name: "Cashier", icon: "🧾", color: "#a3e635", enabled: true, isSystem: true, sortOrder: 3 },
+  { id: "pickup", name: "Takeaway", icon: "📦", color: "#fb923c", enabled: true, isSystem: true, sortOrder: 4 },
+  { id: "delivery", name: "Delivery", icon: "🛵", color: "#34d399", enabled: true, isSystem: true, sortOrder: 5 },
+];
+
+/** Education — office / fee receipts only (no kitchen). */
+export const DEFAULT_EDUCATION_PRINTER_SECTIONS: PrinterSection[] = [
+  { id: "receipt", name: "Fee receipt", icon: "🧾", color: "#38bdf8", enabled: true, isSystem: true, sortOrder: 0 },
+  { id: "counter", name: "Front office", icon: "🖥️", color: "#a3e635", enabled: true, isSystem: true, sortOrder: 1 },
+  { id: "back-office", name: "Back office", icon: "🖨️", color: "#94a3b8", enabled: true, isSystem: true, sortOrder: 2 },
+];
 
 const RESTAURANT_LEAK_IDS = new Set([
   "kitchen",
@@ -74,6 +102,8 @@ export function defaultPrinterSectionsFor(preset: PrinterSectionPreset = "restau
   if (preset === "general-store") return DEFAULT_STORE_PRINTER_SECTIONS;
   if (preset === "distribution") return DEFAULT_DISTRIBUTION_PRINTER_SECTIONS;
   if (preset === "pharmacy") return DEFAULT_PHARMACY_PRINTER_SECTIONS;
+  if (preset === "ice-cream-bar") return DEFAULT_ICE_CREAM_PRINTER_SECTIONS;
+  if (preset === "education") return DEFAULT_EDUCATION_PRINTER_SECTIONS;
   return DEFAULT_PRINTER_SECTIONS;
 }
 
@@ -83,7 +113,13 @@ export function printerSectionPresetForSystem(
   if (systemId === "general-store") return "general-store";
   if (systemId === "distribution") return "distribution";
   if (systemId === "pharmacy") return "pharmacy";
+  if (systemId === "ice-cream-bar") return "ice-cream-bar";
+  if (systemId === "education") return "education";
   return "restaurant";
+}
+
+function systemIdForSectionPreset(preset: PrinterSectionPreset): string {
+  return preset;
 }
 
 export const PRINTER_SECTIONS_CHANGED_EVENT = "pops-printer-sections-changed";
@@ -116,7 +152,8 @@ export function loadPrinterSections(
   const defaults = defaultPrinterSectionsFor(preset);
   if (!branchCode) return defaults;
   const all = readAll();
-  const stored = all[branchCode];
+  const sys = systemIdForSectionPreset(preset);
+  const { value: stored, scopedKey } = readScopedMapEntry(all, branchCode, sys);
   if (!stored || stored.length === 0) return defaults;
 
   let merged = stored;
@@ -134,27 +171,38 @@ export function loadPrinterSections(
         })),
         ...stored,
       ];
-      savePrinterSections(branchCode, merged);
+      savePrinterSections(branchCode, merged, preset);
     }
   }
 
-  // Non-restaurant systems: strip Kitchen/Bar/Waiter leftovers; keep custom sections.
-  if (preset !== "restaurant" && merged.some((s) => RESTAURANT_LEAK_IDS.has(s.id))) {
+  // Non-restaurant-family: strip Kitchen/Bar/Waiter leftovers; keep custom sections.
+  const restaurantFamily = preset === "restaurant" || preset === "ice-cream-bar";
+  if (!restaurantFamily && merged.some((s) => RESTAURANT_LEAK_IDS.has(s.id))) {
     const customs = merged.filter((s) => !s.isSystem && !RESTAURANT_LEAK_IDS.has(s.id));
     const next = [
       ...defaults,
       ...customs.map((s, i) => ({ ...s, sortOrder: defaults.length + i })),
     ];
-    savePrinterSections(branchCode, next);
+    savePrinterSections(branchCode, next, preset);
     return next;
+  }
+
+  // Persist under scoped key so suite systems stop sharing one section list.
+  if (scopedKey && !all[scopedKey]) {
+    savePrinterSections(branchCode, merged, preset);
   }
 
   return [...merged].sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
-export function savePrinterSections(branchCode: string, sections: PrinterSection[]): void {
+export function savePrinterSections(
+  branchCode: string,
+  sections: PrinterSection[],
+  preset: PrinterSectionPreset = "restaurant",
+): void {
   const all = readAll();
-  all[branchCode] = sections;
+  const key = printScopedKey(branchCode, systemIdForSectionPreset(preset));
+  all[key] = sections;
   writeAll(all, branchCode);
 }
 
@@ -163,11 +211,19 @@ function newSectionId(name: string): string {
   return `${base || "section"}-${Date.now().toString(36)}`;
 }
 
+function activeSectionPreset(
+  preset?: PrinterSectionPreset,
+): PrinterSectionPreset {
+  return preset ?? printerSectionPresetForSystem(resolvePrintSystemId());
+}
+
 export function addPrinterSection(
   branchCode: string,
   input: { name: string; icon: string; color: string },
+  preset?: PrinterSectionPreset,
 ): PrinterSection {
-  const sections = loadPrinterSections(branchCode);
+  const sectionPreset = activeSectionPreset(preset);
+  const sections = loadPrinterSections(branchCode, sectionPreset);
   const next: PrinterSection = {
     id: newSectionId(input.name),
     name: input.name.trim() || "New section",
@@ -177,13 +233,18 @@ export function addPrinterSection(
     isSystem: false,
     sortOrder: sections.length,
   };
-  savePrinterSections(branchCode, [...sections, next]);
+  savePrinterSections(branchCode, [...sections, next], sectionPreset);
   return next;
 }
 
 /** Duplicates a section as a new custom (non-system) section, copying icon/color. */
-export function duplicatePrinterSection(branchCode: string, sectionId: string): PrinterSection | null {
-  const sections = loadPrinterSections(branchCode);
+export function duplicatePrinterSection(
+  branchCode: string,
+  sectionId: string,
+  preset?: PrinterSectionPreset,
+): PrinterSection | null {
+  const sectionPreset = activeSectionPreset(preset);
+  const sections = loadPrinterSections(branchCode, sectionPreset);
   const source = sections.find((s) => s.id === sectionId);
   if (!source) return null;
   const copy: PrinterSection = {
@@ -195,7 +256,7 @@ export function duplicatePrinterSection(branchCode: string, sectionId: string): 
     isSystem: false,
     sortOrder: sections.length,
   };
-  savePrinterSections(branchCode, [...sections, copy]);
+  savePrinterSections(branchCode, [...sections, copy], sectionPreset);
   return copy;
 }
 
@@ -203,20 +264,29 @@ export function updatePrinterSection(
   branchCode: string,
   sectionId: string,
   patch: Partial<Pick<PrinterSection, "name" | "icon" | "color" | "enabled">>,
+  preset?: PrinterSectionPreset,
 ): void {
-  const sections = loadPrinterSections(branchCode);
+  const sectionPreset = activeSectionPreset(preset);
+  const sections = loadPrinterSections(branchCode, sectionPreset);
   savePrinterSections(
     branchCode,
     sections.map((s) => (s.id === sectionId ? { ...s, ...patch } : s)),
+    sectionPreset,
   );
 }
 
-export function deletePrinterSection(branchCode: string, sectionId: string): void {
-  const sections = loadPrinterSections(branchCode);
+export function deletePrinterSection(
+  branchCode: string,
+  sectionId: string,
+  preset?: PrinterSectionPreset,
+): void {
+  const sectionPreset = activeSectionPreset(preset);
+  const sections = loadPrinterSections(branchCode, sectionPreset);
   const target = sections.find((s) => s.id === sectionId);
   if (!target || target.isSystem) return;
   savePrinterSections(
     branchCode,
     sections.filter((s) => s.id !== sectionId),
+    sectionPreset,
   );
 }

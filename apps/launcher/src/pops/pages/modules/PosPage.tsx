@@ -1338,6 +1338,7 @@ export function PosPage(): JSX.Element {
     const lines = printOrderedCart();
     const staffName = formatSessionPrintName(useSessionStore.getState().claims?.sub) || sessionUserLabel;
     return {
+      systemId,
       branchName: branch?.name ?? "Zivra",
       branchCode: branch?.code ?? "—",
       orderRef,

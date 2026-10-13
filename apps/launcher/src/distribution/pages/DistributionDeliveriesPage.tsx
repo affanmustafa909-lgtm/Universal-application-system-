@@ -20,11 +20,14 @@ import {
   DistButton,
   DistDataTable,
   DistErrorBanner,
+  DistFilterBar,
+  DistFilterValues,
   DistInput,
   DistPageShell,
   DistSelect,
   DistStatusBadge,
 } from "../ui/DistUi";
+import { filterDistRows } from "../lib/distListFilters";
 import { printDistDocument } from "../lib/printDistOrder";
 import { customerDisplayName, looksLikeUuid, tradeCustomerNameMap } from "../lib/customerDisplay";
 
@@ -68,8 +71,11 @@ export function DistributionDeliveriesPage(): JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const statusParam = searchParams.get("status") ?? searchParams.get("focus") ?? "";
-  const [status, setStatus] = useState(statusParam);
-  const [q, setQ] = useState("");
+  const [filters, setFilters] = useState<DistFilterValues>({
+    status: statusParam || undefined,
+    preset: "30d",
+  });
+  const status = filters.status ?? "";
   const [debounced, setDebounced] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -102,12 +108,12 @@ export function DistributionDeliveriesPage(): JSX.Element {
   const [receiverName, setReceiverName] = useState("");
 
   useEffect(() => {
-    const t = window.setTimeout(() => setDebounced(q.trim()), 250);
+    const t = window.setTimeout(() => setDebounced((filters.q ?? "").trim()), 250);
     return () => window.clearTimeout(t);
-  }, [q]);
+  }, [filters.q]);
 
   useEffect(() => {
-    setStatus(statusParam);
+    setFilters((f) => ({ ...f, status: statusParam || undefined }));
     setPage(1);
   }, [statusParam]);
 
@@ -363,6 +369,15 @@ export function DistributionDeliveriesPage(): JSX.Element {
     });
   }, [list.data?.items, orders.data, invoices.data, routes.data, customers.data]);
 
+  const filteredRows = useMemo(
+    () =>
+      filterDistRows(rows, { from: filters.from, to: filters.to }, {
+        dateFields: ["createdAt", "dispatchedAt", "deliveredAt", "updatedAt", "deliveryDate"],
+        searchFields: [], // search already server-side via q
+      }),
+    [rows, filters.from, filters.to],
+  );
+
   const readyOrders = useMemo(() => {
     const all = (orders.data ?? []) as { id: string; orderNumber?: string; status?: string }[];
     return all.filter((o) => {
@@ -395,51 +410,32 @@ export function DistributionDeliveriesPage(): JSX.Element {
     >
       {actionError ? <DistErrorBanner message={actionError} onRetry={() => setActionError(null)} /> : null}
 
-      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950/40">
-        <label className="text-xs text-slate-500">
-          Status
-          <DistSelect
-            className="mt-1 min-w-[10rem]"
-            value={status}
-            onChange={(e) => {
-              const next = e.target.value;
-              setStatus(next);
-              setPage(1);
-              const sp = new URLSearchParams(searchParams);
-              if (next) sp.set("status", next);
-              else {
-                sp.delete("status");
-                sp.delete("focus");
-              }
-              setSearchParams(sp, { replace: true });
-            }}
-          >
-            {STATUS_OPTIONS.map((o) => (
-              <option key={o.value || "all"} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </DistSelect>
-        </label>
-        <label className="text-xs text-slate-500">
-          Search
-          <DistInput
-            className="mt-1 min-w-[14rem]"
-            placeholder="Delivery #, rider, customer…"
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
-          />
-        </label>
-      </div>
+      <DistFilterBar
+        value={filters}
+        onChange={(next) => {
+          setFilters(next);
+          setPage(1);
+          const sp = new URLSearchParams(searchParams);
+          if (next.status) sp.set("status", next.status);
+          else {
+            sp.delete("status");
+            sp.delete("focus");
+          }
+          setSearchParams(sp, { replace: true });
+        }}
+        showTime
+        searchPlaceholder="Delivery #, rider, customer…"
+        statusOptions={STATUS_OPTIONS.filter((o) => o.value).map((o) => ({
+          value: o.value,
+          label: o.label,
+        }))}
+      />
 
       <DistDataTable
         loading={list.isLoading}
-        rows={rows}
+        rows={filteredRows}
         rowKey={(r) => r.id}
-        empty={debounced || status ? "No deliveries match filters" : "No deliveries yet"}
+        empty={debounced || status || filters.from ? "No deliveries match filters" : "No deliveries yet"}
         columns={[
           { key: "deliveryNumber", header: "Delivery#" },
           {

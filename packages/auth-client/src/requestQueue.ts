@@ -14,6 +14,18 @@ type QueueTask<T> = {
   priority: number;
 };
 
+/**
+ * GET dedupe shares one settled Promise across waiters. Response bodies are
+ * single-consume streams — each waiter must get its own clone, or the second
+ * `res.text()` / `res.json()` throws "body stream already read".
+ */
+function shareQueueValue<T>(value: T): T {
+  if (typeof Response !== "undefined" && value instanceof Response) {
+    return value.clone() as T;
+  }
+  return value;
+}
+
 function isMutationMethod(method: string): boolean {
   return method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
 }
@@ -92,7 +104,7 @@ export class HttpRequestQueue {
 
     if (!isMutationMethod(method) && key) {
       const existing = this.inflightGets.get(key);
-      if (existing) return existing as Promise<T>;
+      if (existing) return existing.then(shareQueueValue) as Promise<T>;
     }
 
     const promise = new Promise<T>((resolve, reject) => {
@@ -108,13 +120,15 @@ export class HttpRequestQueue {
     });
 
     if (!isMutationMethod(method) && key) {
+      // Store the raw promise so duplicates can clone from the unread Response.
       this.inflightGets.set(key, promise);
       void promise.finally(() => {
         if (this.inflightGets.get(key) === promise) this.inflightGets.delete(key);
       });
     }
 
-    return promise;
+    // Every consumer (including the first) gets a clone when the value is a Response.
+    return promise.then(shareQueueValue);
   }
 
   private pump(): void {

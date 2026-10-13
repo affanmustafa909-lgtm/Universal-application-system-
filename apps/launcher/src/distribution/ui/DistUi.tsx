@@ -85,10 +85,42 @@ export function DistStatusBadge({
 export type DistFilterValues = {
   from?: string;
   to?: string;
+  /** Optional time-of-day filter (HH:mm) — client-side when used. */
+  fromTime?: string;
+  toTime?: string;
   cityId?: string;
   areaId?: string;
   q?: string;
+  status?: string;
+  /** Data / record quality tag filter when a page provides options. */
+  quality?: string;
+  /** Quick date preset id (today | 7d | 30d | month | all). */
+  preset?: string;
 };
+
+const DATE_PRESETS: { id: string; label: string }[] = [
+  { id: "today", label: "Today" },
+  { id: "7d", label: "7 days" },
+  { id: "30d", label: "30 days" },
+  { id: "month", label: "This month" },
+  { id: "all", label: "All dates" },
+];
+
+function applyDatePreset(preset: string): Pick<DistFilterValues, "from" | "to" | "preset"> {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const to = iso(new Date());
+  if (preset === "all") return { from: undefined, to: undefined, preset };
+  if (preset === "today") return { from: to, to, preset };
+  if (preset === "month") {
+    const d = new Date();
+    return { from: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`, to, preset };
+  }
+  const days = preset === "7d" ? 7 : 30;
+  const from = new Date();
+  from.setDate(from.getDate() - (days - 1));
+  return { from: iso(from), to, preset };
+}
 
 export function DistFilterBar({
   value,
@@ -96,78 +128,228 @@ export function DistFilterBar({
   cities,
   areas,
   extra,
+  showDates = true,
+  showTime = false,
+  showSearch = true,
+  showPresets = true,
+  statusOptions,
+  qualityOptions,
+  searchPlaceholder = "Search…",
+  onClear,
 }: {
   value: DistFilterValues;
   onChange: (next: DistFilterValues) => void;
   cities?: { id: string; name: string }[];
   areas?: { id: string; name: string; cityId?: string }[];
   extra?: ReactNode;
+  showDates?: boolean;
+  showTime?: boolean;
+  showSearch?: boolean;
+  showPresets?: boolean;
+  statusOptions?: { value: string; label: string }[];
+  qualityOptions?: { value: string; label: string }[];
+  searchPlaceholder?: string;
+  onClear?: () => void;
 }): JSX.Element {
   const filteredAreas = (areas ?? []).filter((a) => !value.cityId || a.cityId === value.cityId);
+  const clear = () => {
+    if (onClear) onClear();
+    else onChange({});
+  };
+  const activeCount = [
+    value.from,
+    value.to,
+    value.fromTime,
+    value.toTime,
+    value.q,
+    value.status,
+    value.quality,
+    value.cityId,
+    value.areaId,
+  ].filter(Boolean).length;
+
   return (
-    <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950/40">
-      <label className="text-xs text-[color:var(--muted)]">
-        From
-        <div className="mt-1">
-          <DistDateField
-            value={value.from ?? ""}
-            onChange={(e) => onChange({ ...value, from: e.target.value || undefined })}
-          />
+    <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950/40">
+      {showPresets && showDates ? (
+        <div className="flex flex-wrap gap-1.5">
+          {DATE_PRESETS.map((p) => {
+            const on = (value.preset ?? "") === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => onChange({ ...value, ...applyDatePreset(p.id) })}
+                className={`rounded-md border px-2.5 py-1 text-[11px] font-semibold transition ${
+                  on
+                    ? "border-cyan-600 bg-cyan-600 text-white"
+                    : "border-slate-200 text-slate-600 hover:border-cyan-400 dark:border-slate-700 dark:text-slate-300"
+                }`}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+          {activeCount > 0 ? (
+            <button
+              type="button"
+              onClick={clear}
+              className="ml-auto rounded-md border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:border-amber-400 dark:border-slate-700 dark:text-slate-300"
+            >
+              Clear filters ({activeCount})
+            </button>
+          ) : null}
         </div>
-      </label>
-      <label className="text-xs text-[color:var(--muted)]">
-        To
-        <div className="mt-1">
-          <DistDateField
-            value={value.to ?? ""}
-            onChange={(e) => onChange({ ...value, to: e.target.value || undefined })}
-          />
-        </div>
-      </label>
-      {cities ? (
-        <label className="text-xs text-slate-500">
-          City
-          <select
-            className={`mt-1 block min-w-[10rem] ${distSelectClass}`}
-            value={value.cityId ?? ""}
-            onChange={(e) => onChange({ ...value, cityId: e.target.value || undefined, areaId: undefined })}
-          >
-            <option value="">All cities</option>
-            {cities.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
       ) : null}
-      {areas ? (
-        <label className="text-xs text-slate-500">
-          Area
-          <select
-            className={`mt-1 block min-w-[10rem] ${distSelectClass}`}
-            value={value.areaId ?? ""}
-            onChange={(e) => onChange({ ...value, areaId: e.target.value || undefined })}
-          >
-            <option value="">All areas</option>
-            {filteredAreas.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-      <label className="text-xs text-slate-500">
-        Search
-        <input
-          className={`mt-1 block min-w-[12rem] ${distInputClass}`}
-          placeholder="Search…"
-          value={value.q ?? ""}
-          onChange={(e) => onChange({ ...value, q: e.target.value || undefined })}
-        />
-      </label>
-      {extra}
+
+      <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+        {showDates ? (
+          <>
+            <label className="text-xs text-[color:var(--muted)]">
+              From date
+              <div className="mt-1">
+                <DistDateField
+                  value={value.from ?? ""}
+                  onChange={(e) =>
+                    onChange({
+                      ...value,
+                      from: e.target.value || undefined,
+                      preset: undefined,
+                    })
+                  }
+                />
+              </div>
+            </label>
+            <label className="text-xs text-[color:var(--muted)]">
+              To date
+              <div className="mt-1">
+                <DistDateField
+                  value={value.to ?? ""}
+                  onChange={(e) =>
+                    onChange({
+                      ...value,
+                      to: e.target.value || undefined,
+                      preset: undefined,
+                    })
+                  }
+                />
+              </div>
+            </label>
+          </>
+        ) : null}
+
+        {showTime ? (
+          <>
+            <label className="text-xs text-slate-500">
+              From time
+              <input
+                type="time"
+                className={`mt-1 block w-full ${distInputClass}`}
+                value={value.fromTime ?? ""}
+                onChange={(e) =>
+                  onChange({ ...value, fromTime: e.target.value || undefined })
+                }
+              />
+            </label>
+            <label className="text-xs text-slate-500">
+              To time
+              <input
+                type="time"
+                className={`mt-1 block w-full ${distInputClass}`}
+                value={value.toTime ?? ""}
+                onChange={(e) => onChange({ ...value, toTime: e.target.value || undefined })}
+              />
+            </label>
+          </>
+        ) : null}
+
+        {statusOptions ? (
+          <label className="text-xs text-slate-500">
+            Status
+            <select
+              className={`mt-1 block w-full ${distSelectClass}`}
+              value={value.status ?? ""}
+              onChange={(e) => onChange({ ...value, status: e.target.value || undefined })}
+            >
+              <option value="">All statuses</option>
+              {statusOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        {qualityOptions ? (
+          <label className="text-xs text-slate-500">
+            Quality
+            <select
+              className={`mt-1 block w-full ${distSelectClass}`}
+              value={value.quality ?? ""}
+              onChange={(e) => onChange({ ...value, quality: e.target.value || undefined })}
+            >
+              <option value="">All</option>
+              {qualityOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        {cities ? (
+          <label className="text-xs text-slate-500">
+            City
+            <select
+              className={`mt-1 block w-full ${distSelectClass}`}
+              value={value.cityId ?? ""}
+              onChange={(e) =>
+                onChange({ ...value, cityId: e.target.value || undefined, areaId: undefined })
+              }
+            >
+              <option value="">All cities</option>
+              {cities.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        {areas ? (
+          <label className="text-xs text-slate-500">
+            Area
+            <select
+              className={`mt-1 block w-full ${distSelectClass}`}
+              value={value.areaId ?? ""}
+              onChange={(e) => onChange({ ...value, areaId: e.target.value || undefined })}
+            >
+              <option value="">All areas</option>
+              {filteredAreas.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        {showSearch ? (
+          <label className="text-xs text-slate-500 sm:col-span-2 lg:col-span-2">
+            Search
+            <input
+              className={`mt-1 block w-full ${distInputClass}`}
+              placeholder={searchPlaceholder}
+              value={value.q ?? ""}
+              onChange={(e) => onChange({ ...value, q: e.target.value || undefined })}
+            />
+          </label>
+        ) : null}
+
+        {extra ? <div className="flex flex-wrap items-end gap-2 sm:col-span-2">{extra}</div> : null}
+      </div>
     </div>
   );
 }
@@ -216,8 +398,8 @@ export function DistDataTable<T extends object>({
           </button>
         </div>
       ) : null}
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/30">
-        <table className="w-full min-w-[36rem] border-collapse text-left text-sm">
+      <div className="-mx-1 overflow-x-auto rounded-lg border border-slate-200 bg-white sm:mx-0 dark:border-slate-800 dark:bg-slate-950/30">
+        <table className="w-full min-w-[20rem] border-collapse text-left text-sm sm:min-w-[36rem]">
           <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-900/90">
             <tr>
               {selectable ? (

@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ioApi } from "../../pharmacy/api/pharmacy-io";
-import { DistDataTable, DistPageShell } from "../ui/DistUi";
+import { DistDataTable, DistFilterBar, DistFilterValues, DistPageShell } from "../ui/DistUi";
 import { DistPagination } from "../components/DistPagination";
+import { filterDistRows } from "../lib/distListFilters";
 import { looksLikeUuid } from "../lib/customerDisplay";
 
 function friendlyModule(entityType: unknown): string {
@@ -14,10 +15,7 @@ function friendlyModule(entityType: unknown): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function displayLabel(
-  preferred?: unknown,
-  fallback?: unknown,
-): string {
+function displayLabel(preferred?: unknown, fallback?: unknown): string {
   const pref = preferred != null ? String(preferred).trim() : "";
   if (pref && !looksLikeUuid(pref)) return pref;
   const fb = fallback != null ? String(fallback).trim() : "";
@@ -35,10 +33,30 @@ function formatWhen(value: unknown): string {
 
 export function DistributionAuditPage(): JSX.Element {
   const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState<DistFilterValues>({ preset: "30d" });
   const audit = useQuery({
     queryKey: ["distribution", "audit", page],
     queryFn: () => ioApi.audit(page),
   });
+
+  const rows = useMemo(() => {
+    const items = (audit.data?.items ?? []) as Array<Record<string, unknown>>;
+    return filterDistRows(items, filters, {
+      dateFields: ["createdAt"],
+      searchFields: [
+        "action",
+        "entityType",
+        "entityId",
+        "entityLabel",
+        "recordLabel",
+        "reason",
+        "userLabel",
+        "userName",
+        "userEmail",
+      ],
+      statusField: "action",
+    });
+  }, [audit.data, filters]);
 
   return (
     <DistPageShell
@@ -50,6 +68,28 @@ export function DistributionAuditPage(): JSX.Element {
         { label: "Audit" },
       ]}
     >
+      <DistFilterBar
+        value={filters}
+        onChange={(next) => {
+          setFilters(next);
+          setPage(1);
+        }}
+        showTime
+        searchPlaceholder="Action, module, record, user…"
+        statusOptions={[
+          { value: "create", label: "Create" },
+          { value: "update", label: "Update" },
+          { value: "delete", label: "Delete" },
+          { value: "import", label: "Import" },
+          { value: "status", label: "Status change" },
+        ]}
+        qualityOptions={[
+          { value: "critical", label: "Critical / delete" },
+          { value: "warning", label: "Updates" },
+          { value: "info", label: "Creates / imports" },
+        ]}
+      />
+
       <DistDataTable
         columns={[
           {
@@ -70,8 +110,7 @@ export function DistributionAuditPage(): JSX.Element {
           {
             key: "entityId",
             header: "Record",
-            render: (r) =>
-              displayLabel(r.entityLabel ?? r.recordLabel, r.entityId),
+            render: (r) => displayLabel(r.entityLabel ?? r.recordLabel, r.entityId),
           },
           {
             key: "reason",
@@ -88,10 +127,21 @@ export function DistributionAuditPage(): JSX.Element {
               displayLabel(r.userLabel ?? r.userDisplay ?? r.userName ?? r.userEmail, r.userId),
           },
         ]}
-        rows={(audit.data?.items ?? []) as Array<Record<string, unknown>>}
+        rows={
+          filters.quality
+            ? rows.filter((r) => {
+                const a = String(r.action ?? "").toLowerCase();
+                if (filters.quality === "critical") return a.includes("delete") || a.includes("void");
+                if (filters.quality === "warning") return a.includes("update") || a.includes("status");
+                if (filters.quality === "info")
+                  return a.includes("create") || a.includes("import") || a.includes("post");
+                return true;
+              })
+            : rows
+        }
         rowKey={(r) => String(r.id)}
         loading={audit.isLoading}
-        empty="No audit rows yet."
+        empty="No audit rows match filters."
       />
       <DistPagination
         page={page}

@@ -27,22 +27,88 @@ export const DISTRIBUTION_REPORTS: DistReportDef[] = [
   { id: "area-sales", title: "Area-wise sales", category: "Sales", live: true, description: "Sales rolled up by area" },
   { id: "status-pipeline", title: "Order status pipeline", category: "Sales", live: true, description: "Count of orders by status" },
   { id: "scheme-utilization", title: "Scheme utilization", category: "Sales", live: true, description: "Schemes vs free qty given on orders" },
+  {
+    id: "bonus-reports",
+    title: "Bonus Reports",
+    category: "Bonus",
+    live: true,
+    description:
+      "Complete bonus hub — by company, salesman, customer, warehouse, product, schemes & line detail",
+    to: "/pops/distribution/bonus-reports",
+  },
+  {
+    id: "bonus-attach",
+    title: "Bonus Attach",
+    category: "Bonus",
+    live: true,
+    description: "Attach Buy X Get Y / threshold bonus to a company and/or customer",
+    to: "/pops/distribution/bonus-attach",
+  },
+  { id: "bonus-by-company", title: "Bonus by company", category: "Bonus", live: true, description: "Free qty and bonus value by company", to: "/pops/distribution/bonus-reports?tab=company" },
+  { id: "bonus-by-salesman", title: "Bonus by salesman", category: "Bonus", live: true, description: "Free qty and bonus value by salesman", to: "/pops/distribution/bonus-reports?tab=salesman" },
+  { id: "bonus-by-customer", title: "Bonus by customer", category: "Bonus", live: true, description: "Free qty and bonus value by trade customer", to: "/pops/distribution/bonus-reports?tab=customer" },
+  { id: "bonus-by-warehouse", title: "Bonus by warehouse", category: "Bonus", live: true, description: "Free qty and bonus value by warehouse", to: "/pops/distribution/bonus-reports?tab=warehouse" },
+  { id: "bonus-by-product", title: "Bonus by product", category: "Bonus", live: true, description: "Free qty and bonus value by SKU / product", to: "/pops/distribution/bonus-reports?tab=product" },
+  { id: "bonus-schemes", title: "Bonus schemes", category: "Bonus", live: true, description: "Scheme utilization — free given vs sold", to: "/pops/distribution/bonus-reports?tab=scheme" },
+  { id: "bonus-detail", title: "Bonus line detail", category: "Bonus", live: true, description: "Every order line with free / bonus qty", to: "/pops/distribution/bonus-reports?tab=detail" },
   { id: "salesman-sales", title: "Salesman-wise sales", category: "Sales", live: true, description: "Orders and sales by salesman" },
-  { id: "customer-sales", title: "Customer-wise sales", category: "Sales", live: true, description: "Orders and sales by trade customer" },
   { id: "sku-sales", title: "SKU / product sales", category: "Sales", live: true, description: "Qty and value by SKU" },
+
+  // Customer — dedicated hub with CUST-xxxx save numbers
+  {
+    id: "customer-reports",
+    title: "Customer Reports",
+    category: "Customer",
+    live: true,
+    description:
+      "Customer hub — sales, credit, ledger, bonus & aging. Save any view to assign CUST-xxxx report number",
+    to: "/pops/distribution/customer-reports",
+  },
+  {
+    id: "customer-sales",
+    title: "Customer-wise sales",
+    category: "Customer",
+    live: true,
+    description: "Orders and sales by trade customer",
+    to: "/pops/distribution/customer-reports?tab=sales",
+  },
+  {
+    id: "customer-credit",
+    title: "Customer credit",
+    category: "Customer",
+    live: true,
+    description: "Full credit statement — limit, days, outstanding, available, over-limit, terms",
+    to: "/pops/distribution/customer-reports?tab=credit",
+  },
+  {
+    id: "customer-ledger",
+    title: "Customer ledger",
+    category: "Customer",
+    live: true,
+    description: "Outstanding and credit by customer",
+    to: "/pops/distribution/customer-reports?tab=ledger",
+  },
+  {
+    id: "customer-bonus",
+    title: "Bonus by customer",
+    category: "Customer",
+    live: true,
+    description: "Free / bonus qty and value by trade customer — save with CUST report number",
+    to: "/pops/distribution/customer-reports?tab=bonus",
+  },
+  {
+    id: "customer-aging",
+    title: "Customer outstanding / aging",
+    category: "Customer",
+    live: true,
+    description: "Trade customers with balance due",
+    to: "/pops/distribution/customer-reports?tab=aging",
+  },
 
   // Recovery
   { id: "outstanding-aging", title: "Outstanding / aging", category: "Recovery", live: true, description: "Trade customers with balance due" },
   { id: "collections-summary", title: "Collections summary", category: "Recovery", live: true, description: "Collections by date" },
-  { id: "customer-ledger", title: "Customer ledger", category: "Recovery", live: true, description: "Outstanding and credit by customer" },
   { id: "credit-limit-breach", title: "Credit limit alerts", category: "Recovery", live: true, description: "Customers over credit limit" },
-  {
-    id: "customer-credit",
-    title: "Customer credit",
-    category: "Recovery",
-    live: true,
-    description: "Full credit statement — limit, days, outstanding, available, over-limit, terms, and company credit",
-  },
 
   // Stock
   { id: "stock-near-expiry", title: "Stock near expiry", category: "Stock", live: true, description: "Batches expiring within 90 days" },
@@ -142,6 +208,8 @@ export const DISTRIBUTION_REPORTS: DistReportDef[] = [
 
 export const REPORT_CATEGORY_ORDER = [
   "Sales",
+  "Bonus",
+  "Customer",
   "Recovery",
   "Inventory",
   "Stock",

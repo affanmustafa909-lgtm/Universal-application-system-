@@ -44,6 +44,11 @@ import {
 
 const QUICK = [
   { to: "/pops/distribution/orders", label: "Sale Window", hint: "Book · FEFO · credit" },
+  { to: "/pops/distribution/today-sales", label: "Today Sales", hint: "Receive · salesman · WH" },
+  { to: "/pops/distribution/bonus-reports", label: "Bonus Reports", hint: "Company · salesman · customer · WH" },
+  { to: "/pops/distribution/customer-reports?tab=bonus", label: "Customer Bonus", hint: "CUST report · save #" },
+  { to: "/pops/distribution/bonus-attach", label: "Bonus Attach", hint: "Company / customer bonus" },
+  { to: "/pops/distribution/customer-reports", label: "Customer Reports", hint: "Sales · credit · bonus" },
   { to: "/pops/distribution/invoices", label: "Invoices", hint: "Wholesale register" },
   { to: "/pops/distribution/aging", label: "Aging", hint: "Recovery" },
   { to: "/pops/distribution/deliveries", label: "Deliveries", hint: "POD" },

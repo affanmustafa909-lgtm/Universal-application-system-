@@ -9,6 +9,8 @@ import { loadBillPrintSettings } from "../../pops/lib/billPrintSettings";
 import { resolveReceiptPrinter } from "../../pops/lib/printerRouting";
 import { useSessionStore } from "../../stores/sessionStore";
 
+const PHARMACY_SYSTEM = "pharmacy" as const;
+
 function saleToTicketInput(
   branchName: string,
   branchCode: string,
@@ -29,6 +31,7 @@ function saleToTicketInput(
   if (sale.patientName) notesParts.push(`Customer: ${sale.patientName}`);
   if (sale.employeeName) notesParts.push(`Employee: ${sale.employeeName}`);
   return {
+    systemId: PHARMACY_SYSTEM,
     branchName,
     branchCode,
     orderRef: sale.invoiceNumber,
@@ -54,7 +57,7 @@ function saleToTicketInput(
   };
 }
 
-/** Print pharmacy invoice with the same POS slip design + PRA Invoice # / QR when enabled. */
+/** Print pharmacy invoice with pharmacy-only receipt layout (never restaurant/kitchen). */
 export function printPharmacyInvoice(
   branchName: string,
   branchCode: string,
@@ -78,7 +81,7 @@ export function printPharmacyInvoice(
       {
         ...base,
         praFiscal: resolved.footer,
-        billPrintSettings: loadBillPrintSettings(branchCode),
+        billPrintSettings: loadBillPrintSettings(branchCode, PHARMACY_SYSTEM),
       },
       profile,
     );

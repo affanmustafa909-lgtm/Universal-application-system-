@@ -11,12 +11,14 @@ import {
   fetchEducationStudents,
 } from "../api/education";
 import { useEducationAccess, useInvalidateEducation } from "../hooks/useEducation";
+import { printEducationCertificate } from "../lib/printCertificate";
 import {
   EducationDataTable,
   EducationField,
   EducationFormSection,
   EducationInput,
   EducationPrimaryButton,
+  EducationSecondaryButton,
   EducationSelect,
 } from "../ui/EducationUi";
 
@@ -38,6 +40,21 @@ export function EducationLifecyclePage(): JSX.Element {
   const [effectiveDate, setEffectiveDate] = useState("");
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
+  const [tcOffer, setTcOffer] = useState<{
+    studentId: string;
+    actionType: ActionType;
+    effectiveDate: string;
+    reason?: string;
+  } | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
+
+  const branding = useMemo(
+    () => ({
+      institutionName: "EducationFlow",
+      branchName: branch?.name ?? branch?.code ?? "",
+    }),
+    [branch?.name, branch?.code],
+  );
 
   const listQuery = useQuery({
     queryKey: ["education", "student-lifecycle", branch?.code],
@@ -85,10 +102,44 @@ export function EducationLifecyclePage(): JSX.Element {
     onSuccess: () => {
       invalidate();
       setNotice("Lifecycle action saved");
+      if (actionType === "transfer" || actionType === "withdraw") {
+        setTcOffer({
+          studentId,
+          actionType,
+          effectiveDate,
+          reason: reason.trim() || undefined,
+        });
+        setNotice("Lifecycle action saved — you can print a Transfer Certificate below.");
+      } else {
+        setTcOffer(null);
+      }
       setReason("");
       setNotes("");
     },
   });
+
+  const printTc = async () => {
+    if (!tcOffer) return;
+    setPrintError(null);
+    const student = (studentsQuery.data ?? []).find((s) => s.id === tcOffer.studentId);
+    if (!student) {
+      setPrintError("Student not found for TC print");
+      return;
+    }
+    const result = await printEducationCertificate({
+      kind: "transfer_certificate",
+      studentName: [student.firstName, student.lastName].filter(Boolean).join(" "),
+      studentNumber: student.studentNumber,
+      fatherName: student.fatherName ?? undefined,
+      className: (classesQuery.data ?? []).find((c) => c.id === student.classId)?.name,
+      sectionName: (sectionsQuery.data ?? []).find((s) => s.id === student.sectionId)?.name,
+      sessionName: (sessionsQuery.data ?? []).find((s) => s.id === student.sessionId)?.name,
+      effectiveDate: tcOffer.effectiveDate,
+      reason: tcOffer.reason,
+      branding,
+    });
+    if (!result.ok) setPrintError(result.error ?? "Print failed");
+  };
 
   const filtered = useMemo(() => {
     const list = listQuery.data ?? [];
@@ -117,11 +168,21 @@ export function EducationLifecyclePage(): JSX.Element {
         subtitle="Promote, transfer, or withdraw students across sessions, classes, and sections."
       />
       {notice ? <div className={noticeSuccessClass}>{notice}</div> : null}
+      {printError ? <div className={noticeErrorClass}>{printError}</div> : null}
       {listQuery.isError ? (
         <div className={noticeErrorClass}>{(listQuery.error as Error).message}</div>
       ) : null}
       {createMutation.isError ? (
         <div className={noticeErrorClass}>{(createMutation.error as Error).message}</div>
+      ) : null}
+      {tcOffer ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+          <span className="text-sm text-slate-700 dark:text-slate-200">
+            Print Transfer Certificate for this {tcOffer.actionType}?
+          </span>
+          <EducationSecondaryButton onClick={() => void printTc()}>Print TC</EducationSecondaryButton>
+          <EducationSecondaryButton onClick={() => setTcOffer(null)}>Dismiss</EducationSecondaryButton>
+        </div>
       ) : null}
 
       <EducationFormSection title="New lifecycle action">

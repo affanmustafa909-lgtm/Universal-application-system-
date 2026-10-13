@@ -1,8 +1,63 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { DistButton, DistInput, DistSelect } from "../ui/DistUi";
 import type { TradeCustomerRow } from "../../pharmacy/api/pharmacy-masters";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+
+export type CustomerBonusPolicy = {
+  enabled: boolean;
+  schemeType: "buy_x_get_y" | "threshold_free";
+  buyQty: number;
+  freeQty: number;
+  bonusPct: number;
+  notes: string;
+};
+
+export function parseCustomerBonusPolicy(raw?: string | null): CustomerBonusPolicy {
+  const empty: CustomerBonusPolicy = {
+    enabled: false,
+    schemeType: "buy_x_get_y",
+    buyQty: 0,
+    freeQty: 0,
+    bonusPct: 0,
+    notes: "",
+  };
+  if (!raw?.trim()) return empty;
+  try {
+    const j = JSON.parse(raw) as Partial<CustomerBonusPolicy> & { notes?: string };
+    if (j && typeof j === "object" && !Array.isArray(j)) {
+      const schemeType =
+        j.schemeType === "threshold_free" ? "threshold_free" : "buy_x_get_y";
+      return {
+        enabled: Boolean(j.enabled),
+        schemeType,
+        buyQty: Math.max(0, Math.round(Number(j.buyQty) || 0)),
+        freeQty: Math.max(0, Math.round(Number(j.freeQty) || 0)),
+        bonusPct: Math.max(0, Number(j.bonusPct) || 0),
+        notes: typeof j.notes === "string" ? j.notes : "",
+      };
+    }
+  } catch {
+    /* plain-text legacy notes */
+  }
+  return { ...empty, notes: raw.trim() };
+}
+
+export function serializeCustomerBonusPolicy(p: CustomerBonusPolicy): string | undefined {
+  const notes = p.notes.trim();
+  const hasStruct =
+    p.enabled || p.buyQty > 0 || p.freeQty > 0 || p.bonusPct > 0 || Boolean(notes);
+  if (!hasStruct) return undefined;
+  return JSON.stringify({
+    enabled: p.enabled,
+    schemeType: p.schemeType,
+    buyQty: Math.max(0, Math.round(Number(p.buyQty) || 0)),
+    freeQty: Math.max(0, Math.round(Number(p.freeQty) || 0)),
+    bonusPct: Math.max(0, Number(p.bonusPct) || 0),
+    notes,
+  });
+}
 
 export type TradeCustomerForm = {
   code: string;
@@ -59,6 +114,11 @@ export type TradeCustomerForm = {
   taxInfo: string;
   imageUrl: string;
   discountPolicyNotes: string;
+  bonusEnabled: boolean;
+  bonusSchemeType: "buy_x_get_y" | "threshold_free";
+  bonusBuyQty: string;
+  bonusFreeQty: string;
+  bonusPct: string;
   bonusPolicyNotes: string;
   companyCreditLimitsNotes: string;
   othersNotes: string;
@@ -171,6 +231,11 @@ export function emptyTradeCustomerForm(): TradeCustomerForm {
     taxInfo: "",
     imageUrl: "",
     discountPolicyNotes: "",
+    bonusEnabled: false,
+    bonusSchemeType: "buy_x_get_y",
+    bonusBuyQty: "0",
+    bonusFreeQty: "0",
+    bonusPct: "0",
     bonusPolicyNotes: "",
     companyCreditLimitsNotes: "",
     othersNotes: "",
@@ -254,7 +319,17 @@ export function rowToTradeCustomerForm(r: TradeCustomerRow): TradeCustomerForm {
     taxInfo: r.taxInfo ?? "",
     imageUrl: r.imageUrl ?? "",
     discountPolicyNotes: r.discountPolicyJson ?? "",
-    bonusPolicyNotes: r.bonusPolicyJson ?? "",
+    ...(() => {
+      const b = parseCustomerBonusPolicy(r.bonusPolicyJson);
+      return {
+        bonusEnabled: b.enabled,
+        bonusSchemeType: b.schemeType,
+        bonusBuyQty: String(b.buyQty),
+        bonusFreeQty: String(b.freeQty),
+        bonusPct: String(b.bonusPct),
+        bonusPolicyNotes: b.notes,
+      };
+    })(),
     companyCreditLimitsNotes: r.companyCreditLimitsJson ?? "",
     othersNotes: r.othersJson ?? "",
     companyIdsNotes: r.companyIdsJson ?? "",
@@ -334,7 +409,14 @@ export function tradeCustomerFormPayload(form: TradeCustomerForm, branchCode?: s
     taxInfo: form.taxInfo.trim() || undefined,
     imageUrl: form.imageUrl.trim() || undefined,
     discountPolicyJson: form.discountPolicyNotes.trim() || undefined,
-    bonusPolicyJson: form.bonusPolicyNotes.trim() || undefined,
+    bonusPolicyJson: serializeCustomerBonusPolicy({
+      enabled: form.bonusEnabled,
+      schemeType: form.bonusSchemeType,
+      buyQty: Number(form.bonusBuyQty) || 0,
+      freeQty: Number(form.bonusFreeQty) || 0,
+      bonusPct: Number(form.bonusPct) || 0,
+      notes: form.bonusPolicyNotes,
+    }),
     companyCreditLimitsJson: form.companyCreditLimitsNotes.trim() || undefined,
     companyIdsJson: form.companyIdsNotes.trim() || undefined,
     blockSalesJson: form.blockSalesNotes.trim() || undefined,
@@ -740,7 +822,13 @@ export function TradeCustomerFormFields({
             <Field label="City">
               <DistInput
                 value={form.cityName}
-                onChange={(e) => set({ cityName: e.target.value })}
+                onChange={(e) => {
+                  const cityName = e.target.value;
+                  const hit = lookups.cities.find(
+                    (c) => c.name.toLowerCase() === cityName.trim().toLowerCase(),
+                  );
+                  set({ cityName, cityId: hit?.id ?? "" });
+                }}
                 list="dist-city-names"
                 placeholder="City name"
               />
@@ -1046,14 +1134,80 @@ export function TradeCustomerFormFields({
       ) : null}
 
       {tab === "bonus" ? (
-        <Field label="Bonus policy notes / schemes">
-          <textarea
-            className="min-h-[12rem] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
-            value={form.bonusPolicyNotes}
-            onChange={(e) => set({ bonusPolicyNotes: e.target.value })}
-            placeholder="Buy X get Y, company bonuses…"
-          />
-        </Field>
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-200">
+            <input
+              type="checkbox"
+              checked={form.bonusEnabled}
+              onChange={(e) => set({ bonusEnabled: e.target.checked })}
+            />
+            Enable customer bonus (Sale Window auto-apply)
+          </label>
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-200">
+            <input
+              type="checkbox"
+              checked={form.isFocCustomer}
+              onChange={(e) => set({ isFocCustomer: e.target.checked })}
+            />
+            Is FOC Customer
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Scheme type">
+              <DistSelect
+                value={form.bonusSchemeType}
+                onChange={(e) =>
+                  set({
+                    bonusSchemeType: e.target.value as "buy_x_get_y" | "threshold_free",
+                  })
+                }
+              >
+                <option value="buy_x_get_y">Buy X Get Y</option>
+                <option value="threshold_free">Threshold free</option>
+              </DistSelect>
+            </Field>
+            <Field label="Bonus % (info)">
+              <DistInput
+                type="number"
+                min={0}
+                step="0.1"
+                value={form.bonusPct}
+                onChange={(e) => set({ bonusPct: e.target.value })}
+              />
+            </Field>
+            <Field label="Buy qty (X)">
+              <DistInput
+                type="number"
+                min={0}
+                value={form.bonusBuyQty}
+                onChange={(e) => set({ bonusBuyQty: e.target.value })}
+              />
+            </Field>
+            <Field label="Free qty (Y)">
+              <DistInput
+                type="number"
+                min={0}
+                value={form.bonusFreeQty}
+                onChange={(e) => set({ bonusFreeQty: e.target.value })}
+              />
+            </Field>
+          </div>
+          <Field label="Bonus notes">
+            <textarea
+              className="min-h-[8rem] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              value={form.bonusPolicyNotes}
+              onChange={(e) => set({ bonusPolicyNotes: e.target.value })}
+              placeholder="Extra rules, company-wise notes… Medicine-specific schemes → Bonus Attach."
+            />
+          </Field>
+          <p className="text-[11px] text-slate-500">
+            Save ke baad default customer scheme sync hoti hai (Buy/Free). Product/company
+            specific bonus ke liye{" "}
+            <Link className="font-medium text-[color:var(--brand)] underline" to="/pops/distribution/bonus-attach">
+              Bonus Attach
+            </Link>{" "}
+            use karein.
+          </p>
+        </div>
       ) : null}
 
       {tab === "others" ? (

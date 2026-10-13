@@ -27,9 +27,14 @@ import {
   DEFAULT_KOT_PRINT_SETTINGS,
   isKotSystemBlock,
   loadKotPrintSettings,
+  slipPresetForSystem,
   type KotCustomLine,
   type KotPrintSettings,
 } from "./kotPrintSettings";
+import {
+  receiptMetaLabelsFor,
+  resolvePrintSystemId,
+} from "./printSystemScope";
 import { toPng } from "html-to-image";
 import type { PrinterPaperSize, PrinterProfile } from "./printerRouting";
 import { printerTextScaleFactor } from "./printerRouting";
@@ -62,6 +67,8 @@ export type PrintLine = {
 
 export type PrintTicketInput = {
   kind: "receipt" | "kot";
+  /** Active ERP system — keeps restaurant kitchen labels out of pharmacy/store slips. */
+  systemId?: string | null;
   branchName: string;
   branchCode: string;
   orderRef: string;
@@ -425,9 +432,12 @@ function buildKotThermalPlainText(
   input: PrintTicketInput,
   thermal: ThermalPrintSettings,
 ): string {
+  const slipPreset = slipPresetForSystem(resolvePrintSystemId(input.systemId));
   const kot =
     input.kotSettings ??
-    (input.branchCode ? loadKotPrintSettings(input.branchCode) : DEFAULT_KOT_PRINT_SETTINGS);
+    (input.branchCode
+      ? loadKotPrintSettings(input.branchCode, slipPreset)
+      : DEFAULT_KOT_PRINT_SETTINGS);
   const paper = resolvePaperSize(input, thermal);
   const width = thermalCharsPerLine(paper, thermal);
   const fields = kot.fields;
@@ -594,7 +604,12 @@ export function buildThermalPlainText(
   const billSettings =
     input.billPrintSettings ??
     (input.branchCode
-      ? resolveBillPrintSettingsForReceipt(input.branchCode)
+      ? resolveBillPrintSettingsForReceipt(
+          input.branchCode,
+          null,
+          null,
+          resolvePrintSystemId(input.systemId),
+        )
       : DEFAULT_BILL_PRINT_SETTINGS);
   const fields = billSettings.fields;
   // Wide rolls use columns; Clear is for narrow rolls only.
@@ -825,13 +840,18 @@ export function buildThermalPlainText(
 
 export function buildTicketHtml(input: PrintTicketInput): string {
   const isReceipt = input.kind === "receipt";
+  const systemId = resolvePrintSystemId(input.systemId);
+  const metaLabels = receiptMetaLabelsFor(systemId);
+  const slipPreset = slipPresetForSystem(systemId);
   const kotSettings =
     input.kotSettings ??
-    (input.branchCode ? loadKotPrintSettings(input.branchCode) : DEFAULT_KOT_PRINT_SETTINGS);
+    (input.branchCode
+      ? loadKotPrintSettings(input.branchCode, slipPreset)
+      : DEFAULT_KOT_PRINT_SETTINGS);
   const billSettings =
     input.billPrintSettings ??
     (input.branchCode
-      ? resolveBillPrintSettingsForReceipt(input.branchCode)
+      ? resolveBillPrintSettingsForReceipt(input.branchCode, null, null, systemId)
       : DEFAULT_BILL_PRINT_SETTINGS);
   const thermal = resolveThermalSettings(input);
   const paperSize = resolvePaperSize(input, thermal);
@@ -960,8 +980,11 @@ export function buildTicketHtml(input: PrintTicketInput): string {
   const paymentSectionsHtml = (() => {
     if (!isReceipt || !fields) return "";
     const parts: string[] = [];
+    // Card vs Cash compare is restaurant / parlour POS only — not distribution/pharmacy/store.
+    const showPayCompare =
+      systemId === "restaurant" || systemId === "ice-cream-bar";
 
-    if (!input.praFiscal) {
+    if (!input.praFiscal && showPayCompare) {
       const settings = loadPosSettings(input.branchCode);
       const mode = inferPosModeFromLabel(input.tableLabel || input.modeLabel || "");
       // Always use Settings for the Card vs Cash preview (never hardcode card=5%).
@@ -1081,16 +1104,16 @@ export function buildTicketHtml(input: PrintTicketInput): string {
           : "",
         // Order number on its own line — large & clear for thermal print.
         fields.orderRef && input.orderRef?.trim()
-          ? `<div class="meta-order-solo"><span class="meta-order-solo-label">Order</span><span class="meta-order-solo-value">${escapeHtml(input.orderRef.trim())}</span></div>`
+          ? `<div class="meta-order-solo"><span class="meta-order-solo-label">${escapeHtml(metaLabels.order)}</span><span class="meta-order-solo-value">${escapeHtml(input.orderRef.trim())}</span></div>`
           : "",
-        fields.orderType ? metaRow("Type", input.modeLabel ?? "", true) : "",
+        fields.orderType ? metaRow(metaLabels.type, input.modeLabel ?? "", true) : "",
         fields.tableLabel &&
         input.tableLabel?.trim() &&
         input.tableLabel.trim().toLowerCase() !== input.modeLabel.trim().toLowerCase()
-          ? metaRow("Table", input.tableLabel, true)
+          ? metaRow(metaLabels.station, input.tableLabel, true)
           : "",
-        fields.billRef ? metaRow("Bill", input.billRef ?? "", false, "meta-row-plain") : "",
-        fields.waiterName ? metaRow("Cashier", receiptCashier, false, "meta-row-plain") : "",
+        fields.billRef ? metaRow(metaLabels.bill, input.billRef ?? "", false, "meta-row-plain") : "",
+        fields.waiterName ? metaRow(metaLabels.staff, receiptCashier, false, "meta-row-plain") : "",
         deliveryContact.customerName ? metaRow("Customer", deliveryContact.customerName, true) : "",
         deliveryContact.customerPhone ? metaRow("Phone", deliveryContact.customerPhone, true) : "",
         deliveryContact.customerAddress
@@ -2268,7 +2291,17 @@ export function buildTicketHtml(input: PrintTicketInput): string {
     : ""}
   ${kotTotalsBlock}
   <div class="footer"><div class="kot-banner${isOrderUpdate ? " kot-banner-update" : ""}">${
-    isOrderUpdate ? "Kitchen copy — UPDATE REVISED" : "Kitchen copy — order"
+    isOrderUpdate
+      ? escapeHtml(
+          systemId === "restaurant"
+            ? "Kitchen copy — UPDATE REVISED"
+            : `${metaLabels.station} copy — UPDATE REVISED`,
+        )
+      : escapeHtml(
+          systemId === "restaurant"
+            ? "Kitchen copy — order"
+            : `${metaLabels.station} copy — order`,
+        )
   }</div></div>`
   }
   ${isReceipt && input.praFiscal ? buildPraReceiptFooterHtml(input.praFiscal) : ""}
@@ -2510,7 +2543,7 @@ export function buildThermalDialogHtml(
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Zivra Print</title>
+  <title>Print</title>
   <style>
     @page {
       size: ${pageW}mm auto;
@@ -3013,18 +3046,21 @@ export async function printTestPageAsync(
     thermal?: ThermalPrintSettings;
     /** Stamp paper settings on the slip for physical verification. */
     completeTestLabel?: boolean;
+    systemId?: string | null;
   },
 ): Promise<boolean> {
   const branchCode = options?.branchCode?.trim() || "TEST";
+  const systemId = resolvePrintSystemId(options?.systemId);
   const thermal =
     options?.thermal ??
     (options?.branchCode
-      ? loadThermalPrintSettings(options.branchCode)
+      ? loadThermalPrintSettings(options.branchCode, systemId)
       : DEFAULT_THERMAL_PRINT_SETTINGS);
   const paper = options?.paperSize ?? thermal.defaultPaperSize;
   const billSettings =
-    resolveBillPrintSettingsForReceipt(branchCode) ?? loadBillPrintSettings(branchCode);
-  const sample = sampleBillPrintInput("BuchaSoft", branchCode);
+    resolveBillPrintSettingsForReceipt(branchCode, null, null, systemId) ??
+    loadBillPrintSettings(branchCode, systemId);
+  const sample = sampleBillPrintInput("BuchaSoft", branchCode, systemId);
   const copies = Math.max(1, options?.copies ?? 1);
   const rollMm = paperWidthMm(paper, thermal.customPaperWidthMm);
   const notes =

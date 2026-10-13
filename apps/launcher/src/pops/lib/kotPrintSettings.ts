@@ -144,10 +144,63 @@ export const DEFAULT_STORE_SLIP_PRINT_SETTINGS: KotPrintSettings = {
   blockOrder: [...DEFAULT_KOT_BLOCK_ORDER],
 };
 
-export type SlipPrintPreset = "restaurant" | "general-store";
+/** Ice cream parlour station ticket — not restaurant kitchen wording. */
+export const DEFAULT_ICE_CREAM_SLIP_PRINT_SETTINGS: KotPrintSettings = {
+  emphasizeOrderMeta: true,
+  itemUnderlineSeparator: false,
+  baseFontSize: 15,
+  headerAlign: "center",
+  headerBusinessName: "",
+  headerSubtitle: "",
+  documentTitle: "Station Order",
+  documentTitleUpdate: "Station Order — UPDATE REVISED",
+  footerText: "STATION COPY",
+  footerSecondaryText: "",
+  fields: DEFAULT_KOT_RECEIPT_FIELDS,
+  customLines: [],
+  blockOrder: [...DEFAULT_KOT_BLOCK_ORDER],
+};
+
+/** Pharmacy prep / counter slip — never "Kitchen Order". */
+export const DEFAULT_PHARMACY_SLIP_PRINT_SETTINGS: KotPrintSettings = {
+  emphasizeOrderMeta: true,
+  itemUnderlineSeparator: false,
+  baseFontSize: 15,
+  headerAlign: "center",
+  headerBusinessName: "",
+  headerSubtitle: "",
+  documentTitle: "Pharmacy Slip",
+  documentTitleUpdate: "Pharmacy Slip — UPDATE REVISED",
+  footerText: "COUNTER COPY",
+  footerSecondaryText: "",
+  fields: {
+    ...DEFAULT_KOT_RECEIPT_FIELDS,
+    tableLabel: true,
+  },
+  customLines: [],
+  blockOrder: [...DEFAULT_KOT_BLOCK_ORDER],
+};
+
+export type SlipPrintPreset =
+  | "restaurant"
+  | "general-store"
+  | "ice-cream-bar"
+  | "pharmacy";
+
+export function slipPresetForSystem(
+  systemId?: string | null | undefined,
+): SlipPrintPreset {
+  if (systemId === "general-store") return "general-store";
+  if (systemId === "ice-cream-bar") return "ice-cream-bar";
+  if (systemId === "pharmacy") return "pharmacy";
+  return "restaurant";
+}
 
 export function defaultSlipPrintSettings(preset: SlipPrintPreset = "restaurant"): KotPrintSettings {
-  return preset === "general-store" ? DEFAULT_STORE_SLIP_PRINT_SETTINGS : DEFAULT_KOT_PRINT_SETTINGS;
+  if (preset === "general-store") return DEFAULT_STORE_SLIP_PRINT_SETTINGS;
+  if (preset === "ice-cream-bar") return DEFAULT_ICE_CREAM_SLIP_PRINT_SETTINGS;
+  if (preset === "pharmacy") return DEFAULT_PHARMACY_SLIP_PRINT_SETTINGS;
+  return DEFAULT_KOT_PRINT_SETTINGS;
 }
 
 export const STORE_SLIP_FIELD_LABELS: Record<keyof KotReceiptFields, string> = {
@@ -355,8 +408,11 @@ export function normalizeKotPrintSettings(input: Partial<KotPrintSettings> | nul
 }
 
 function storageKey(branchCode: string, preset: SlipPrintPreset = "restaurant"): string {
-  const suffix = preset === "general-store" ? "store-slip" : STORAGE_KEY;
-  return `${suffix}.${branchCode.trim().toUpperCase()}`;
+  const branch = branchCode.trim().toUpperCase();
+  if (preset === "general-store") return `store-slip.${branch}`;
+  if (preset === "pharmacy") return `pharmacy-slip.${branch}`;
+  if (preset === "ice-cream-bar") return `ice-cream-slip.${branch}`;
+  return `${STORAGE_KEY}.${branch}`;
 }
 
 export function loadKotPrintSettings(

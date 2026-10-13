@@ -1,10 +1,33 @@
+import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { noticeErrorClass, noticeSuccessClass } from "../../pops/lib/themeClasses";
 import {
+  convertEducationEnquiry,
   createEducationEnquiry,
   fetchEducationEnquiries,
 } from "../api/education";
+import { useInvalidateEducation } from "../hooks/useEducation";
 import { EducationModulePage } from "../ui/EducationModulePage";
+import { EducationSecondaryButton } from "../ui/EducationUi";
 
 export function EducationFrontDeskPage(): JSX.Element {
+  const invalidate = useInvalidateEducation();
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const convertMutation = useMutation({
+    mutationFn: (id: string) => convertEducationEnquiry(id),
+    onSuccess: () => {
+      invalidate(["enquiries", "admissions"]);
+      setActionNotice("Enquiry converted to admission");
+      setActionError(null);
+    },
+    onError: (e: Error) => {
+      setActionError(e.message);
+      setActionNotice(null);
+    },
+  });
+
   return (
     <EducationModulePage
       title="Front desk"
@@ -15,6 +38,12 @@ export function EducationFrontDeskPage(): JSX.Element {
       createLabel="Log enquiry"
       formTitle="New enquiry"
       searchKeys={["name", "phone", "email", "status", "interestedProgram"]}
+      extras={
+        <>
+          {actionNotice ? <div className={noticeSuccessClass}>{actionNotice}</div> : null}
+          {actionError ? <div className={noticeErrorClass}>{actionError}</div> : null}
+        </>
+      }
       fields={[
         { key: "name", label: "Name", required: true },
         { key: "phone", label: "Phone", omitIfEmpty: true },
@@ -47,6 +76,30 @@ export function EducationFrontDeskPage(): JSX.Element {
         { key: "sourceCode", label: "Source" },
         { key: "status", label: "Status" },
         { key: "followUpDate", label: "Follow-up" },
+        {
+          key: "actions",
+          label: "Actions",
+          render: (row) => {
+            const status = String(row.status ?? "");
+            const id = String(row.id ?? "");
+            if (!id || status === "converted" || status === "closed" || status === "lost") {
+              return "—";
+            }
+            return (
+              <EducationSecondaryButton
+                className="px-2 py-1"
+                disabled={convertMutation.isPending}
+                onClick={() => {
+                  setActionNotice(null);
+                  setActionError(null);
+                  convertMutation.mutate(id);
+                }}
+              >
+                Convert
+              </EducationSecondaryButton>
+            );
+          },
+        },
       ]}
     />
   );

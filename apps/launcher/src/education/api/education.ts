@@ -386,6 +386,22 @@ export async function createEducationAdmission(body: unknown) {
   );
 }
 
+export async function updateEducationAdmission(id: string, body: unknown) {
+  return parseFlexible(
+    educationAdmissionSchema,
+    await sendJson(`/v1/education/admissions/${id}`, "PATCH", body, "Failed to update admission"),
+  );
+}
+
+export async function convertEducationAdmission(id: string) {
+  return sendJson(
+    `/v1/education/admissions/${id}/convert`,
+    "POST",
+    {},
+    "Failed to convert admission",
+  ) as Promise<{ admission: unknown; student: unknown }>;
+}
+
 /* ——— Guardians ——— */
 export async function fetchEducationGuardians(branchCode: string) {
   return parseFlexibleArray(
@@ -702,6 +718,13 @@ export async function updateEducationExpense(id: string, body: unknown) {
   );
 }
 
+export async function approveEducationExpense(id: string) {
+  return parseFlexible(
+    educationExpenseSchema,
+    await sendJson(`/v1/education/expenses/${id}/approve`, "POST", {}, "Failed to approve expense"),
+  );
+}
+
 /* ——— Payroll ——— */
 export async function fetchEducationPayrollRuns(branchCode: string) {
   return parseFlexibleArray(
@@ -736,6 +759,26 @@ export async function createEducationPayslip(body: unknown) {
     educationPayslipSchema,
     await sendJson("/v1/education/payslips", "POST", body, "Failed to create payslip"),
   );
+}
+
+export async function generateEducationPayslips(runId: string) {
+  const json = await sendJson(
+    `/v1/education/payroll-runs/${runId}/generate-payslips`,
+    "POST",
+    {},
+    "Failed to generate payslips",
+  );
+  if (Array.isArray(json)) {
+    return {
+      payslips: parseFlexibleArray(educationPayslipSchema, json),
+      totalPkr: 0,
+    };
+  }
+  const obj = (json ?? {}) as { payslips?: unknown; totalPkr?: number };
+  return {
+    payslips: parseFlexibleArray(educationPayslipSchema, obj.payslips ?? []),
+    totalPkr: Number(obj.totalPkr ?? 0),
+  };
 }
 
 /* ——— Library ——— */
@@ -889,6 +932,32 @@ export async function generateEducationDocument(body: unknown) {
   );
 }
 
+export async function fetchEducationGeneratedDocuments(branchCode: string) {
+  return parseFlexibleArray(
+    educationGeneratedDocumentSchema,
+    await getJson(
+      `/v1/education/generated-documents?${qs(branchCode)}`,
+      "Failed to load generated documents",
+    ),
+  );
+}
+
+export async function fetchEducationGeneratedDocument(id: string) {
+  return parseFlexible(
+    educationGeneratedDocumentSchema,
+    await getJson(`/v1/education/generated-documents/${id}`, "Failed to load generated document"),
+  );
+}
+
+export async function seedEducationDocumentTemplates(branchCode: string) {
+  return sendJson(
+    "/v1/education/document-templates/seed",
+    "POST",
+    { branchCode },
+    "Failed to seed document templates",
+  ) as Promise<{ created: number; total: number }>;
+}
+
 /* ——— Reports / Audit ——— */
 export async function fetchEducationReport(reportKey: string, branchCode: string) {
   return getJson(
@@ -939,6 +1008,18 @@ export async function updateEducationLeaveRequest(id: string, body: unknown) {
       "PATCH",
       body,
       "Failed to update leave request",
+    ),
+  );
+}
+
+export async function approveEducationLeaveRequest(id: string) {
+  return parseFlexible(
+    educationLeaveRequestSchema,
+    await sendJson(
+      `/v1/education/leave-requests/${id}/approve`,
+      "POST",
+      {},
+      "Failed to approve leave request",
     ),
   );
 }
@@ -1242,6 +1323,13 @@ export async function updateEducationEnquiry(id: string, body: unknown) {
   return parseFlexible(
     educationEnquirySchema,
     await sendJson(`/v1/education/enquiries/${id}`, "PATCH", body, "Failed to update enquiry"),
+  );
+}
+
+export async function convertEducationEnquiry(id: string) {
+  return parseFlexible(
+    educationAdmissionSchema,
+    await sendJson(`/v1/education/enquiries/${id}/convert`, "POST", {}, "Failed to convert enquiry"),
   );
 }
 

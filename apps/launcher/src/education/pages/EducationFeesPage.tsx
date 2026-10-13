@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { PageHeader } from "../../pops/ui/PageHeader";
 import { noticeErrorClass, noticeSuccessClass } from "../../pops/lib/themeClasses";
 import {
@@ -13,12 +13,15 @@ import {
   fetchEducationStudents,
 } from "../api/education";
 import { formatPkr, useEducationAccess, useInvalidateEducation } from "../hooks/useEducation";
+import { printEducationFeeChallan } from "../lib/printFeeChallan";
+import { printEducationFeeReceipt } from "../lib/printFeeReceipt";
 import {
   EducationDataTable,
   EducationField,
   EducationFormSection,
   EducationInput,
   EducationPrimaryButton,
+  EducationSecondaryButton,
   EducationSelect,
 } from "../ui/EducationUi";
 
@@ -26,6 +29,7 @@ export function EducationFeesPage(): JSX.Element {
   const { branch } = useEducationAccess();
   const invalidate = useInvalidateEducation();
   const [notice, setNotice] = useState<string | null>(null);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [tab, setTab] = useState<"structures" | "invoices" | "payments">("structures");
 
   const [structName, setStructName] = useState("");
@@ -41,6 +45,14 @@ export function EducationFeesPage(): JSX.Element {
   const [paymentInvoiceId, setPaymentInvoiceId] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
+
+  const branding = useMemo(
+    () => ({
+      institutionName: "EducationFlow",
+      branchName: branch?.name ?? branch?.code ?? "",
+    }),
+    [branch?.name, branch?.code],
+  );
 
   const structuresQuery = useQuery({
     queryKey: ["education", "fee-structures", branch?.code],
@@ -72,6 +84,67 @@ export function EducationFeesPage(): JSX.Element {
     enabled: Boolean(branch?.code),
     queryFn: () => fetchEducationLookups(branch!.code, "payment_method"),
   });
+
+  const studentById = useMemo(() => {
+    const map = new Map((studentsQuery.data ?? []).map((s) => [s.id, s]));
+    return map;
+  }, [studentsQuery.data]);
+
+  const invoiceById = useMemo(() => {
+    const map = new Map((invoicesQuery.data ?? []).map((i) => [i.id, i]));
+    return map;
+  }, [invoicesQuery.data]);
+
+  const printChallan = async (invoiceId: string) => {
+    const invoice = invoiceById.get(invoiceId);
+    if (!invoice) {
+      setErrorNotice("Invoice not found for print");
+      return;
+    }
+    const student = studentById.get(invoice.studentId);
+    const result = await printEducationFeeChallan({
+      voucherNumber: invoice.voucherNumber,
+      dueDate: invoice.dueDate ?? undefined,
+      studentName: student
+        ? [student.firstName, student.lastName].filter(Boolean).join(" ")
+        : invoice.studentId.slice(0, 8),
+      studentNumber: student?.studentNumber,
+      invoiceTitle: invoice.title,
+      feeType: invoice.feeTypeCode,
+      amountPkr: invoice.amountPkr,
+      paidPkr: invoice.paidPkr,
+      status: invoice.status,
+      branding,
+    });
+    if (!result.ok) setErrorNotice(result.error ?? "Print failed");
+  };
+
+  const printReceipt = async (payment: {
+    receiptNumber: string;
+    paidAt: string;
+    amountPkr: number;
+    paymentMethodCode: string;
+    invoiceId: string;
+    notes?: string | null;
+  }) => {
+    const invoice = invoiceById.get(payment.invoiceId);
+    const student = invoice ? studentById.get(invoice.studentId) : undefined;
+    const result = await printEducationFeeReceipt({
+      receiptNumber: payment.receiptNumber,
+      paidAt: payment.paidAt.slice(0, 19).replace("T", " "),
+      studentName: student
+        ? [student.firstName, student.lastName].filter(Boolean).join(" ")
+        : invoice?.studentId?.slice(0, 8) ?? "—",
+      studentNumber: student?.studentNumber,
+      voucherNumber: invoice?.voucherNumber,
+      feeType: invoice?.feeTypeCode,
+      paymentMethod: payment.paymentMethodCode,
+      amountPkr: payment.amountPkr,
+      notes: payment.notes ?? undefined,
+      branding,
+    });
+    if (!result.ok) setErrorNotice(result.error ?? "Print failed");
+  };
 
   const structureMutation = useMutation({
     mutationFn: () =>
@@ -116,10 +189,47 @@ export function EducationFeesPage(): JSX.Element {
         amountPkr: Number(paymentAmount) || 0,
         paymentMethodCode: paymentMethod || "cash",
       }),
-    onSuccess: () => {
+    onSuccess: async (payment) => {
       invalidate();
       setPaymentAmount("");
       setNotice("Payment recorded");
+      const receiptNumber =
+        payment && typeof payment === "object" && "receiptNumber" in payment
+          ? String((payment as { receiptNumber?: string }).receiptNumber ?? "")
+          : "";
+      if (receiptNumber) {
+        await printReceipt({
+          receiptNumber,
+          paidAt:
+            payment && typeof payment === "object" && "paidAt" in payment
+              ? String((payment as { paidAt?: string }).paidAt ?? new Date().toISOString())
+              : new Date().toISOString(),
+          amountPkr:
+            payment && typeof payment === "object" && "amountPkr" in payment
+              ? Number((payment as { amountPkr?: number }).amountPkr ?? 0)
+              : Number(paymentAmount) || 0,
+          paymentMethodCode:
+            payment && typeof payment === "object" && "paymentMethodCode" in payment
+              ? String((payment as { paymentMethodCode?: string }).paymentMethodCode ?? "cash")
+              : paymentMethod || "cash",
+          invoiceId:
+            payment && typeof payment === "object" && "invoiceId" in payment
+              ? String((payment as { invoiceId?: string }).invoiceId ?? paymentInvoiceId)
+              : paymentInvoiceId,
+          notes:
+            payment && typeof payment === "object" && "notes" in payment
+              ? ((payment as { notes?: string | null }).notes ?? undefined)
+              : undefined,
+        });
+      } else {
+        try {
+          const latest = await fetchEducationFeePayments(branch!.code);
+          const match = latest.find((p) => p.invoiceId === paymentInvoiceId);
+          if (match?.receiptNumber) await printReceipt(match);
+        } catch {
+          // ignore auto-print refetch failures
+        }
+      }
     },
   });
 
@@ -136,6 +246,7 @@ export function EducationFeesPage(): JSX.Element {
         subtitle="Define fee structures, raise invoices, and record student payments."
       />
       {notice ? <div className={noticeSuccessClass}>{notice}</div> : null}
+      {errorNotice ? <div className={noticeErrorClass}>{errorNotice}</div> : null}
 
       <div className="flex flex-wrap gap-2">
         {tabs.map((t) => (
@@ -186,6 +297,7 @@ export function EducationFeesPage(): JSX.Element {
                 disabled={!structName.trim() || structureMutation.isPending}
                 onClick={() => {
                   setNotice(null);
+                  setErrorNotice(null);
                   structureMutation.mutate();
                 }}
               >
@@ -243,6 +355,7 @@ export function EducationFeesPage(): JSX.Element {
                 disabled={!invoiceStudentId || !invoiceTitle.trim() || invoiceMutation.isPending}
                 onClick={() => {
                   setNotice(null);
+                  setErrorNotice(null);
                   invoiceMutation.mutate();
                 }}
               >
@@ -251,7 +364,7 @@ export function EducationFeesPage(): JSX.Element {
             </div>
           </EducationFormSection>
           <EducationDataTable
-            columns={["Voucher", "Title", "Amount", "Paid", "Status", "Due"]}
+            columns={["Voucher", "Title", "Amount", "Paid", "Status", "Due", "Print"]}
             rows={(invoicesQuery.data ?? []).map((i) => [
               i.voucherNumber,
               i.title,
@@ -259,6 +372,16 @@ export function EducationFeesPage(): JSX.Element {
               formatPkr(i.paidPkr),
               i.status,
               i.dueDate ?? "—",
+              <EducationSecondaryButton
+                key={`challan-${i.id}`}
+                className="px-2 py-1"
+                onClick={() => {
+                  setErrorNotice(null);
+                  void printChallan(i.id);
+                }}
+              >
+                Print challan
+              </EducationSecondaryButton>,
             ])}
           />
         </>
@@ -295,6 +418,7 @@ export function EducationFeesPage(): JSX.Element {
                 disabled={!paymentInvoiceId || !paymentAmount || paymentMutation.isPending}
                 onClick={() => {
                   setNotice(null);
+                  setErrorNotice(null);
                   paymentMutation.mutate();
                 }}
               >
@@ -303,12 +427,22 @@ export function EducationFeesPage(): JSX.Element {
             </div>
           </EducationFormSection>
           <EducationDataTable
-            columns={["Receipt", "Amount", "Method", "Paid at"]}
+            columns={["Receipt", "Amount", "Method", "Paid at", "Print"]}
             rows={(paymentsQuery.data ?? []).map((p) => [
               p.receiptNumber,
               formatPkr(p.amountPkr),
               p.paymentMethodCode,
               p.paidAt.slice(0, 19).replace("T", " "),
+              <EducationSecondaryButton
+                key={`receipt-${p.id}`}
+                className="px-2 py-1"
+                onClick={() => {
+                  setErrorNotice(null);
+                  void printReceipt(p);
+                }}
+              >
+                Print receipt
+              </EducationSecondaryButton>,
             ])}
           />
         </>

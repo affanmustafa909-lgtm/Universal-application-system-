@@ -22,6 +22,8 @@
     "installer:pharmacy": "pnpm --filter @platform/launcher build:pharmacy",
     "installer:distribution": "pnpm --filter @platform/launcher build:distribution",
     "installer:education": "pnpm --filter @platform/launcher build:education",
+    "publish:education": "pnpm --filter @platform/launcher publish:education",
+    "manifest:education": "pnpm --filter @platform/launcher manifest:education",
     "installer:suite": "pnpm --filter @platform/launcher build:suite",
     "installer:universal": "pnpm --filter @platform/launcher build:suite",
     "installer:windows": "node apps/launcher/scripts/build-windows-installer.mjs",

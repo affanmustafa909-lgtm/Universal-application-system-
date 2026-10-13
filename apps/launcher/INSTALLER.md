@@ -4,12 +4,13 @@ Each business system ships as its own **installable `.exe`** (Windows) / `.dmg` 
 
 ## Available installers
 
-| Installer | Command | Product name | Desktop shortcut |
-| --- | --- | --- | --- |
-| **Restaurant** | `pnpm installer:restaurant` | Restaurant Management System | Restaurant Management System |
-| **General Store** | `pnpm installer:general-store` | General Store Management System | General Store Management System |
-| **Pharmacy** | `pnpm installer:pharmacy` | Pharmacy Management System | Pharmacy Management System |
-| **Suite** (all systems) | `pnpm --filter @platform/launcher build:suite` | Platform Launcher | Platform Launcher |
+| Installer | Command | Product name | Desktop shortcut | Auto-update feed |
+| --- | --- | --- | --- | --- |
+| **Restaurant** | `pnpm installer:restaurant` | Restaurant Management System | Restaurant Management System | `latest-restaurant.json` |
+| **General Store** | `pnpm installer:general-store` | General Store Management System | General Store Management System | `latest-general-store.json` |
+| **Pharmacy** | `pnpm installer:pharmacy` | Pharmacy Management System | Pharmacy Management System | `latest-pharmacy.json` |
+| **EducationFlow** | `pnpm installer:education` | EducationFlow Management System | EducationFlow Management System | `latest-education.json` |
+| **Suite** (all systems) | `pnpm --filter @platform/launcher build:suite` | Platform Launcher | Platform Launcher | `latest-suite.json` |
 
 Build all three single-system installers:
 
@@ -31,10 +32,11 @@ Output: `apps/launcher/src-tauri/target/release/bundle/` (per platform).
 
 | Edition | Bundled UI | Excluded |
 | --- | --- | --- |
-| `restaurant` | POPS POS, kitchen, tables, menu, inventory, HR, accounting | Pharmacy + Store pages |
-| `general-store` | Retail POS, products, warehouses, purchase flow, reports | Restaurant + Pharmacy pages |
-| `pharmacy` | Counter POS, medicines, prescriptions, suppliers, finance | Restaurant + Store pages |
-| `suite` | All three (system picker at startup) | — |
+| `restaurant` | POPS POS, kitchen, tables, menu, inventory, HR, accounting | Pharmacy + Store + Education pages |
+| `general-store` | Retail POS, products, warehouses, purchase flow, reports | Restaurant + Pharmacy + Education pages |
+| `pharmacy` | Counter POS, medicines, prescriptions, suppliers, finance | Restaurant + Store + Education pages |
+| `education` | EducationFlow only — admissions, students, academics, fees, exams, certificates | Restaurant + Pharmacy + Store pages |
+| `suite` | All systems (system picker at startup) | — |
 
 Physical exclusion is enforced by the `editionExcludePlugin` Vite plugin: non-selected route modules are stubbed at build time, so their lazy-loaded pages never enter the bundle.
 
@@ -50,9 +52,23 @@ pnpm --filter @platform/launcher dev:pharmacy
 # General Store-only
 pnpm --filter @platform/launcher dev:general-store
 
+# EducationFlow-only (separate school/college/academy app)
+pnpm --filter @platform/launcher dev:education
+
 # All systems (default)
 pnpm dev:launcher
 ```
+
+### Publish EducationFlow auto-update
+
+```bash
+pnpm installer:education          # signed build + latest-education.json
+pnpm publish:education            # upload EXE + manifest to GitHub Releases
+```
+
+Feed URL (baked into the EducationFlow EXE):
+
+`https://github.com/basir2353/zivra-desktop-updates/releases/latest/download/latest-education.json`
 
 ## Architecture
 

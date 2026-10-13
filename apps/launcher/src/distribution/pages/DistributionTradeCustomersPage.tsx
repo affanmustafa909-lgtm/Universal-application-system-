@@ -1,17 +1,20 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  createPharmacyScheme,
   createPharmacyTradeCustomer,
   fetchPharmacyAreas,
   fetchPharmacyCities,
   fetchPharmacyEmployeesPicker,
   fetchPharmacyRoutes,
+  fetchPharmacySchemes,
   fetchPharmacyTradeCustomerLedger,
 } from "../../pharmacy/api/pharmacy-erp";
 import {
   listTradeCustomersPaged,
   setTradeCustomerStatus,
+  updateScheme,
   updateTradeCustomer,
   type TradeCustomerRow,
 } from "../../pharmacy/api/pharmacy-masters";
@@ -21,27 +24,78 @@ import { DistBulkCustomerCreate } from "../components/DistBulkCreate";
 import { DistPagination } from "../components/DistPagination";
 import {
   emptyTradeCustomerForm,
+  parseCustomerBonusPolicy,
   rowToTradeCustomerForm,
   TradeCustomerFormFields,
   tradeCustomerFormPayload,
   type TradeCustomerForm,
   type TradeCustomerFormTab,
 } from "../components/TradeCustomerFormFields";
+
+const CUSTOMER_BONUS_SCHEME_PREFIX = "Customer bonus:";
+
+async function syncCustomerDefaultBonusScheme(customer: TradeCustomerRow): Promise<void> {
+  const policy = parseCustomerBonusPolicy(customer.bonusPolicyJson);
+  const buyQty = policy.buyQty;
+  const freeQty = policy.freeQty;
+  const name = `${CUSTOMER_BONUS_SCHEME_PREFIX} ${customer.code}`.trim();
+  const schemes = (await fetchPharmacySchemes()) as Array<{
+    id: string;
+    name?: string | null;
+    tradeCustomerId?: string | null;
+    medicineId?: string | null;
+    companyId?: string | null;
+  }>;
+  const existing = schemes.find(
+    (s) =>
+      s.tradeCustomerId === customer.id &&
+      !s.medicineId &&
+      !s.companyId &&
+      String(s.name ?? "").startsWith(CUSTOMER_BONUS_SCHEME_PREFIX),
+  );
+  if (!policy.enabled || buyQty <= 0 || freeQty <= 0) {
+    if (existing) {
+      await updateScheme(existing.id, { status: "inactive" });
+    }
+    return;
+  }
+  const body = {
+    name,
+    schemeType: policy.schemeType,
+    tradeCustomerId: customer.id,
+    companyId: null,
+    medicineId: null,
+    buyQty,
+    freeQty,
+    priority: 0,
+    status: "active",
+  };
+  if (existing) {
+    await updateScheme(existing.id, body);
+  } else {
+    await createPharmacyScheme(body);
+  }
+}
 import {
   DistButton,
   DistDataTable,
-  DistInput,
+  DistFilterBar,
+  DistFilterValues,
   DistPageShell,
   DistPanel,
-  DistSelect,
   DistStatusBadge,
 } from "../ui/DistUi";
+import { filterDistRows } from "../lib/distListFilters";
 
 export function DistributionTradeCustomersPage(): JSX.Element {
   const { branch } = usePharmacyAccess();
-  const invalidate = useInvalidatePharmacy([["pharmacy", "trade-customers-paged"]]);
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState("");
+  const invalidate = useInvalidatePharmacy([
+    ["pharmacy", "trade-customers-paged"],
+    ["pharmacy", "schemes"],
+  ]);
+  const [filters, setFilters] = useState<DistFilterValues>({});
+  const q = filters.q ?? "";
+  const status = filters.status ?? "";
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [form, setForm] = useState<TradeCustomerForm>(emptyTradeCustomerForm());
@@ -49,6 +103,7 @@ export function DistributionTradeCustomersPage(): JSX.Element {
   const [editing, setEditing] = useState<TradeCustomerRow | null>(null);
   const [drawer, setDrawer] = useState<TradeCustomerRow | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
 
@@ -77,16 +132,30 @@ export function DistributionTradeCustomersPage(): JSX.Element {
   const save = useMutation({
     mutationFn: async () => {
       const body = tradeCustomerFormPayload(form, branch?.code);
-      if (editing) return updateTradeCustomer(editing.id, body);
-      return createPharmacyTradeCustomer(body);
+      const saved = editing
+        ? ((await updateTradeCustomer(editing.id, body)) as TradeCustomerRow)
+        : ((await createPharmacyTradeCustomer(body)) as TradeCustomerRow);
+      try {
+        await syncCustomerDefaultBonusScheme(saved);
+      } catch {
+        /* bonus scheme sync is best-effort — customer row already saved */
+      }
+      return saved;
     },
-    onSuccess: () => {
-      invalidate();
+    onSuccess: (row) => {
+      void invalidate();
       setError(null);
-      setEditing(null);
-      setForm(emptyTradeCustomerForm());
-      setFormTab("coaClient");
-      setShowForm(false);
+      const saved = row as TradeCustomerRow;
+      // Keep form open with server-returned values so every field is visible after save.
+      setEditing(saved);
+      setForm(rowToTradeCustomerForm(saved));
+      setShowForm(true);
+      const bonus = parseCustomerBonusPolicy(saved.bonusPolicyJson);
+      setNotice(
+        bonus.enabled && bonus.buyQty > 0 && bonus.freeQty > 0
+          ? `Saved ${saved.code} — ${saved.name}. Customer bonus Buy ${bonus.buyQty} Get ${bonus.freeQty} synced.`
+          : `Saved ${saved.code} — ${saved.name}. Saari fields form + Detail pe hain.`,
+      );
       void list.refetch();
     },
     onError: (e: Error) => setError(e.message),
@@ -188,6 +257,19 @@ export function DistributionTradeCustomersPage(): JSX.Element {
       }
       error={error}
     >
+      {notice ? (
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
+          {notice}{" "}
+          {editing?.id ? (
+            <Link
+              className="font-semibold underline"
+              to={`/pops/distribution/trade-customers/${editing.id}`}
+            >
+              Open full detail
+            </Link>
+          ) : null}
+        </p>
+      ) : null}
       {bulkOpen ? (
         <DistBulkCustomerCreate
           busy={bulkSave.isPending}
@@ -217,41 +299,41 @@ export function DistributionTradeCustomersPage(): JSX.Element {
         </DistPanel>
       ) : null}
 
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="text-xs text-slate-500">
-          Search
-          <DistInput
-            className="mt-1 min-w-[14rem]"
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
-          />
-        </label>
-        <label className="text-xs text-slate-500">
-          Status
-          <DistSelect
-            className="mt-1"
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="">All</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </DistSelect>
-        </label>
-      </div>
+      <DistFilterBar
+        value={filters}
+        onChange={(next) => {
+          setFilters(next);
+          setPage(1);
+        }}
+        showTime
+        searchPlaceholder="Code, name, phone, NTN…"
+        statusOptions={[
+          { value: "active", label: "Active" },
+          { value: "inactive", label: "Inactive" },
+        ]}
+        qualityOptions={[
+          { value: "complete", label: "Has phone + address" },
+          { value: "credit", label: "Has credit limit" },
+          { value: "thin", label: "Missing phone/address" },
+        ]}
+      />
 
       <DistDataTable
         loading={list.isLoading}
         rowKey={(r) => r.id}
         empty="No customers"
         onRowClick={(r) => setDrawer(r)}
-        rows={list.data?.items ?? []}
+        rows={filterDistRows(list.data?.items ?? [], filters, {
+          dateFields: ["createdAt", "regDate"],
+          searchFields: [],
+        }).filter((r) => {
+          if (!filters.quality) return true;
+          const hasContact = Boolean(r.phone || r.landLine) && Boolean(r.address || r.detailedAddress);
+          if (filters.quality === "complete") return hasContact;
+          if (filters.quality === "credit") return (r.creditLimitPkr ?? 0) > 0;
+          if (filters.quality === "thin") return !hasContact;
+          return true;
+        })}
         columns={[
           { key: "accountType", header: "Acct Type", render: (r) => r.accountType ?? "—" },
           { key: "code", header: "Code", className: "font-mono text-xs whitespace-nowrap" },
@@ -302,6 +384,17 @@ export function DistributionTradeCustomersPage(): JSX.Element {
             className: "whitespace-nowrap",
           },
           { key: "partyType", header: "Party Type", render: (r) => r.partyType ?? r.customerType ?? "—" },
+          { key: "customerType", header: "Billing type", render: (r) => r.customerType ?? "—" },
+          { key: "speciality", header: "Speciality", render: (r) => r.speciality ?? "—" },
+          { key: "storeType", header: "Store type", render: (r) => r.storeType ?? "—" },
+          { key: "contactPerson", header: "Contact", render: (r) => r.contactPerson ?? "—" },
+          { key: "whatsapp", header: "WhatsApp", render: (r) => r.whatsapp ?? "—" },
+          { key: "cityName", header: "City", render: (r) => r.cityName ?? "—" },
+          {
+            key: "creditDays",
+            header: "Credit days",
+            render: (r) => (r.creditDays != null ? String(r.creditDays) : "—"),
+          },
           {
             key: "activeTaxPayer",
             header: "Active Tax",
@@ -415,6 +508,18 @@ export function DistributionTradeCustomersPage(): JSX.Element {
               label="Licence Exp"
               value={drawer.licenceExpiry ? String(drawer.licenceExpiry).slice(0, 10) : null}
             />
+            <DistDrawerField label="Billing type" value={drawer.customerType} />
+            <DistDrawerField label="Speciality" value={drawer.speciality} />
+            <DistDrawerField label="Store type" value={drawer.storeType} />
+            <DistDrawerField label="Contact person" value={drawer.contactPerson} />
+            <DistDrawerField label="WhatsApp" value={drawer.whatsapp} />
+            <DistDrawerField label="City" value={drawer.cityName} />
+            <DistDrawerField label="Detailed address" value={drawer.detailedAddress} />
+            <DistDrawerField label="Credit days" value={drawer.creditDays} />
+            <DistDrawerField label="Credit category" value={drawer.creditCategory} />
+            <DistDrawerField label="Mode of payment" value={drawer.modeOfPayment} />
+            <DistDrawerField label="Price level" value={drawer.priceLevel} />
+            <DistDrawerField label="Business name" value={drawer.businessName} />
             <DistDrawerField label="Active Tax Payer" value={drawer.activeTaxPayer ? "Yes" : "No"} />
             <DistDrawerField label="Income Tax Exempt" value={drawer.incomeTaxExempt ? "Yes" : "No"} />
             <DistDrawerField label="Advance Tax Summary" value={drawer.advanceTaxSummary ? "Yes" : "No"} />
@@ -428,6 +533,21 @@ export function DistributionTradeCustomersPage(): JSX.Element {
   );
 }
 
+function DetailRow({ label, value }: { label: string; value: ReactNode }): JSX.Element {
+  const empty =
+    value == null ||
+    value === "" ||
+    (typeof value === "string" && !value.trim());
+  return (
+    <div className="flex justify-between gap-3 border-b border-slate-100 py-1.5 text-sm dark:border-slate-800">
+      <dt className="shrink-0 text-xs uppercase text-slate-500">{label}</dt>
+      <dd className="min-w-0 text-right text-slate-900 dark:text-slate-100">
+        {empty ? "—" : value}
+      </dd>
+    </div>
+  );
+}
+
 export function DistributionTradeCustomerDetailPage(): JSX.Element {
   const { id = "" } = useParams();
   const ledger = useQuery({
@@ -435,71 +555,199 @@ export function DistributionTradeCustomerDetailPage(): JSX.Element {
     enabled: Boolean(id),
     queryFn: () => fetchPharmacyTradeCustomerLedger(id),
   });
-  const c = (ledger.data as { customer?: TradeCustomerRow } | null)?.customer ?? (ledger.data as TradeCustomerRow | null);
+  const schemesQ = useQuery({
+    queryKey: ["pharmacy", "schemes"],
+    queryFn: () => fetchPharmacySchemes(),
+    staleTime: 60_000,
+  });
+  const c = (ledger.data as { customer?: TradeCustomerRow } | null)?.customer ?? null;
+  const row = c as TradeCustomerRow | null;
+  const bonus = parseCustomerBonusPolicy(row?.bonusPolicyJson);
+  const customerSchemes = ((schemesQ.data ?? []) as Array<{
+    id: string;
+    name?: string | null;
+    tradeCustomerId?: string | null;
+    buyQty?: number | null;
+    freeQty?: number | null;
+    schemeType?: string | null;
+    status?: string | null;
+  }>).filter((s) => s.tradeCustomerId === id && s.status !== "inactive");
+
   return (
     <DistPageShell
-      title={(c as TradeCustomerRow | undefined)?.name ?? "Customer"}
-      subtitle={(c as TradeCustomerRow | undefined)?.code}
+      title={row?.name ?? "Customer"}
+      subtitle={row?.code}
       breadcrumb={[
         { label: "Distribution", to: "/pops/distribution/ps" },
         { label: "Customers", to: "/pops/distribution/trade-customers" },
-        { label: (c as TradeCustomerRow | undefined)?.code ?? id },
+        { label: row?.code ?? id },
       ]}
       loading={ledger.isLoading}
       error={
         ledger.error instanceof Error
           ? ledger.error.message
-          : !ledger.isLoading && !c
+          : !ledger.isLoading && !row
             ? "Customer not found"
             : null
       }
+      actions={
+        row ? (
+          <div className="flex flex-wrap gap-2">
+            <Link to={`/pops/distribution/customer-reports?tab=bonus&q=${encodeURIComponent(row.code ?? "")}`}>
+              <DistButton variant="secondary">Bonus Report</DistButton>
+            </Link>
+            <Link to="/pops/distribution/bonus-attach">
+              <DistButton variant="secondary">Bonus Attach</DistButton>
+            </Link>
+            <Link to="/pops/distribution/trade-customers">
+              <DistButton variant="secondary">Back to list / edit</DistButton>
+            </Link>
+          </div>
+        ) : null
+      }
     >
-      {c ? (
+      {row ? (
         <div className="grid gap-4 lg:grid-cols-2">
-          <DistPanel title="Overview">
-            <dl className="space-y-1 text-sm">
-              <div className="flex justify-between border-b border-slate-100 py-1.5 dark:border-slate-800">
-                <dt className="text-xs uppercase text-slate-500">Type</dt>
-                <dd>{(c as TradeCustomerRow).customerType}</dd>
-              </div>
-              <div className="flex justify-between border-b border-slate-100 py-1.5 dark:border-slate-800">
-                <dt className="text-xs uppercase text-slate-500">Phone</dt>
-                <dd>{(c as TradeCustomerRow).phone ?? "—"}</dd>
-              </div>
-              <div className="flex justify-between border-b border-slate-100 py-1.5 dark:border-slate-800">
-                <dt className="text-xs uppercase text-slate-500">Business</dt>
-                <dd>{(c as TradeCustomerRow).businessName ?? "—"}</dd>
-              </div>
-              <div className="flex justify-between border-b border-slate-100 py-1.5 dark:border-slate-800">
-                <dt className="text-xs uppercase text-slate-500">Status</dt>
-                <dd>
-                  <DistStatusBadge status={(c as TradeCustomerRow).status} />
-                </dd>
-              </div>
+          <DistPanel title="CoA / Client">
+            <dl>
+              <DetailRow label="Account type" value={row.accountType} />
+              <DetailRow label="Code" value={row.code} />
+              <DetailRow label="Old code" value={row.oldCode} />
+              <DetailRow label="Cmp code" value={row.companyCode} />
+              <DetailRow label="Name" value={row.name} />
+              <DetailRow label="Unique name" value={row.uniqueName} />
+              <DetailRow label="Business" value={row.businessName} />
+              <DetailRow label="Address" value={row.address} />
+              <DetailRow label="Postal address" value={row.postalAddress} />
+              <DetailRow label="Province" value={row.province} />
+              <DetailRow label="Sector" value={row.sector} />
+              <DetailRow label="Email" value={row.email} />
+              <DetailRow label="Phone" value={row.landLine} />
+              <DetailRow label="Mobile" value={row.phone} />
+              <DetailRow label="Fax" value={row.fax} />
+              <DetailRow label="Party type" value={row.partyType} />
+              <DetailRow label="Party mode" value={row.partyMode} />
+              <DetailRow label="Stx No" value={row.stxNo} />
+              <DetailRow label="NTN" value={row.ntnNumber} />
+              <DetailRow label="CNIC" value={row.nicNumber} />
+              <DetailRow label="Licence #" value={row.licenceNo} />
+              <DetailRow
+                label="Licence exp"
+                value={row.licenceExpiry ? String(row.licenceExpiry).slice(0, 10) : null}
+              />
+              <DetailRow label="Active tax payer" value={row.activeTaxPayer ? "Yes" : "No"} />
+              <DetailRow label="Tax exempt" value={row.incomeTaxExempt ? "Yes" : "No"} />
+              <DetailRow label="Adv tax summary" value={row.advanceTaxSummary ? "Yes" : "No"} />
+              <DetailRow label="Invoice warranty" value={row.invoiceWarranty ? "Yes" : "No"} />
+              <DetailRow label="Status" value={<DistStatusBadge status={row.status} />} />
             </dl>
           </DistPanel>
-          <DistPanel title="Credit summary">
-            <dl className="space-y-1 text-sm">
-              <div className="flex justify-between border-b border-slate-100 py-1.5 dark:border-slate-800">
-                <dt className="text-xs uppercase text-slate-500">Credit limit</dt>
-                <dd>{formatPkr((c as TradeCustomerRow).creditLimitPkr ?? 0)}</dd>
+
+          <DistPanel title="Information">
+            <dl>
+              <DetailRow label="Billing type" value={row.customerType} />
+              <DetailRow label="Speciality" value={row.speciality} />
+              <DetailRow label="Store type" value={row.storeType} />
+              <DetailRow label="City" value={row.cityName} />
+              <DetailRow label="Contact person" value={row.contactPerson} />
+              <DetailRow label="WhatsApp" value={row.whatsapp} />
+              <DetailRow label="Passport" value={row.passportNo} />
+              <DetailRow label="Class" value={row.customerClass} />
+              <DetailRow label="Detailed address" value={row.detailedAddress} />
+              <DetailRow
+                label="Reg date"
+                value={row.regDate ? String(row.regDate).slice(0, 10) : null}
+              />
+              <DetailRow label="Mode of payment" value={row.modeOfPayment} />
+              <DetailRow label="Timing" value={row.timing} />
+              <DetailRow label="Visit frequency" value={row.visitFrequency} />
+              <DetailRow label="Visiting days" value={row.visitingDaysJson} />
+              <DetailRow label="Terms of payment" value={row.termsOfPayment} />
+              <DetailRow label="Price level" value={row.priceLevel} />
+              <DetailRow label="Discount %" value={row.discountPct} />
+              <DetailRow label="Adv tax type" value={row.advTaxType} />
+              <DetailRow label="FOC customer" value={row.isFocCustomer ? "Yes" : "No"} />
+              <DetailRow label="Can deduct tax" value={row.canDeductTax ? "Yes" : "No"} />
+              <DetailRow label="Tax %" value={row.taxPct} />
+              <DetailRow label="Tax info" value={row.taxInfo} />
+              <DetailRow label="License 9" value={row.license9No} />
+              <DetailRow label="License 10" value={row.license10No} />
+              <DetailRow label="License 11" value={row.license11No} />
+            </dl>
+          </DistPanel>
+
+          <DistPanel title="Credit">
+            <dl>
+              <DetailRow label="Credit limit" value={formatPkr(row.creditLimitPkr ?? 0)} />
+              <DetailRow label="Outstanding" value={formatPkr(row.outstandingPkr ?? 0)} />
+              <DetailRow
+                label="Available"
+                value={formatPkr(
+                  Math.max(0, (row.creditLimitPkr ?? 0) - (row.outstandingPkr ?? 0)),
+                )}
+              />
+              <DetailRow label="Credit days" value={row.creditDays} />
+              <DetailRow label="Credit category" value={row.creditCategory} />
+              <DetailRow
+                label="Monthly sales target"
+                value={formatPkr(row.monthlySalesTargetPkr ?? 0)}
+              />
+            </dl>
+          </DistPanel>
+
+          <DistPanel title="Bonus">
+            <dl>
+              <DetailRow label="Bonus enabled" value={bonus.enabled ? "Yes" : "No"} />
+              <DetailRow label="FOC customer" value={row.isFocCustomer ? "Yes" : "No"} />
+              <DetailRow label="Scheme type" value={bonus.schemeType} />
+              <DetailRow label="Buy qty" value={bonus.buyQty} />
+              <DetailRow label="Free qty" value={bonus.freeQty} />
+              <DetailRow label="Bonus %" value={bonus.bonusPct} />
+              <DetailRow label="Notes" value={bonus.notes} />
+            </dl>
+            {customerSchemes.length > 0 ? (
+              <div className="mt-3 space-y-1 border-t border-slate-100 pt-3 dark:border-slate-800">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Attached schemes
+                </p>
+                {customerSchemes.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex justify-between gap-2 text-sm text-slate-800 dark:text-slate-100"
+                  >
+                    <span className="truncate">{s.name ?? s.id}</span>
+                    <span className="shrink-0 text-xs text-slate-500">
+                      Buy {s.buyQty ?? 0} / Free {s.freeQty ?? 0}
+                    </span>
+                  </div>
+                ))}
               </div>
-              <div className="flex justify-between border-b border-slate-100 py-1.5 dark:border-slate-800">
-                <dt className="text-xs uppercase text-slate-500">Outstanding</dt>
-                <dd>{formatPkr((c as TradeCustomerRow).outstandingPkr ?? 0)}</dd>
-              </div>
-              <div className="flex justify-between border-b border-slate-100 py-1.5 dark:border-slate-800">
-                <dt className="text-xs uppercase text-slate-500">Available</dt>
-                <dd>
-                  {formatPkr(
-                    Math.max(
-                      0,
-                      ((c as TradeCustomerRow).creditLimitPkr ?? 0) -
-                        ((c as TradeCustomerRow).outstandingPkr ?? 0),
-                    ),
-                  )}
-                </dd>
-              </div>
+            ) : (
+              <p className="mt-3 text-xs text-slate-500">
+                No active schemes on this customer yet — set Bonus Policy on edit, or use Bonus Attach.
+              </p>
+            )}
+            <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+              <Link
+                className="text-xs font-semibold text-[color:var(--brand)] underline"
+                to={`/pops/distribution/customer-reports?tab=bonus&q=${encodeURIComponent(row.code ?? "")}`}
+              >
+                Open bonus utilization report →
+              </Link>
+            </div>
+          </DistPanel>
+
+          <DistPanel title="Policies & location">
+            <dl>
+              <DetailRow label="Discount policy" value={row.discountPolicyJson} />
+              <DetailRow label="Company credit limits" value={row.companyCreditLimitsJson} />
+              <DetailRow label="Company IDs" value={row.companyIdsJson} />
+              <DetailRow label="Block sales" value={row.blockSalesJson} />
+              <DetailRow label="Others" value={row.othersJson} />
+              <DetailRow label="Lat" value={row.locationLat} />
+              <DetailRow label="Lng" value={row.locationLng} />
+              <DetailRow label="Location notes" value={row.locationNotes} />
+              <DetailRow label="Image URL" value={row.imageUrl} />
             </dl>
           </DistPanel>
         </div>

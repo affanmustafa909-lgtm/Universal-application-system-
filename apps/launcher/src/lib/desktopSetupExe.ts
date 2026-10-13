@@ -13,11 +13,14 @@ export function isTauriShell(): boolean {
 /** Local folder hint shown in UI. */
 export const LOCAL_UPDATES_DIR_HINT = "%LOCALAPPDATA%\\Zivra\\updates";
 
-export type SetupChannel = "suite" | "distribution";
+export type SetupChannel = "suite" | "distribution" | "education";
 
 export function setupExeFileName(channel: SetupChannel, version: string): string {
   if (channel === "distribution") {
     return `Zivra-Distribution-System_${version}_x64-setup.exe`;
+  }
+  if (channel === "education") {
+    return `EducationFlow-Management-System_${version}_x64-setup.exe`;
   }
   return `Zivra-Universal-Management-System_${version}_x64-setup.exe`;
 }
@@ -26,12 +29,16 @@ export function setupExeDownloadUrl(channel: SetupChannel, version: string): str
   if (channel === "distribution") {
     return DISTRIBUTION_FEED.downloadTag(version);
   }
+  if (channel === "education") {
+    return DESKTOP_FEEDS.education.downloadTag(version);
+  }
   return DESKTOP_FEEDS.suite.downloadTag(version);
 }
 
 /** Current app edition → which setup channel to offer on the update banner. */
 export function currentSetupChannel(): SetupChannel | null {
   if (PLATFORM_EDITION === "distribution") return "distribution";
+  if (PLATFORM_EDITION === "education") return "education";
   if (PLATFORM_EDITION === "suite") return "suite";
   return null;
 }

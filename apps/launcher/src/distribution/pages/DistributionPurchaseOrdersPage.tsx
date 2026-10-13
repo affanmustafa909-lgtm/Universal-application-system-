@@ -15,11 +15,14 @@ import {
   DistButton,
   DistDataTable,
   DistErrorBanner,
+  DistFilterBar,
+  DistFilterValues,
   DistInput,
   DistPageShell,
   DistSelect,
   DistStatusBadge,
 } from "../ui/DistUi";
+import { filterDistRows } from "../lib/distListFilters";
 import { printDistDocument } from "../lib/printDistOrder";
 
 const DIST = "/pops/distribution";
@@ -54,11 +57,13 @@ export function DistributionPurchaseOrdersPage(): JSX.Element {
   const focus = searchParams.get("focus");
   const statusParam = searchParams.get("status");
 
-  const [status, setStatus] = useState(() => {
-    if (focus === "pending") return "submitted";
-    return statusParam ?? "";
-  });
-  const [q, setQ] = useState("");
+  const [filters, setFilters] = useState<DistFilterValues>(() => ({
+    status: focus === "pending" ? "submitted" : statusParam ?? undefined,
+    q: "",
+    preset: "30d",
+  }));
+  const status = filters.status ?? "";
+  const q = filters.q ?? "";
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -85,7 +90,7 @@ export function DistributionPurchaseOrdersPage(): JSX.Element {
 
   useEffect(() => {
     if (focus === "pending") {
-      setStatus((s) => s || "submitted");
+      setFilters((f) => ({ ...f, status: f.status || "submitted" }));
     }
   }, [focus]);
 
@@ -113,6 +118,8 @@ export function DistributionPurchaseOrdersPage(): JSX.Element {
       page,
       pageSize,
       focus,
+      filters.from,
+      filters.to,
     ],
     enabled: Boolean(branchCode),
     queryFn: () =>
@@ -120,6 +127,8 @@ export function DistributionPurchaseOrdersPage(): JSX.Element {
         branchCode: branchCode!,
         status: listStatus,
         q: q || undefined,
+        dateFrom: filters.from,
+        dateTo: filters.to,
         page,
         pageSize,
       }),
@@ -229,13 +238,13 @@ export function DistributionPurchaseOrdersPage(): JSX.Element {
     setActionError(null);
   }
 
-  function setStatusFilter(next: string) {
-    setStatus(next);
+  function applyListFilters(next: DistFilterValues) {
+    setFilters(next);
     setPage(1);
     const params = new URLSearchParams(searchParams);
-    if (next) params.set("status", next);
+    if (next.status) params.set("status", next.status);
     else params.delete("status");
-    if (focus === "pending" && next && next !== "submitted") params.delete("focus");
+    if (focus === "pending" && next.status && next.status !== "submitted") params.delete("focus");
     setSearchParams(params, { replace: true });
   }
 
@@ -271,45 +280,32 @@ export function DistributionPurchaseOrdersPage(): JSX.Element {
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950/40">
-        <label className="text-xs text-slate-500">
-          Status
-          <DistSelect
-            className="mt-1 block min-w-[11rem]"
-            value={status}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="">All</option>
-            <option value="pending">Pending (draft/submitted/receivable)</option>
-            <option value="draft">Draft</option>
-            <option value="submitted">Submitted</option>
-            <option value="approved">Approved</option>
-            <option value="sent">Sent</option>
-            <option value="supplier_confirmed">Confirmed</option>
-            <option value="partial">Partial</option>
-            <option value="received">Received</option>
-            <option value="cancelled">Cancelled</option>
-          </DistSelect>
-        </label>
-        <label className="text-xs text-slate-500">
-          Search
-          <DistInput
-            className="mt-1 block min-w-[12rem]"
-            placeholder="PO#…"
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
-          />
-        </label>
-      </div>
+      <DistFilterBar
+        value={filters}
+        onChange={applyListFilters}
+        showTime
+        searchPlaceholder="PO#, supplier…"
+        statusOptions={[
+          { value: "pending", label: "Pending (draft/submitted/receivable)" },
+          { value: "draft", label: "Draft" },
+          { value: "submitted", label: "Submitted" },
+          { value: "approved", label: "Approved" },
+          { value: "sent", label: "Sent" },
+          { value: "supplier_confirmed", label: "Confirmed" },
+          { value: "partial", label: "Partial" },
+          { value: "received", label: "Received" },
+          { value: "cancelled", label: "Cancelled" },
+        ]}
+      />
 
       <DistDataTable
         loading={list.isLoading}
         empty="No purchase orders"
         rowKey={(r) => r.id}
-        rows={list.data?.items ?? []}
+        rows={filterDistRows(list.data?.items ?? [], { from: filters.from, to: filters.to }, {
+          dateFields: ["orderDate", "createdAt", "expectedDate"],
+          searchFields: [],
+        })}
         onRowClick={(r) => setDetailId(r.id)}
         columns={[
           { key: "poNumber", header: "PO#" },

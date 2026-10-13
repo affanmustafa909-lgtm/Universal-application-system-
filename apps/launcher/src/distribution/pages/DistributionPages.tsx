@@ -6,6 +6,10 @@ export {
 
 export { DistributionGeoPage } from "./DistributionGeoPage";
 export { DistributionOrdersPage } from "./DistributionOrdersPage";
+export { DistributionTodaySalesPage } from "./DistributionTodaySalesPage";
+export { DistributionBonusReportsPage } from "./DistributionBonusReportsPage";
+export { DistributionBonusAttachPage } from "./DistributionBonusAttachPage";
+export { DistributionCustomerReportsPage } from "./DistributionCustomerReportsPage";
 export { DistributionPsWindowPage } from "./DistributionPsWindowPage";
 export { DistributionReportCenterPage } from "./DistributionReportCenterPage";
 export { DistributionInvoicesPage } from "./DistributionInvoicesPage";

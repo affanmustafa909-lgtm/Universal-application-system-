@@ -1,10 +1,33 @@
+import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { noticeErrorClass, noticeSuccessClass } from "../../pops/lib/themeClasses";
 import {
+  approveEducationLeaveRequest,
   createEducationLeaveRequest,
   fetchEducationLeaveRequests,
 } from "../api/education";
+import { useInvalidateEducation } from "../hooks/useEducation";
 import { EducationModulePage } from "../ui/EducationModulePage";
+import { EducationSecondaryButton } from "../ui/EducationUi";
 
 export function EducationLeavePage(): JSX.Element {
+  const invalidate = useInvalidateEducation();
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const approveMutation = useMutation({
+    mutationFn: (id: string) => approveEducationLeaveRequest(id),
+    onSuccess: () => {
+      invalidate(["leave-requests"]);
+      setActionNotice("Leave request approved");
+      setActionError(null);
+    },
+    onError: (e: Error) => {
+      setActionError(e.message);
+      setActionNotice(null);
+    },
+  });
+
   return (
     <EducationModulePage
       title="Leave"
@@ -15,6 +38,12 @@ export function EducationLeavePage(): JSX.Element {
       createLabel="Submit leave"
       formTitle="New leave request"
       searchKeys={["applicantId", "leaveTypeCode", "reason", "status"]}
+      extras={
+        <>
+          {actionNotice ? <div className={noticeSuccessClass}>{actionNotice}</div> : null}
+          {actionError ? <div className={noticeErrorClass}>{actionError}</div> : null}
+        </>
+      }
       fields={[
         {
           key: "applicantType",
@@ -56,6 +85,30 @@ export function EducationLeavePage(): JSX.Element {
         { key: "days", label: "Days" },
         { key: "status", label: "Status" },
         { key: "reason", label: "Reason" },
+        {
+          key: "actions",
+          label: "Actions",
+          render: (row) => {
+            const status = String(row.status ?? "");
+            const id = String(row.id ?? "");
+            if (!id || status === "approved" || status === "cancelled" || status === "rejected") {
+              return "—";
+            }
+            return (
+              <EducationSecondaryButton
+                className="px-2 py-1"
+                disabled={approveMutation.isPending}
+                onClick={() => {
+                  setActionNotice(null);
+                  setActionError(null);
+                  approveMutation.mutate(id);
+                }}
+              >
+                Approve
+              </EducationSecondaryButton>
+            );
+          },
+        },
       ]}
     />
   );

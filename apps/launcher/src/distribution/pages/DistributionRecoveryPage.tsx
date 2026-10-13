@@ -11,9 +11,9 @@ import { DistPagination } from "../components/DistPagination";
 import {
   DistButton,
   DistDataTable,
-  DistInput,
+  DistFilterBar,
+  DistFilterValues,
   DistPageShell,
-  DistSelect,
   DistStatusBadge,
 } from "../ui/DistUi";
 import { customerDisplayName } from "../lib/customerDisplay";
@@ -43,24 +43,38 @@ export function DistributionRecoveryPage(): JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const priorityParam = searchParams.get("priority") ?? "";
-  const [priority, setPriority] = useState(priorityParam);
-  const [q, setQ] = useState("");
+  const [filters, setFilters] = useState<DistFilterValues>({
+    quality: priorityParam || undefined,
+    preset: "30d",
+  });
+  const priority = filters.quality ?? "";
   const [debounced, setDebounced] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
   useEffect(() => {
-    const t = window.setTimeout(() => setDebounced(q.trim()), 250);
+    const t = window.setTimeout(() => setDebounced((filters.q ?? "").trim()), 250);
     return () => window.clearTimeout(t);
-  }, [q]);
+  }, [filters.q]);
 
   useEffect(() => {
-    setPriority(priorityParam);
+    setFilters((f) => ({ ...f, quality: priorityParam || undefined }));
     setPage(1);
   }, [priorityParam]);
 
   const recovery = useQuery({
-    queryKey: ["distribution", "collections", "recovery", branchCode, priority, debounced, page, pageSize],
+    queryKey: [
+      "distribution",
+      "collections",
+      "recovery",
+      branchCode,
+      priority,
+      debounced,
+      page,
+      pageSize,
+      filters.from,
+      filters.to,
+    ],
     enabled: Boolean(branchCode),
     queryFn: () =>
       collectionsApi.recovery({
@@ -105,42 +119,23 @@ export function DistributionRecoveryPage(): JSX.Element {
       }
       loading={recovery.isLoading && !recovery.data}
     >
-      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950/40">
-        <label className="text-xs text-slate-500">
-          Priority
-          <DistSelect
-            className="mt-1 min-w-[10rem]"
-            value={priority}
-            onChange={(e) => {
-              const next = e.target.value;
-              setPriority(next);
-              setPage(1);
-              const sp = new URLSearchParams(searchParams);
-              if (next) sp.set("priority", next);
-              else sp.delete("priority");
-              setSearchParams(sp, { replace: true });
-            }}
-          >
-            {PRIORITY_OPTIONS.map((o) => (
-              <option key={o.value || "all"} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </DistSelect>
-        </label>
-        <label className="text-xs text-slate-500">
-          Search
-          <DistInput
-            className="mt-1 min-w-[14rem]"
-            placeholder="Customer, code, reference…"
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
-          />
-        </label>
-      </div>
+      <DistFilterBar
+        value={filters}
+        onChange={(next) => {
+          setFilters(next);
+          setPage(1);
+          const sp = new URLSearchParams(searchParams);
+          if (next.quality) sp.set("priority", next.quality);
+          else sp.delete("priority");
+          setSearchParams(sp, { replace: true });
+        }}
+        showTime
+        searchPlaceholder="Customer, code, reference…"
+        qualityOptions={PRIORITY_OPTIONS.filter((o) => o.value).map((o) => ({
+          value: o.value,
+          label: o.label,
+        }))}
+      />
 
       <DistDataTable
         loading={recovery.isLoading}

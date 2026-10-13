@@ -15,6 +15,8 @@ import {
   DistButton,
   DistDataTable,
   DistErrorBanner,
+  DistFilterBar,
+  DistFilterValues,
   DistInput,
   DistPageShell,
   DistSelect,
@@ -43,11 +45,24 @@ export function DistributionCollectionsPage(): JSX.Element {
 
   const customerFromQuery = searchParams.get("tradeCustomerId") ?? searchParams.get("customerId") ?? "";
 
-  const [q, setQ] = useState("");
+  const [filters, setFilters] = useState<DistFilterValues>({ preset: "30d" });
   const [debounced, setDebounced] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // seed 30d on first mount if empty
+    if (!filters.from && !filters.to && filters.preset === "30d") {
+      const to = new Date();
+      const from = new Date();
+      from.setDate(from.getDate() - 29);
+      const iso = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      setFilters((f) => ({ ...f, from: iso(from), to: iso(to) }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [composerOpen, setComposerOpen] = useState(Boolean(customerFromQuery));
   const [tradeCustomerId, setTradeCustomerId] = useState(customerFromQuery);
@@ -63,9 +78,9 @@ export function DistributionCollectionsPage(): JSX.Element {
   const [chequeStatus, setChequeStatus] = useState<ChequeStatus>("pending");
 
   useEffect(() => {
-    const t = window.setTimeout(() => setDebounced(q.trim()), 250);
+    const t = window.setTimeout(() => setDebounced((filters.q ?? "").trim()), 250);
     return () => window.clearTimeout(t);
-  }, [q]);
+  }, [filters.q]);
 
   useEffect(() => {
     if (customerFromQuery) {
@@ -75,13 +90,27 @@ export function DistributionCollectionsPage(): JSX.Element {
   }, [customerFromQuery]);
 
   const list = useQuery({
-    queryKey: ["distribution", "collections", "list", branchCode, debounced, page, pageSize, customerFromQuery],
+    queryKey: [
+      "distribution",
+      "collections",
+      "list",
+      branchCode,
+      debounced,
+      page,
+      pageSize,
+      customerFromQuery,
+      filters.from,
+      filters.to,
+      filters.status,
+    ],
     enabled: Boolean(branchCode),
     queryFn: () =>
       collectionsApi.list({
         branchCode: branchCode!,
         q: debounced || undefined,
         tradeCustomerId: customerFromQuery || undefined,
+        from: filters.from,
+        to: filters.to,
         page,
         pageSize,
       }),
@@ -195,7 +224,16 @@ export function DistributionCollectionsPage(): JSX.Element {
     setAdvance(left > 0);
   }
 
-  const rows = list.data?.items ?? [];
+  const rows = useMemo(() => {
+    let items = list.data?.items ?? [];
+    if (filters.status) {
+      const s = filters.status.toLowerCase();
+      items = items.filter(
+        (r) => String(r.paymentMethod ?? "").toLowerCase() === s || String(r.status ?? "").toLowerCase() === s,
+      );
+    }
+    return items;
+  }, [list.data, filters.status]);
 
   return (
     <DistPageShell
@@ -224,20 +262,22 @@ export function DistributionCollectionsPage(): JSX.Element {
     >
       {actionError ? <DistErrorBanner message={actionError} onRetry={() => setActionError(null)} /> : null}
 
-      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950/40">
-        <label className="text-xs text-slate-500">
-          Search
-          <DistInput
-            className="mt-1 min-w-[14rem]"
-            placeholder="Collection #, customer, reference…"
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
-          />
-        </label>
-      </div>
+      <DistFilterBar
+        value={filters}
+        onChange={(next) => {
+          setFilters(next);
+          setPage(1);
+        }}
+        showTime
+        searchPlaceholder="Collection #, customer, reference…"
+        statusOptions={[
+          { value: "Cash", label: "Cash" },
+          { value: "Bank", label: "Bank" },
+          { value: "Cheque", label: "Cheque" },
+          { value: "Card", label: "Card" },
+          { value: "Online", label: "Online" },
+        ]}
+      />
 
       <DistDataTable
         loading={list.isLoading}

@@ -16,6 +16,7 @@ import {
   type BillSystemBlockId,
 } from "../lib/billPrintSettings";
 import { fieldInputClass } from "../lib/themeClasses";
+import { resolvePrintSystemId } from "../lib/printSystemScope";
 
 type Props = {
   settings: BillPrintSettings;
@@ -23,6 +24,7 @@ type Props = {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onChange: (settings: BillPrintSettings) => void;
+  systemId?: string | null;
 };
 
 /** System blocks whose text is stored in bill settings and prints as typed. */
@@ -43,14 +45,25 @@ const EDITABLE_SYSTEM_TEXT: Partial<
   footerSecondary: "footerSecondaryText",
 };
 
-function liveSample(blockId: BillSystemBlockId): string {
+function liveSample(blockId: BillSystemBlockId, systemId?: string | null): string {
+  const sys = resolvePrintSystemId(systemId);
   switch (blockId) {
     case "meta":
+      if (sys === "distribution") return "BK-SAMPLE · Booking · Trade customer";
+      if (sys === "pharmacy") return "RX-SAMPLE · Counter";
+      if (sys === "general-store") return "SALE-SAMPLE · Walk-in · Till 1";
+      if (sys === "education") return "FEE-SAMPLE · Tuition";
+      if (sys === "ice-cream-bar") return "IC-SAMPLE · Takeaway · Station 2";
       return "ORD-SAMPLE · Dine-in · T5";
     case "notes":
+      if (sys === "distribution") return "Trade customer: City Medical Store";
+      if (sys === "pharmacy") return "Customer: Walk-in";
+      if (sys === "general-store") return "Customer: Walk-in";
+      if (sys === "education") return "Student: Ali Khan · Class 8-A";
+      if (sys === "ice-cream-bar") return "Extra toppings";
       return "Extra spicy • no onions";
     case "timestamp":
-      return "ISB-GT · date & time";
+      return "Date & time";
     case "items":
       return "QTY  ITEM  PRICE  AMT";
     case "totals":
@@ -156,6 +169,7 @@ function blockInputValue(
   settings: BillPrintSettings,
   blockId: string,
   branchName: string,
+  systemId?: string | null,
 ): { value: string; placeholder: string; editable: boolean; hint?: string } {
   if (!isBillSystemBlock(blockId)) {
     const line = settings.customLines.find((l) => l.id === blockId);
@@ -167,10 +181,18 @@ function blockInputValue(
   }
   const key = EDITABLE_SYSTEM_TEXT[blockId];
   if (key) {
+    const sys = resolvePrintSystemId(systemId);
     const placeholders: Record<string, string> = {
       headerBusinessName: branchName || "Business name",
       headerSubtitle: "Subtitle / tagline",
-      documentTitle: "Tax Invoice",
+      documentTitle:
+        sys === "distribution"
+          ? "Booking / Invoice"
+          : sys === "pharmacy"
+            ? "Pharmacy Invoice"
+            : sys === "education"
+              ? "Fee Receipt"
+              : "Tax Invoice",
       footerText: "Thank you — visit again",
       footerSecondaryText: "Phone · address · NTN",
     };
@@ -181,7 +203,7 @@ function blockInputValue(
     };
   }
   return {
-    value: liveSample(blockId),
+    value: liveSample(blockId, systemId),
     placeholder: "",
     editable: false,
     hint: "Live from each order — use On / Bold / A± only",
@@ -194,6 +216,7 @@ export function BillReceiptLayoutCanvas({
   selectedId,
   onSelect,
   onChange,
+  systemId,
 }: Props): JSX.Element {
   const dragIdRef = useRef<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
@@ -376,7 +399,7 @@ export function BillReceiptLayoutCanvas({
           const label = isBillSystemBlock(blockId)
             ? BILL_SYSTEM_BLOCK_LABELS[blockId]
             : "Custom line";
-          const input = blockInputValue(settings, blockId, branchName);
+          const input = blockInputValue(settings, blockId, branchName, systemId);
 
           return (
             <div

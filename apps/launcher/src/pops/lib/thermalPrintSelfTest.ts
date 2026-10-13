@@ -3,9 +3,10 @@
  * Used by unit tests and the Printer → Customize → Complete test button.
  */
 
-import { sampleBillPrintInput } from "./billSampleReceipt";
+import { sampleBillPrintInput, sampleFingerprintItem } from "./billSampleReceipt";
 import { buildPrintPreviewHtml } from "./printTicket";
 import type { PrinterPaperSize } from "./printerRouting";
+import { resolvePrintSystemId } from "./printSystemScope";
 import {
   DEFAULT_THERMAL_PRINT_SETTINGS,
   isNarrowPaperWidth,
@@ -49,19 +50,23 @@ export function runThermalPrintSelfTest(input: {
   thermal?: ThermalPrintSettings;
   /** Simulate a printer profile paperSize (e.g. stale 80mm). */
   profilePaperSize?: PrinterPaperSize;
+  systemId?: string | null;
 }): ThermalSelfTestResult {
   const branchCode = input.branchCode.trim() || "TEST";
+  const systemId = resolvePrintSystemId(input.systemId);
   const thermal = normalizeThermalPrintSettings(
-    input.thermal ?? loadThermalPrintSettings(branchCode),
+    input.thermal ?? loadThermalPrintSettings(branchCode, systemId),
   );
   const paper = resolveThermalPaperSize(input.profilePaperSize, thermal);
   const rollMm = paperWidthMm(paper, thermal.customPaperWidthMm);
   const contentMm = thermalContentWidthMm(paper, thermal.marginMm, thermal.customPaperWidthMm);
   const renderPx = receiptRenderWidthPx(paper, thermal.customPaperWidthMm);
   const narrow = isNarrowPaperWidth(paper, thermal.customPaperWidthMm);
+  const fingerprint = sampleFingerprintItem(systemId);
+  const restaurantFamily = systemId === "restaurant" || systemId === "ice-cream-bar";
 
   const html = buildPrintPreviewHtml({
-    ...sampleBillPrintInput(input.branchName ?? branchCode, branchCode),
+    ...sampleBillPrintInput(input.branchName ?? branchCode, branchCode, systemId),
     kind: "receipt",
     paperSize: paper,
     thermal,
@@ -134,22 +139,33 @@ export function runThermalPrintSelfTest(input: {
     ),
   );
 
-  const expectStack = narrow;
-  const hasStack = html.includes("pay-compare pay-compare-stack");
-  checks.push(
-    check(
-      "pay-compare-layout",
-      "Card/Cash layout for paper width",
-      expectStack ? hasStack : !hasStack && html.includes('class="pay-compare"'),
-      expectStack
-        ? hasStack
-          ? "stacked (narrow OK)"
-          : "expected stacked Card/Cash on narrow paper"
-        : hasStack
-          ? "unexpected stack — should be side-by-side on 80mm+"
-          : "side-by-side Card/Cash (OK)",
-    ),
-  );
+  if (restaurantFamily) {
+    const expectStack = narrow;
+    const hasStack = html.includes("pay-compare pay-compare-stack");
+    checks.push(
+      check(
+        "pay-compare-layout",
+        "Card/Cash layout for paper width",
+        expectStack ? hasStack : !hasStack && html.includes('class="pay-compare"'),
+        expectStack
+          ? hasStack
+            ? "stacked (narrow OK)"
+            : "expected stacked Card/Cash on narrow paper"
+          : hasStack
+            ? "unexpected stack — should be side-by-side on 80mm+"
+            : "side-by-side Card/Cash (OK)",
+      ),
+    );
+  } else {
+    checks.push(
+      check(
+        "pay-compare-layout",
+        "No restaurant Card/Cash block on this system",
+        !html.includes("pay-compare") && !/On Card Payment/i.test(html),
+        "Card/Cash compare correctly omitted for non-restaurant systems",
+      ),
+    );
+  }
 
   const expectPrice =
     thermal.receiptLayout === "columns" && thermal.showUnitPrice && !narrow;
@@ -173,20 +189,33 @@ export function runThermalPrintSelfTest(input: {
   checks.push(
     check(
       "items-present",
-      "Sample items render",
-      html.includes("Soft drink") && (html.includes("item-row") || html.includes("clear-item")),
-      html.includes("Soft drink") ? "sample lines present" : "sample items missing from HTML",
+      "Sample items render for this system",
+      html.includes(fingerprint) && (html.includes("item-row") || html.includes("clear-item")),
+      html.includes(fingerprint)
+        ? `sample lines present (${fingerprint})`
+        : `expected “${fingerprint}” missing from HTML`,
     ),
   );
 
-  checks.push(
-    check(
-      "card-cash-totals",
-      "Card/Cash GST compare present",
-      /CARD PAYMENT|On Card Payment/i.test(html) && /CASH PAYMENT|On Cash Payment/i.test(html),
-      "Card and Cash payment blocks found",
-    ),
-  );
+  if (restaurantFamily) {
+    checks.push(
+      check(
+        "card-cash-totals",
+        "Card/Cash GST compare present",
+        /CARD PAYMENT|On Card Payment/i.test(html) && /CASH PAYMENT|On Cash Payment/i.test(html),
+        "Card and Cash payment blocks found",
+      ),
+    );
+  } else {
+    checks.push(
+      check(
+        "card-cash-totals",
+        "Card/Cash GST compare omitted",
+        !/CARD PAYMENT|On Card Payment/i.test(html),
+        "No restaurant Card/Cash block (OK)",
+      ),
+    );
+  }
 
   for (const [preset, mm] of [
     ["58mm", 58],

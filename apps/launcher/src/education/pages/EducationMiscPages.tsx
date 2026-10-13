@@ -8,14 +8,18 @@ import {
   createEducationNotice,
   fetchEducationAuditLogs,
   fetchEducationDocumentTemplates,
+  fetchEducationGeneratedDocument,
+  fetchEducationGeneratedDocuments,
   fetchEducationNotices,
   fetchEducationReport,
   fetchEducationSettings,
   fetchEducationStudents,
   generateEducationDocument,
+  seedEducationDocumentTemplates,
   upsertEducationSetting,
 } from "../api/education";
 import { useEducationAccess, useInvalidateEducation } from "../hooks/useEducation";
+import { printEducationHtmlDocument } from "../lib/printCertificate";
 import {
   EducationDataTable,
   EducationField,
@@ -150,12 +154,14 @@ export function EducationDocumentsPage(): JSX.Element {
   const { branch } = useEducationAccess();
   const invalidate = useInvalidateEducation();
   const [notice, setNotice] = useState<string | null>(null);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [documentTypeCode, setDocumentTypeCode] = useState("certificate");
   const [bodyHtml, setBodyHtml] = useState("<p>{{studentName}}</p>");
   const [templateId, setTemplateId] = useState("");
   const [studentId, setStudentId] = useState("");
   const [genTitle, setGenTitle] = useState("");
+  const [previewHtml, setPreviewHtml] = useState<string>("");
 
   const templatesQuery = useQuery({
     queryKey: ["education", "document-templates", branch?.code],
@@ -166,6 +172,11 @@ export function EducationDocumentsPage(): JSX.Element {
     queryKey: ["education", "students", branch?.code],
     enabled: Boolean(branch?.code),
     queryFn: () => fetchEducationStudents(branch!.code),
+  });
+  const generatedQuery = useQuery({
+    queryKey: ["education", "generated-documents", branch?.code],
+    enabled: Boolean(branch?.code),
+    queryFn: () => fetchEducationGeneratedDocuments(branch!.code),
   });
 
   const createMutation = useMutation({
@@ -184,6 +195,16 @@ export function EducationDocumentsPage(): JSX.Element {
     },
   });
 
+  const seedMutation = useMutation({
+    mutationFn: () => seedEducationDocumentTemplates(branch!.code),
+    onSuccess: (result) => {
+      invalidate(["document-templates"]);
+      setNotice(
+        `Document templates ready (${result.created} new of ${result.total} — receipts, certificates, marksheets).`,
+      );
+    },
+  });
+
   const generateMutation = useMutation({
     mutationFn: () =>
       generateEducationDocument({
@@ -193,11 +214,40 @@ export function EducationDocumentsPage(): JSX.Element {
         title: genTitle.trim() || name || "Generated document",
         status: "generated",
       }),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: async (doc) => {
+      invalidate(["generated-documents"]);
       setNotice("Document generated");
+      const html =
+        doc && typeof doc === "object" && "bodyHtml" in doc
+          ? String((doc as { bodyHtml?: string }).bodyHtml ?? "")
+          : "";
+      if (html.trim()) {
+        setPreviewHtml(html);
+        const printed = await printEducationHtmlDocument(
+          html,
+          (doc as { title?: string }).title ?? "Generated document",
+        );
+        if (!printed.ok) setErrorNotice(printed.error ?? "Print failed");
+      }
     },
   });
+
+  const reprintDocument = async (id: string) => {
+    setErrorNotice(null);
+    try {
+      const doc = await fetchEducationGeneratedDocument(id);
+      const html = doc.bodyHtml?.trim() ?? "";
+      if (!html) {
+        setErrorNotice("Document has no HTML body to print");
+        return;
+      }
+      setPreviewHtml(html);
+      const printed = await printEducationHtmlDocument(html, doc.title || "Document");
+      if (!printed.ok) setErrorNotice(printed.error ?? "Print failed");
+    } catch (e) {
+      setErrorNotice((e as Error).message);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -206,15 +256,32 @@ export function EducationDocumentsPage(): JSX.Element {
         subtitle="Document templates and generate certificates / letters."
       />
       {notice ? <div className={noticeSuccessClass}>{notice}</div> : null}
+      {errorNotice ? <div className={noticeErrorClass}>{errorNotice}</div> : null}
       {templatesQuery.isError ? (
         <div className={noticeErrorClass}>{(templatesQuery.error as Error).message}</div>
       ) : null}
       {createMutation.isError ? (
         <div className={noticeErrorClass}>{(createMutation.error as Error).message}</div>
       ) : null}
+      {seedMutation.isError ? (
+        <div className={noticeErrorClass}>{(seedMutation.error as Error).message}</div>
+      ) : null}
       {generateMutation.isError ? (
         <div className={noticeErrorClass}>{(generateMutation.error as Error).message}</div>
       ) : null}
+
+      <div className="flex flex-wrap gap-2">
+        <EducationSecondaryButton
+          disabled={!branch?.code || seedMutation.isPending}
+          onClick={() => {
+            setNotice(null);
+            setErrorNotice(null);
+            seedMutation.mutate();
+          }}
+        >
+          Seed templates
+        </EducationSecondaryButton>
+      </div>
 
       <EducationFormSection title="New template">
         <EducationField label="Name" required>
@@ -241,6 +308,7 @@ export function EducationDocumentsPage(): JSX.Element {
             title={templatesQuery.isError ? "Templates API unavailable" : undefined}
             onClick={() => {
               setNotice(null);
+              setErrorNotice(null);
               createMutation.mutate();
             }}
           >
@@ -278,6 +346,7 @@ export function EducationDocumentsPage(): JSX.Element {
             disabled={!templateId || generateMutation.isPending}
             onClick={() => {
               setNotice(null);
+              setErrorNotice(null);
               generateMutation.mutate();
             }}
           >
@@ -286,6 +355,39 @@ export function EducationDocumentsPage(): JSX.Element {
         </div>
       </EducationFormSection>
 
+      {previewHtml ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/40">
+          <h3 className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">Preview</h3>
+          <iframe
+            title="Document preview"
+            className="h-80 w-full rounded-lg border border-slate-200 bg-white dark:border-slate-700"
+            srcDoc={previewHtml}
+            sandbox=""
+          />
+        </section>
+      ) : null}
+
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Generated documents</h3>
+      {generatedQuery.isError ? (
+        <div className={noticeErrorClass}>{(generatedQuery.error as Error).message}</div>
+      ) : null}
+      <EducationDataTable
+        columns={["Title", "Status", "Created", "Actions"]}
+        rows={(generatedQuery.data ?? []).map((d) => [
+          d.title,
+          d.status,
+          d.createdAt?.slice(0, 19) ?? "—",
+          <EducationSecondaryButton
+            key={`reprint-${d.id}`}
+            className="px-2 py-1"
+            onClick={() => void reprintDocument(d.id)}
+          >
+            Reprint
+          </EducationSecondaryButton>,
+        ])}
+      />
+
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Templates</h3>
       <EducationDataTable
         columns={["Name", "Type", "Status", "Updated"]}
         rows={(templatesQuery.data ?? []).map((t) => [
@@ -308,6 +410,66 @@ const REPORT_KEYS = [
   { key: "payroll", label: "Payroll report" },
 ] as const;
 
+function flattenReportRows(payload: unknown): { columns: string[]; rows: string[][] } | null {
+  if (payload == null || typeof payload !== "object") return null;
+  const obj = payload as Record<string, unknown>;
+
+  if (obj.byStatus && typeof obj.byStatus === "object" && !Array.isArray(obj.byStatus)) {
+    const entries = Object.entries(obj.byStatus as Record<string, unknown>);
+    return {
+      columns: ["Status", "Count"],
+      rows: entries.map(([k, v]) => [k, String(v)]),
+    };
+  }
+
+  for (const key of ["rows", "items", "records", "data", "students", "payments", "marks"]) {
+    const arr = obj[key];
+    if (Array.isArray(arr) && arr.length > 0 && typeof arr[0] === "object" && arr[0] != null) {
+      const columns = Object.keys(arr[0] as object);
+      return {
+        columns,
+        rows: arr.map((row) =>
+          columns.map((c) => {
+            const v = (row as Record<string, unknown>)[c];
+            if (v == null) return "—";
+            if (typeof v === "object") return JSON.stringify(v);
+            return String(v);
+          }),
+        ),
+      };
+    }
+  }
+
+  if (Array.isArray(payload) && payload.length > 0 && typeof payload[0] === "object" && payload[0] != null) {
+    const columns = Object.keys(payload[0] as object);
+    return {
+      columns,
+      rows: payload.map((row) =>
+        columns.map((c) => {
+          const v = (row as Record<string, unknown>)[c];
+          if (v == null) return "—";
+          if (typeof v === "object") return JSON.stringify(v);
+          return String(v);
+        }),
+      ),
+    };
+  }
+
+  return null;
+}
+
+function downloadCsv(filename: string, columns: string[], rows: string[][]) {
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const lines = [columns.map(escape).join(","), ...rows.map((r) => r.map(escape).join(","))];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function EducationReportsPage(): JSX.Element {
   const { branch } = useEducationAccess();
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -320,6 +482,8 @@ export function EducationReportsPage(): JSX.Element {
     enabled: Boolean(branch?.code),
     queryFn: () => fetchEducationAuditLogs(branch!.code),
   });
+
+  const table = useMemo(() => flattenReportRows(payload), [payload]);
 
   const loadReport = async (key: string) => {
     if (!branch?.code) {
@@ -338,6 +502,24 @@ export function EducationReportsPage(): JSX.Element {
     } finally {
       setLoading(false);
     }
+  };
+
+  const printReport = async () => {
+    if (!activeKey || payload == null) return;
+    const flat = flattenReportRows(payload);
+    let body: string;
+    if (flat) {
+      const head = flat.columns.map((c) => `<th>${c}</th>`).join("");
+      const bodyRows = flat.rows
+        .map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`)
+        .join("");
+      body = `<h2>Report: ${activeKey}</h2><table border="1" cellpadding="6" cellspacing="0"><thead><tr>${head}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+    } else {
+      body = `<h2>Report: ${activeKey}</h2><pre>${JSON.stringify(payload, null, 2)}</pre>`;
+    }
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Report ${activeKey}</title></head><body>${body}</body></html>`;
+    const result = await printEducationHtmlDocument(html, `Report ${activeKey}`);
+    if (!result.ok) setError(result.error ?? "Print failed");
   };
 
   return (
@@ -366,12 +548,30 @@ export function EducationReportsPage(): JSX.Element {
       {loading ? <p className="text-sm text-slate-500 dark:text-slate-400">Loading report…</p> : null}
       {activeKey && payload != null ? (
         <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/40">
-          <h3 className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">
-            Report: {activeKey}
-          </h3>
-          <pre className="max-h-80 overflow-auto rounded-lg bg-slate-50 p-3 text-xs text-slate-800 dark:bg-slate-900 dark:text-slate-200">
-            {JSON.stringify(payload, null, 2)}
-          </pre>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+              Report: {activeKey}
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <EducationSecondaryButton onClick={() => void printReport()}>Print</EducationSecondaryButton>
+              {table ? (
+                <EducationSecondaryButton
+                  onClick={() =>
+                    downloadCsv(`education-${activeKey}-report.csv`, table.columns, table.rows)
+                  }
+                >
+                  Export CSV
+                </EducationSecondaryButton>
+              ) : null}
+            </div>
+          </div>
+          {table ? (
+            <EducationDataTable columns={table.columns} rows={table.rows} />
+          ) : (
+            <pre className="max-h-80 overflow-auto rounded-lg bg-slate-50 p-3 text-xs text-slate-800 dark:bg-slate-900 dark:text-slate-200">
+              {JSON.stringify(payload, null, 2)}
+            </pre>
+          )}
         </section>
       ) : null}
 

@@ -11,6 +11,7 @@ import {
   fetchEducationStudents,
 } from "../api/education";
 import { educationMutedClass, useEducationAccess, useInvalidateEducation } from "../hooks/useEducation";
+import { printEducationAttendanceRegister } from "../lib/printAttendanceRegister";
 import {
   EducationDataTable,
   EducationField,
@@ -31,6 +32,15 @@ export function EducationAttendancePage(): JSX.Element {
   const [sectionId, setSectionId] = useState("");
   const [defaultStatus, setDefaultStatus] = useState("present");
   const [marks, setMarks] = useState<Record<string, string>>({});
+  const [printError, setPrintError] = useState<string | null>(null);
+
+  const branding = useMemo(
+    () => ({
+      institutionName: "EducationFlow",
+      branchName: branch?.name ?? branch?.code ?? "",
+    }),
+    [branch?.name, branch?.code],
+  );
 
   const attendanceQuery = useQuery({
     queryKey: ["education", "attendance", branch?.code, date, classId, sectionId],
@@ -138,6 +148,40 @@ export function EducationAttendancePage(): JSX.Element {
     setMarks(next);
   };
 
+  const printRegister = async () => {
+    setPrintError(null);
+    if (!classId || !date) {
+      setPrintError("Select date and class to print register");
+      return;
+    }
+    const className = (classesQuery.data ?? []).find((c) => c.id === classId)?.name;
+    const sectionName = (sectionsQuery.data ?? []).find((s) => s.id === sectionId)?.name;
+    const rows =
+      classStudents.length > 0
+        ? classStudents.map((s) => ({
+            personLabel: `${s.firstName} ${s.lastName ?? ""}`.trim(),
+            statusCode: marks[s.id] || defaultStatus,
+          }))
+        : (attendanceQuery.data ?? []).map((a) => {
+            const student = studentById.get(a.personId);
+            return {
+              personLabel: student
+                ? `${student.firstName} ${student.lastName ?? ""}`.trim()
+                : a.personId.slice(0, 8),
+              statusCode: a.statusCode,
+              notes: a.notes ?? undefined,
+            };
+          });
+    const result = await printEducationAttendanceRegister({
+      date,
+      className,
+      sectionName,
+      rows,
+      branding,
+    });
+    if (!result.ok) setPrintError(result.error ?? "Print failed");
+  };
+
   const disabledReason = !branch?.code
     ? "Select a branch first"
     : !date
@@ -159,6 +203,7 @@ export function EducationAttendancePage(): JSX.Element {
         subtitle="Mark student attendance by class and date. Re-saving updates existing marks."
       />
       {notice ? <div className={noticeSuccessClass}>{notice}</div> : null}
+      {printError ? <div className={noticeErrorClass}>{printError}</div> : null}
       {attendanceQuery.isError ? (
         <div className={noticeErrorClass}>{(attendanceQuery.error as Error).message}</div>
       ) : null}
@@ -225,6 +270,13 @@ export function EducationAttendancePage(): JSX.Element {
         <div className="col-span-full flex flex-wrap items-center gap-2">
           <EducationSecondaryButton type="button" onClick={applyDefault} disabled={!classId}>
             Apply default to all
+          </EducationSecondaryButton>
+          <EducationSecondaryButton
+            type="button"
+            disabled={!classId || !date}
+            onClick={() => void printRegister()}
+          >
+            Print register
           </EducationSecondaryButton>
           <EducationPrimaryButton
             disabled={Boolean(disabledReason)}
