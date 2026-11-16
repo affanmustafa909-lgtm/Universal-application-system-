@@ -57,13 +57,16 @@ const extra = Constants.expoConfig?.extra as
   | undefined;
 
 const appKind: AppKind = extra?.appKind ?? "staff";
+const isMobizoneApp = extra?.appVariant === "mobizone";
 const isAdminApp = appKind === "admin";
 const defaultRole: StaffRole =
   extra?.defaultRole === "rider" || extra?.defaultRole === "cashier" || extra?.defaultRole === "waiter"
     ? extra.defaultRole
     : "waiter";
 
-const appName = Constants.expoConfig?.name ?? (isAdminApp ? "POPS Admin" : "POPS Staff");
+const appName =
+  Constants.expoConfig?.name ??
+  (isMobizoneApp ? "MobiZone ERP" : isAdminApp ? "POPS Admin" : "POPS Staff");
 
 /** Staff APK shows Waiter | Rider. Locked APKs show one role. Admin has no role tabs. */
 const roleTabs: StaffRole[] =
@@ -97,6 +100,13 @@ export default function LoginScreen() {
   }, [accessToken]);
 
   if (accessToken && !loading && !postLoginNav) {
+    if (isMobizoneApp) {
+      if (!claims || (claims.systemType ?? "").toLowerCase() !== "mobizone") {
+        useSessionStore.getState().clear();
+        return null;
+      }
+      return <Redirect href={branch ? "/mobizone-home" : "/branch"} />;
+    }
     if (isAdminApp) {
       return <Redirect href="/admin-home" />;
     }

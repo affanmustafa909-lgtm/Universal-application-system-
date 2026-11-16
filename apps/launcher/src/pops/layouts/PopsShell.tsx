@@ -1,9 +1,12 @@
 import { Button } from "@platform/ui";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { businessSystemIdFromSystemType, getBusinessSystem } from "../../lib/businessSystems";
+import { businessLogoLetter } from "../../lib/businessLogoLetter";
 import { getEffectiveSystemLock } from "../../lib/deviceInstall";
 import { roleSelectPath } from "../../lib/loginRoles";
+import { SOFTWARE_VENDOR_NAME } from "../../lib/productBrand";
 import {
   loadUiZoomIndex,
   UI_ZOOM_CHANGED_EVENT,
@@ -13,6 +16,7 @@ import {
 import { useActiveSystemId } from "../../hooks/useActiveSystemId";
 import { SystemRouteGuard } from "../../components/SystemRouteGuard";
 import { UiZoomControls } from "../../components/UiZoomControls";
+import { VendorBrandMark } from "../../components/VendorBrandMark";
 import { useSessionStore } from "../../stores/sessionStore";
 import { usePopsStore } from "../../stores/popsStore";
 import { ThemeToggle } from "../../components/ThemeToggle";
@@ -21,6 +25,7 @@ import { PopsAlertCenter } from "../components/PopsAlertCenter";
 import { LicencePaymentAlertBanner } from "../components/LicencePaymentAlertBanner";
 import { BranchAutoConnect } from "../components/BranchAutoConnect";
 import { BranchPrintBootstrap } from "../components/BranchPrintBootstrap";
+import { fetchBusinessProfile } from "../api/operations";
 import {
   loadPosHeaderVisible,
   POS_HEADER_VISIBLE_EVENT,
@@ -96,6 +101,16 @@ export function PopsShell(): JSX.Element {
   const isPosRoute = /\/pos(?:\/|$)/.test(location.pathname);
   const showHeader = !isPosRoute || posHeaderVisible;
   const uiZoom = uiZoomScale(uiZoomIndex);
+
+  const businessProfile = useQuery({
+    queryKey: ["operations", "business-profile"],
+    queryFn: fetchBusinessProfile,
+    staleTime: 60_000,
+    retry: 1,
+  });
+  const businessName = businessProfile.data?.name?.trim() || "";
+  const brandTitle = businessName || system.name;
+  const brandLetter = businessName ? businessLogoLetter(businessName) : system.iconLetter;
 
   useEffect(() => {
     try {
@@ -177,14 +192,23 @@ export function PopsShell(): JSX.Element {
           <div className="shrink-0 border-b border-[color:var(--sidebar-line,var(--line))] bg-[var(--sidebar,#ffffff)] px-4 py-4 dark:border-slate-800 dark:bg-slate-800">
             <div className="flex items-start justify-between gap-2">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--brand)] text-sm font-bold text-[color:var(--brand-fg,var(--ink))] shadow-card">
-                  {system.iconLetter}
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${system.gradientClass} text-base font-extrabold text-slate-950 shadow-md`}
+                  title={brandTitle}
+                  aria-hidden
+                >
+                  {brandLetter}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-[color:var(--sidebar-muted,var(--brand-dark))]">
-                    {system.shortName}
+                  <div className="truncate text-sm font-extrabold leading-tight text-[color:var(--sidebar-fg,var(--ink))] dark:text-white" title={brandTitle}>
+                    {brandTitle}
                   </div>
-                  <div className="truncate text-sm font-bold text-[color:var(--sidebar-fg,var(--ink))] dark:text-white">{system.name}</div>
+                  <div className={`mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.14em] ${system.accentClass}`}>
+                    {system.name}
+                  </div>
+                  <div className="mt-0.5 truncate text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">
+                    {SOFTWARE_VENDOR_NAME}
+                  </div>
                 </div>
               </div>
               <button
@@ -202,6 +226,7 @@ export function PopsShell(): JSX.Element {
             <PopsSidebarNav />
           </nav>
           <div className="shrink-0 border-t border-[color:var(--sidebar-line,var(--line))] bg-[var(--sidebar,#ffffff)] px-4 py-3 dark:border-slate-800 dark:bg-slate-800">
+            <VendorBrandMark className="mb-2 px-1" />
             <button
               type="button"
               onClick={() => navigate("/pops/sync")}
@@ -258,6 +283,7 @@ export function PopsShell(): JSX.Element {
               </div>
             </div>
             <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+              <VendorBrandMark compact className="mr-1 hidden sm:block" />
               {systemId === "distribution" ? <DistGlobalSearch /> : null}
               <LiveServerBadge compact />
               <UiZoomControls compact />
@@ -281,9 +307,12 @@ export function PopsShell(): JSX.Element {
           </header>
         ) : isPosRoute ? (
           /* POS can hide the full header — keep zoom reachable in a slim strip. */
-          <div className="flex shrink-0 items-center justify-end gap-2 border-b border-[color:var(--line)] bg-white px-3 py-1.5 dark:border-slate-800 dark:bg-slate-900/30">
-            <LiveServerBadge compact />
-            <UiZoomControls compact />
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[color:var(--line)] bg-white px-3 py-1.5 dark:border-slate-800 dark:bg-slate-900/30">
+            <VendorBrandMark compact />
+            <div className="flex items-center gap-2">
+              <LiveServerBadge compact />
+              <UiZoomControls compact />
+            </div>
           </div>
         ) : null}
 

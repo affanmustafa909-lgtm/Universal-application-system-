@@ -16,6 +16,7 @@ const VALID_EDITIONS = new Set([
   "distribution",
   "general-store",
   "education",
+  "mobizone",
 ]);
 
 function resolveEdition(env: Record<string, string>): string {

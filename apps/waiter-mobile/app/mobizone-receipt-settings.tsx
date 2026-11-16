@@ -1,0 +1,178 @@
+import Constants from "expo-constants";
+import { Redirect } from "expo-router";
+import { useEffect, useState } from "react";
+import { Alert, ScrollView, Switch, Text, View } from "react-native";
+import { MzShell } from "../src/mobizone/MzShell";
+import {
+  DEFAULT_MOBIZONE_RECEIPT_SETTINGS,
+  loadMobizoneReceiptSettings,
+  saveMobizoneReceiptSettings,
+  type MobizoneReceiptFields,
+  type MobizoneReceiptSettings,
+} from "../src/mobizone/receiptSettings";
+import { useMz, useMzLayout } from "../src/mobizone/theme";
+import {
+  MzCard,
+  MzField,
+  MzInput,
+  MzPrimaryButton,
+  MzScreenTitle,
+  MzSection,
+} from "../src/mobizone/ui";
+import { useMobizoneDb } from "../src/mobizone/useMobizone";
+import { useSessionStore } from "../src/stores/sessionStore";
+
+const extra = Constants.expoConfig?.extra as { appVariant?: string } | undefined;
+const isMobizoneApp = extra?.appVariant === "mobizone";
+
+const TOGGLES: { key: keyof MobizoneReceiptFields; label: string }[] = [
+  { key: "device", label: "Device brand/model" },
+  { key: "imei", label: "IMEI" },
+  { key: "salePrice", label: "Price / TOTAL" },
+  { key: "cash", label: "Cash" },
+  { key: "bank", label: "Bank" },
+  { key: "remaining", label: "Remaining udhaar" },
+  { key: "footer", label: "Footer" },
+];
+
+export default function MobizoneReceiptSettingsScreen(): React.JSX.Element {
+  const mz = useMz();
+  const { pad, gap, tileW } = useMzLayout();
+  const accessToken = useSessionStore((s) => s.accessToken);
+  const { branchCode } = useMobizoneDb();
+  const [settings, setSettings] = useState<MobizoneReceiptSettings>(DEFAULT_MOBIZONE_RECEIPT_SETTINGS);
+
+  useEffect(() => {
+    setSettings(loadMobizoneReceiptSettings(branchCode));
+  }, [branchCode]);
+
+  if (!accessToken) return <Redirect href="/" />;
+  if (extra?.appVariant && !isMobizoneApp) return <Redirect href="/home" />;
+
+  function save(): void {
+    saveMobizoneReceiptSettings(branchCode, settings);
+    Alert.alert("Saved", "MobiZone phone-shop bill ab yeh settings use karega.");
+  }
+
+  return (
+    <MzShell>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: pad, paddingTop: 8, paddingBottom: 20, gap }}>
+        <MzScreenTitle
+          title="Bill print settings"
+          subtitle="Phone-shop receipt · IMEI + customer/seller KYC"
+        />
+
+        <MzCard style={{ backgroundColor: mz.navyDeep, borderColor: mz.accent }}>
+          <Text style={{ color: mz.accent, fontWeight: "800" }}>Always on bill</Text>
+          <Text style={{ color: "rgba(233,238,243,0.7)", marginTop: 6, fontSize: 13 }}>
+            Customer/Seller · Phone · CNIC · Address · IMEI — MobiZone thermal (not restaurant POS)
+          </Text>
+        </MzCard>
+
+        <MzSection title="Shop header">
+          <MzField label="Shop name">
+            <MzInput
+              value={settings.shopName}
+              onChangeText={(shopName) => setSettings((s) => ({ ...s, shopName }))}
+            />
+          </MzField>
+          <MzField label="Shop phone">
+            <MzInput
+              value={settings.shopPhone}
+              onChangeText={(shopPhone) => setSettings((s) => ({ ...s, shopPhone }))}
+            />
+          </MzField>
+          <MzField label="WhatsApp number">
+            <MzInput
+              value={settings.whatsappNumber}
+              onChangeText={(whatsappNumber) => setSettings((s) => ({ ...s, whatsappNumber }))}
+              placeholder="03xx… (share after sale)"
+              keyboardType="phone-pad"
+            />
+          </MzField>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              backgroundColor: mz.cardSoft,
+              borderRadius: 12,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: mz.border,
+            }}
+          >
+            <Text style={{ color: mz.text, fontWeight: "600", flex: 1, paddingRight: 8 }}>
+              Default share on WhatsApp
+            </Text>
+            <Switch
+              value={settings.whatsappDefaultOn}
+              onValueChange={(whatsappDefaultOn) => setSettings((s) => ({ ...s, whatsappDefaultOn }))}
+              trackColor={{ true: mz.accent, false: mz.border }}
+              thumbColor={mz.ivory}
+            />
+          </View>
+          <MzField label="Shop address">
+            <MzInput
+              value={settings.shopAddress}
+              onChangeText={(shopAddress) => setSettings((s) => ({ ...s, shopAddress }))}
+            />
+          </MzField>
+          <MzField label="Footer">
+            <MzInput
+              value={settings.footerText}
+              onChangeText={(footerText) => setSettings((s) => ({ ...s, footerText }))}
+            />
+          </MzField>
+          <View
+            style={{
+              backgroundColor: mz.cardSoft,
+              borderRadius: 12,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: mz.border,
+              gap: 4,
+            }}
+          >
+            <Text style={{ color: mz.ink, fontWeight: "800", fontSize: 12 }}>Shop logo</Text>
+            <Text style={{ color: mz.muted, fontSize: 12, lineHeight: 16 }}>
+              {settings.shopLogoUrl
+                ? "Logo synced from desktop — prints on phone-shop bills only."
+                : "Upload logo on desktop Bill print settings — syncs here (not restaurant POS)."}
+            </Text>
+          </View>
+        </MzSection>
+
+        <MzSection title="Optional fields">
+          {TOGGLES.map((t) => (
+            <View
+              key={t.key}
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                backgroundColor: mz.cardSoft,
+                borderRadius: 12,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: mz.border,
+              }}
+            >
+              <Text style={{ color: mz.text, fontWeight: "600" }}>{t.label}</Text>
+              <Switch
+                value={settings.fields[t.key]}
+                onValueChange={(v) =>
+                  setSettings((s) => ({ ...s, fields: { ...s.fields, [t.key]: v } }))
+                }
+                trackColor={{ true: mz.accent, false: mz.border }}
+                thumbColor={mz.ivory}
+              />
+            </View>
+          ))}
+        </MzSection>
+
+        <MzPrimaryButton label="Save settings" onPress={save} />
+      </ScrollView>
+    </MzShell>
+  );
+}

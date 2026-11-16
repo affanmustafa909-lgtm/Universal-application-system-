@@ -128,7 +128,7 @@ export function SuperAdminShell(): JSX.Element {
               Control plane
             </p>
             <h1 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white">
-              POPS Platform
+              Zivra Platform
             </h1>
           </div>
         </div>

@@ -64,6 +64,17 @@ const variants = {
     defaultRole: "rider",
     appKind: "staff-locked",
   },
+  /** Zivra MobiZone ERP — phone shop buy/sell APK. */
+  mobizone: {
+    name: "Zivra MobiZone ERP",
+    slug: "mobizone-erp",
+    scheme: "mobizone-erp",
+    androidPackage: "com.platform.mobizone.erp",
+    iosBundleId: "com.platform.mobizone.erp",
+    defaultRole: "admin",
+    /** Same login shell as admin (email/password); routes go to Mobizone home. */
+    appKind: "admin",
+  },
 };
 
 const selected = variants[variant] ?? variants.staff;
@@ -93,7 +104,9 @@ module.exports = {
       appVersion: base.expo.version,
       updateFeedUrl:
         process.env.EXPO_PUBLIC_UPDATE_FEED_URL ||
-        `https://github.com/basir2353/zivra-mobile-updates/releases/latest/download/latest-${variant === "admin" ? "admin" : "staff"}.json`,
+        `https://github.com/basir2353/zivra-mobile-updates/releases/latest/download/latest-${
+          variant === "mobizone" ? "mobizone" : variant === "admin" ? "admin" : "staff"
+        }.json`,
     },
   },
 };

@@ -337,7 +337,7 @@ export function LoginPage(): JSX.Element {
         </div>
         <div className={`${loginCardClass} border-teal-500/20 shadow-lg shadow-teal-900/5 ring-1 ring-teal-500/35`}>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">
-            Platform
+            Zivra
           </p>
           <h1 className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">
             {roleMeta.label}

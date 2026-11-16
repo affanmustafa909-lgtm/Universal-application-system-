@@ -68,6 +68,7 @@ const DEMO_ADMIN_EMAIL_BY_SYSTEM: Record<BusinessSystemId, string> = {
   distribution: "admin.distribution@pops.demo",
   "general-store": "admin.store@pops.demo",
   education: "admin.education@pops.demo",
+  mobizone: "admin.mobizone@pops.demo",
 };
 
 function restaurantStaff(): LoginRoleOption[] {
@@ -262,6 +263,37 @@ export function loginRolesForSystem(systemId: BusinessSystemId): {
           label: "Parent",
           description: "Linked children attendance, fees, results, notices",
           demoEmail: "parent.education@pops.demo",
+        },
+      ],
+    };
+  }
+
+  if (systemId === "mobizone") {
+    return {
+      admin: {
+        id: "admin",
+        label: "Admin",
+        description: "Full MobiZone control, users, stock, and buy/sell",
+        demoEmail: DEMO_ADMIN_EMAIL_BY_SYSTEM.mobizone,
+      },
+      staff: [
+        {
+          id: "manager",
+          label: "Manager",
+          description: "Stock, purchases, and sales oversight",
+          demoEmail: DEMO_EMAIL.manager,
+        },
+        {
+          id: "cashier",
+          label: "Staff",
+          description: "Counter buy & sell, IMEI scan, receipts",
+          demoEmail: DEMO_EMAIL.cashier,
+        },
+        {
+          id: "accountant",
+          label: "Accountant",
+          description: "Payments, cash/bank, and reports",
+          demoEmail: DEMO_EMAIL.accountant,
         },
       ],
     };

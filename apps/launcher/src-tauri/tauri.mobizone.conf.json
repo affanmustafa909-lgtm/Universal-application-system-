@@ -1,0 +1,31 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Zivra MobiZone ERP",
+  "identifier": "com.platform.mobizone",
+  "version": "1.0.4",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Zivra MobiZone ERP"
+      }
+    ]
+  },
+  "bundle": {
+    "shortDescription": "MobiZone phone shop ERP by Zivra",
+    "longDescription": "Zivra MobiZone ERP — IMEI buy/sell, cash/bank position, WhatsApp receipts, barcode stickers, and shop ledgers.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/basir2353/zivra-desktop-updates/releases/latest/download/latest-mobizone.json"
+      ]
+    }
+  }
+}

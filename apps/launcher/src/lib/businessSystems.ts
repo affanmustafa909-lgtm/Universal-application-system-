@@ -8,6 +8,7 @@ import { pharmacyNavItems } from "../pharmacy/spec/nav";
 import { distributionNavItems } from "../distribution/spec/nav";
 import { storeNavItems } from "../store/spec/nav";
 import { educationNavItems, filterEducationNavByModules } from "../education/spec/nav";
+import { mobizoneNavItems } from "../mobizone/spec/nav";
 import { frontendIdToSystemType, systemTypeToFrontendId, type SystemType } from "@platform/contracts";
 
 export type BusinessSystemId =
@@ -16,7 +17,8 @@ export type BusinessSystemId =
   | "pharmacy"
   | "distribution"
   | "general-store"
-  | "education";
+  | "education"
+  | "mobizone";
 
 export type BusinessSystem = {
   id: BusinessSystemId;
@@ -162,6 +164,29 @@ export const businessSystems: Record<BusinessSystemId, BusinessSystem> = {
     routePrefix: "/pops",
     hiddenNavPaths: educationHidden,
   },
+  mobizone: {
+    id: "mobizone",
+    name: "MobiZone ERP",
+    shortName: "MobiZone",
+    tagline: "Mobile buy · sell · IMEI stock",
+    description:
+      "Buy/sell phones with CNIC photos, shopkeeper ledgers, bank accounts, IMEI search, WhatsApp statements, and printable P&L.",
+    accentClass: "text-teal-400",
+    iconLetter: "MZ",
+    gradientClass: "from-slate-800 to-teal-600",
+    routePrefix: "/pops",
+    hiddenNavPaths: new Set([
+      "menu",
+      "tables",
+      "kitchen",
+      "waiter",
+      "delivery",
+      "inventory/recipes",
+      "inventory/ingredients",
+      "manufacturing",
+      "content",
+    ]),
+  },
 };
 
 export const businessSystemList: BusinessSystem[] = [
@@ -171,6 +196,7 @@ export const businessSystemList: BusinessSystem[] = [
   businessSystems.distribution,
   businessSystems["general-store"],
   businessSystems.education,
+  businessSystems.mobizone,
 ];
 
 /** Backend-provisioned ERP types Super Admin can create. */
@@ -183,7 +209,8 @@ export function isBusinessSystemId(value: string): value is BusinessSystemId {
     value === "pharmacy" ||
     value === "distribution" ||
     value === "general-store" ||
-    value === "education"
+    value === "education" ||
+    value === "mobizone"
   );
 }
 
@@ -243,6 +270,9 @@ export function getErpEntryPath(systemId: BusinessSystemId, hasBranch: boolean):
   if (systemId === "education") {
     return "/pops/education/dashboard";
   }
+  if (systemId === "mobizone") {
+    return "/pops/mobizone/sell";
+  }
   // Restaurant dashboard is admin-only; callers with a role should use erpEntryPathForRole.
   return "/pops/pos";
 }
@@ -281,10 +311,13 @@ export function resolveBusinessSystemFromPath(pathname: string): BusinessSystemI
   if (pathname.startsWith("/pops/education/") || pathname === "/pops/education") {
     return "education";
   }
+  if (pathname.startsWith("/pops/mobizone/") || pathname === "/pops/mobizone") {
+    return "mobizone";
+  }
   return null;
 }
 
-/** True for restaurant-only screens (not pharmacy, store, distribution, education, or shared ERP modules). */
+/** True for restaurant-only screens (not pharmacy, store, distribution, education, mobizone, or shared ERP modules). */
 export function isRestaurantExclusivePath(pathname: string): boolean {
   const sub = String(pathname ?? "")
     .replace(/^\/pops\/?/, "")
@@ -293,6 +326,7 @@ export function isRestaurantExclusivePath(pathname: string): boolean {
   if (sub.startsWith("distribution/") || sub === "distribution") return false;
   if (sub.startsWith("store/") || sub === "store") return false;
   if (sub.startsWith("education/") || sub === "education") return false;
+  if (sub.startsWith("mobizone/") || sub === "mobizone") return false;
   if (isSharedErpSubpath(sub)) return false;
   return true;
 }
@@ -327,6 +361,9 @@ export function getNavItemsForSystem(
   }
   if (id === "education") {
     return filterEducationNavByModules(educationNavItems, options?.educationModules);
+  }
+  if (id === "mobizone") {
+    return mobizoneNavItems;
   }
   const hidden = businessSystems[id].hiddenNavPaths;
   const out: PopsNavItem[] = [];

@@ -44,6 +44,12 @@ const DESKTOP_FEEDS = {
     downloadTag: (v: string) =>
       `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/EducationFlow-Management-System_${v}_x64-setup.exe`,
   },
+  mobizone: {
+    manifest: "latest-mobizone.json",
+    label: "Desktop · MobiZone",
+    downloadTag: (v: string) =>
+      `https://github.com/${DESKTOP_REPO}/releases/download/desktop-v${v}/Zivra-MobiZone-ERP_${v}_x64-setup.exe`,
+  },
 } as const;
 
 const DISTRIBUTION_FEED = {
@@ -72,6 +78,12 @@ const MOBILE_FEEDS = {
     label: "Mobile · Staff APK",
     downloadTag: (v: string) =>
       `https://github.com/${MOBILE_REPO}/releases/download/mobile-v${v}/pops-staff-release.apk`,
+  },
+  mobizone: {
+    manifest: "latest-mobizone.json",
+    label: "Mobile · Zivra MobiZone APK",
+    downloadTag: (v: string) =>
+      `https://github.com/${MOBILE_REPO}/releases/download/mobile-v${v}/mobizone-erp-release.apk`,
   },
 } as const;
 

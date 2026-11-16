@@ -4,6 +4,7 @@ import {
   type BusinessSystemId,
 } from "./businessSystems";
 import { getLockedSystemId } from "./edition";
+import { safeLocalStorageSet } from "./localStorageGuard";
 
 const INSTALL_KEY = "platform-installed-system-v1";
 
@@ -66,7 +67,7 @@ export function recordDeviceInstall(
     installedAt: new Date().toISOString(),
   };
   try {
-    localStorage.setItem(INSTALL_KEY, JSON.stringify(install));
+    safeLocalStorageSet(INSTALL_KEY, JSON.stringify(install));
   } catch {
     // storage unavailable — lock falls back to the JWT for this session only
   }

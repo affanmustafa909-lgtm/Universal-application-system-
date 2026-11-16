@@ -66,6 +66,7 @@ const VALID = new Set([
   "pharmacy",
   "distribution",
   "education",
+  "mobizone",
   "suite",
 ]);
 

@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 import { App } from "./App";
 import { clearDeviceInstall } from "./lib/deviceInstall";
 import { getApiBaseUrl } from "./lib/apiBase";
+import { ensureLocalStorageHeadroom, reclaimLocalStorageSpace } from "./lib/localStorageGuard";
 import "./index.css";
 import "./theme-overrides.css";
 import "./floor-modal.css";
@@ -11,7 +12,7 @@ import "./segmented-control.css";
 import "./date-filters-bar.css";
 import "./dashboard-charts.css";
 
-// Clear device lock before stores hydrate so the suite system picker can open.
+// Clear device lock / reclaim quota before stores hydrate so login can persist.
 try {
   const params = new URLSearchParams(window.location.search);
   if (params.get("reset-install") === "1") {
@@ -19,6 +20,12 @@ try {
     localStorage.removeItem("platform-system-v1");
     localStorage.removeItem("platform-session-v1");
   }
+  if (params.get("clear-storage") === "1") {
+    reclaimLocalStorageSpace({ keepSession: false });
+    localStorage.removeItem("platform-session-v1");
+    localStorage.removeItem("platform-system-v1");
+  }
+  ensureLocalStorageHeadroom();
 } catch {
   // ignore storage errors
 }

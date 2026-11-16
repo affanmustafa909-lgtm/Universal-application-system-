@@ -1,7 +1,8 @@
 @echo off
 setlocal EnableExtensions
-REM Publish signed desktop installers + latest-*.json to PUBLIC update repo.
+REM Publish signed desktop installers + latest-*.json to Zivra desktop update repo.
 REM Usage: local\publish-desktop-release.bat [version] [edition|all]
+REM Editions: suite | restaurant | general-store | pharmacy | education | mobizone | all
 cd /d "%~dp0\.."
 
 set "VER=%~1"
@@ -25,10 +26,11 @@ call %PNPM% exec node .\scripts\publish-desktop-update.mjs %EDITION% %VER%
 if errorlevel 1 exit /b 1
 
 echo.
-echo Live update feeds:
-echo   https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-suite.json
-echo   https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-restaurant.json
-echo   https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-general-store.json
-echo   https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-pharmacy.json
-echo   https://github.com/basir2353/pops-desktop-updates/releases/latest/download/latest-distribution.json
+echo Live Zivra update feeds:
+echo   https://github.com/basir2353/zivra-desktop-updates/releases/latest/download/latest-suite.json
+echo   https://github.com/basir2353/zivra-desktop-updates/releases/latest/download/latest-restaurant.json
+echo   https://github.com/basir2353/zivra-desktop-updates/releases/latest/download/latest-general-store.json
+echo   https://github.com/basir2353/zivra-desktop-updates/releases/latest/download/latest-pharmacy.json
+echo   https://github.com/basir2353/zivra-desktop-updates/releases/latest/download/latest-education.json
+echo   https://github.com/basir2353/zivra-desktop-updates/releases/latest/download/latest-mobizone.json
 exit /b 0

@@ -6,6 +6,7 @@
  *   pnpm build:apk:win            # staff APK (Waiter + Rider) — default
  *   pnpm build:apk:win staff
  *   pnpm build:apk:win admin
+ *   pnpm build:apk:win mobizone   # Zivra MobiZone ERP (phone shop)
  *   pnpm build:apk:win waiter     # legacy single-role
  *   pnpm build:apk:win rider      # legacy single-role
  */
@@ -48,6 +49,12 @@ const VARIANTS = {
     packageId: "com.platform.pops.rider",
     envVariant: "rider",
     displayName: "POPS Rider",
+  },
+  mobizone: {
+    apkName: "mobizone-erp-release.apk",
+    packageId: "com.platform.mobizone.erp",
+    envVariant: "mobizone",
+    displayName: "Zivra MobiZone ERP",
   },
 };
 
@@ -551,6 +558,36 @@ function writeLocalProperties(androidDirPath) {
   console.log(`[build-apk] Wrote local.properties → ${sdkDir}`);
 }
 
+/**
+ * Light AppTheme + NavigationContainer fallback=null → empty white window on some OEMs.
+ * Force a Classic ivory windowBackground so the first native frame matches MobiZone UI.
+ */
+function patchAndroidWindowBackground(androidDirPath) {
+  const stylesPath = join(androidDirPath, "app", "src", "main", "res", "values", "styles.xml");
+  if (!existsSync(stylesPath)) return;
+  let text = readFileSync(stylesPath, "utf8");
+  const splashBg = variantArg === "mobizone" ? "#E9EEF3" : "#0B1220";
+  const statusBg = variantArg === "mobizone" ? "#0C1524" : "#0B1220";
+  if (text.includes("android:windowBackground")) {
+    text = text.replace(
+      /<item name="android:windowBackground">[^<]*<\/item>/,
+      `<item name="android:windowBackground">${splashBg}</item>`,
+    );
+  } else {
+    text = text.replace(
+      /(<item name="android:statusBarColor">[^<]*<\/item>)/,
+      `$1\n    <item name="android:windowBackground">${splashBg}</item>`,
+    );
+  }
+  if (text.includes("android:statusBarColor")) {
+    text = text.replace(
+      /<item name="android:statusBarColor">[^<]*<\/item>/,
+      `<item name="android:statusBarColor">${statusBg}</item>`,
+    );
+  }
+  writeFileSync(stylesPath, text);
+}
+
 function applyAndroidPatches(buildPaths) {
   const buildGradle = join(buildPaths.androidDir, "app", "build.gradle");
   patchAndroidBuildGradle(buildGradle, buildPaths.appRoot);
@@ -562,6 +599,7 @@ function applyAndroidPatches(buildPaths) {
   patchExpoModulesCoreReactNativeDir(buildPaths);
   writeLocalProperties(buildPaths.androidDir);
   patchAndroidCleartextTraffic(buildPaths.androidDir);
+  patchAndroidWindowBackground(buildPaths.androidDir);
 }
 
 /**
@@ -778,7 +816,10 @@ console.log(`[build-apk] Done → ${apkDest}`);
 
 try {
   const manifestScript = join(__dirname, "write-mobile-update-manifest.mjs");
-  if ((variantArg === "admin" || variantArg === "staff") && existsSync(manifestScript)) {
+  if (
+    (variantArg === "admin" || variantArg === "staff" || variantArg === "mobizone") &&
+    existsSync(manifestScript)
+  ) {
     const appJsonPath = join(appRoot, "app.json");
     let ver = "1.0.0";
     let code = "0";

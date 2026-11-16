@@ -1,0 +1,523 @@
+import { Ionicons } from "@expo/vector-icons";
+import Constants from "expo-constants";
+import { Redirect, useLocalSearchParams } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { MzAttachStrip, type AttachBundle } from "../src/mobizone/MzAttachStrip";
+import { MzImeiScanner } from "../src/mobizone/MzImeiScanner";
+import { MzShell } from "../src/mobizone/MzShell";
+import { normalizeImeiScan } from "../src/mobizone/normalizeImei";
+import {
+  loadMobizoneReceiptSettings,
+  resolveWhatsAppTarget,
+} from "../src/mobizone/receiptSettings";
+import {
+  buildWhatsAppSaleText,
+  findDeviceByImei,
+  formatPkr,
+  openWhatsApp,
+  printSaleReceipt,
+  recordSale,
+} from "../src/mobizone/storeCore";
+import { useMz, useMzLayout } from "../src/mobizone/theme";
+import {
+  MzChip,
+  MzField,
+  MzInput,
+  MzPrimaryButton,
+  MzScreenTitle,
+  MzSection,
+} from "../src/mobizone/ui";
+import { useMobizoneDb } from "../src/mobizone/useMobizone";
+import { useSessionStore } from "../src/stores/sessionStore";
+
+const extra = Constants.expoConfig?.extra as { appVariant?: string } | undefined;
+const isMobizoneApp = extra?.appVariant === "mobizone";
+
+export default function MobizoneSaleScreen(): React.JSX.Element {
+  const mz = useMz();
+  const { pad, gap, tileW } = useMzLayout();
+  const accessToken = useSessionStore((s) => s.accessToken);
+  const { branchCode, db, refresh, ready } = useMobizoneDb();
+  const params = useLocalSearchParams<{ imei?: string }>();
+  const inStock = useMemo(() => db.devices.filter((d) => d.status === "in_stock"), [db.devices]);
+
+  const [scan, setScan] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [deviceId, setDeviceId] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
+  const [customerCnic, setCustomerCnic] = useState("");
+  const [attach, setAttach] = useState<AttachBundle>({
+    photoDataUrl: null,
+    cnicFrontDataUrl: null,
+    cnicBackDataUrl: null,
+    otherPhotoDataUrl: null,
+  });
+  const [price, setPrice] = useState("");
+  const [cash, setCash] = useState("");
+  const [bank, setBank] = useState("");
+  const [bankAccountId, setBankAccountId] = useState("");
+  const [payMode, setPayMode] = useState<"cash" | "bank" | "split" | "udhaar">("cash");
+  const [dueDate, setDueDate] = useState("");
+  const [warrantyDays, setWarrantyDays] = useState("0");
+  const [note, setNote] = useState("");
+  const [shareWa, setShareWa] = useState(true);
+  const [printBill, setPrintBill] = useState(true);
+
+  useEffect(() => {
+    setShareWa(loadMobizoneReceiptSettings(branchCode).whatsappDefaultOn);
+  }, [branchCode, ready]);
+
+  useEffect(() => {
+    if (!bankAccountId && db.bankAccounts.length === 1) {
+      setBankAccountId(db.bankAccounts[0]!.id);
+    }
+  }, [db.bankAccounts, bankAccountId]);
+
+  useEffect(() => {
+    const fromScan = normalizeImeiScan(String(params.imei ?? ""));
+    if (!fromScan) return;
+    setScan(fromScan);
+    const found = findDeviceByImei(branchCode, fromScan);
+    if (found && found.status === "in_stock") {
+      setDeviceId(found.id);
+      setPrice(String(found.salePricePkr ?? found.purchasePricePkr));
+    }
+  }, [params.imei, branchCode]);
+
+  if (!accessToken) return <Redirect href="/" />;
+  if (extra?.appVariant && !isMobizoneApp) return <Redirect href="/home" />;
+
+  const selected = inStock.find((d) => d.id === deviceId) ?? null;
+  const priceN = Number(price) || 0;
+  const cashN = payMode === "bank" || payMode === "udhaar" ? 0 : Number(cash) || 0;
+  const bankN = payMode === "cash" || payMode === "udhaar" ? 0 : Number(bank) || 0;
+  const remaining = Math.max(0, priceN - cashN - bankN);
+
+  function applyScan(raw = scan): void {
+    if (!ready) return;
+    const code = normalizeImeiScan(raw);
+    setScan(code);
+    const found = findDeviceByImei(branchCode, code);
+    if (!found || found.status !== "in_stock") {
+      Alert.alert("Not found", "No in-stock device matched that IMEI / barcode.");
+      return;
+    }
+    setDeviceId(found.id);
+    setPrice(String(found.salePricePkr ?? found.purchasePricePkr));
+  }
+
+  function onSave(): void {
+    if (!ready) {
+      Alert.alert("Please wait", "Data abhi load ho raha hai — 1 second baad try karein.");
+      return;
+    }
+    if (!deviceId || !customerName.trim() || !(priceN > 0)) {
+      Alert.alert("Missing info", "Select a phone, customer name, and sale price.");
+      return;
+    }
+    if (!customerPhone.trim()) {
+      Alert.alert("Customer phone", "Phone bill / WhatsApp ke liye zaroori hai.");
+      return;
+    }
+    const resolvedBankId =
+      bankAccountId || (bankN > 0 && db.bankAccounts.length === 1 ? db.bankAccounts[0]!.id : "");
+    if (bankN > 0 && !resolvedBankId) {
+      Alert.alert("Bank account", "Bank amount ke liye account select karein.");
+      return;
+    }
+    if (remaining > 0 && !dueDate.trim()) {
+      Alert.alert("Due date", "Udhaar / remaining balance ke liye due date likhein (YYYY-MM-DD).");
+      return;
+    }
+    const acc = db.bankAccounts.find((a) => a.id === resolvedBankId);
+    try {
+      const sale = recordSale(branchCode, {
+        deviceId,
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim() || null,
+        customerAddress: customerAddress.trim() || null,
+        customerCnic: customerCnic.trim() || null,
+        customerPhotoDataUrl: attach.photoDataUrl,
+        otherPhotoDataUrl: attach.otherPhotoDataUrl,
+        cnicFrontDataUrl: attach.cnicFrontDataUrl,
+        cnicBackDataUrl: attach.cnicBackDataUrl,
+        pricePkr: priceN,
+        dueDate: remaining > 0 ? dueDate.trim() : null,
+        warrantyDays: Number(warrantyDays) || 0,
+        note: note.trim() || null,
+        payment: {
+          cashPkr: cashN,
+          bankPkr: bankN,
+          bank:
+            bankN > 0
+              ? {
+                  bankAccountId: resolvedBankId,
+                  bankName: acc?.bankName ?? null,
+                  accountTitle: acc?.accountTitle ?? null,
+                  verified: true,
+                }
+              : undefined,
+        },
+      });
+      refresh();
+      if (printBill) void printSaleReceipt(sale, branchCode);
+      Alert.alert("Sale saved", `${sale.brand} ${sale.model} · ${formatPkr(sale.pricePkr)}`, [
+        {
+          text: "Print bill",
+          onPress: () => {
+            void printSaleReceipt(sale, branchCode);
+          },
+        },
+        {
+          text: shareWa ? "OK · WhatsApp" : "OK",
+          onPress: () => {
+            if (!shareWa) return;
+            const settings = loadMobizoneReceiptSettings(branchCode);
+            openWhatsApp(
+              resolveWhatsAppTarget(sale.customerPhone, settings),
+              buildWhatsAppSaleText(sale, branchCode),
+            );
+          },
+        },
+      ]);
+      setDeviceId("");
+      setCustomerName("");
+      setCustomerPhone("");
+      setCustomerAddress("");
+      setCustomerCnic("");
+      setAttach({
+        photoDataUrl: null,
+        otherPhotoDataUrl: null,
+        cnicFrontDataUrl: null,
+        cnicBackDataUrl: null,
+      });
+      setPrice("");
+      setCash("");
+      setBank("");
+      setScan("");
+      setDueDate("");
+      setWarrantyDays("0");
+      setNote("");
+    } catch (e) {
+      Alert.alert("Error", e instanceof Error ? e.message : "Could not save sale");
+    }
+  }
+
+  return (
+    <MzShell>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: pad, paddingTop: 8, paddingBottom: 20, gap }}>
+        <MzScreenTitle title="New Sale" subtitle="Select phone · customer · cash / bank / udhaar" />
+        {!ready ? <ActivityIndicator color={mz.accent} /> : null}
+
+        <MzSection title="Phone">
+          <MzField label="Scan IMEI / Barcode">
+            <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+              <MzInput
+                value={scan}
+                onChangeText={setScan}
+                placeholder="Enter or scan IMEI"
+                style={{ flex: 1 }}
+              />
+              <Pressable
+                onPress={() => setScannerOpen(true)}
+                style={{
+                  width: 46,
+                  height: 46,
+                  borderRadius: 12,
+                  backgroundColor: mz.navy,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name="barcode-outline" size={20} color={mz.accent} />
+              </Pressable>
+              <Pressable
+                onPress={() => applyScan()}
+                style={{
+                  backgroundColor: mz.accent,
+                  borderRadius: 10,
+                  paddingHorizontal: 14,
+                  justifyContent: "center",
+                  minHeight: 46,
+                }}
+              >
+                <Text style={{ color: mz.onAccent, fontWeight: "800" }}>Find</Text>
+              </Pressable>
+            </View>
+          </MzField>
+          <MzField label="Select Mobile">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 44 }}>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {inStock.length === 0 ? (
+                  <Text style={{ color: mz.muted }}>No stock — add a purchase first</Text>
+                ) : (
+                  inStock.map((d) => (
+                    <Pressable
+                      key={d.id}
+                      onPress={() => {
+                        setDeviceId(d.id);
+                        setPrice(String(d.salePricePkr ?? d.purchasePricePkr));
+                      }}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        borderRadius: 10,
+                        backgroundColor: deviceId === d.id ? mz.gold : mz.ivory,
+                        borderWidth: 1,
+                        borderColor: deviceId === d.id ? mz.gold : mz.border,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: mz.navy,
+                          fontWeight: "700",
+                          fontSize: 12,
+                        }}
+                      >
+                        {d.brand} {d.model}
+                        {d.storage ? ` · ${d.storage}` : ""}
+                      </Text>
+                    </Pressable>
+                  ))
+                )}
+              </View>
+            </ScrollView>
+            {selected ? (
+              <Text style={{ color: mz.teal, marginTop: 6, fontSize: 12 }}>
+                IMEI {selected.imei}
+                {selected.imei2 ? ` / ${selected.imei2}` : ""}
+                {selected.colour ? ` · ${selected.colour}` : ""}
+                {" · Cost "}
+                {formatPkr(selected.purchasePricePkr)}
+              </Text>
+            ) : null}
+          </MzField>
+        </MzSection>
+
+        <MzSection title="Customer">
+          <MzField label="Customer Name *">
+            <MzInput
+              value={customerName}
+              onChangeText={setCustomerName}
+              placeholder="Customer full name"
+            />
+          </MzField>
+          <MzField label="Phone *">
+            <MzInput
+              value={customerPhone}
+              onChangeText={setCustomerPhone}
+              keyboardType="phone-pad"
+              placeholder="03XXXXXXXXX"
+            />
+          </MzField>
+          <MzField label="CNIC / ID">
+            <MzInput
+              value={customerCnic}
+              onChangeText={setCustomerCnic}
+              placeholder="xxxxx-xxxxxxx-x"
+            />
+          </MzField>
+          <MzField label="Address">
+            <MzInput
+              value={customerAddress}
+              onChangeText={setCustomerAddress}
+              placeholder="Customer address"
+            />
+          </MzField>
+          <MzAttachStrip value={attach} onChange={setAttach} photoLabel="Customer photo" />
+        </MzSection>
+
+        <MzSection title="Payment">
+          <MzField label="Sale Price">
+            <MzInput
+              value={price}
+              onChangeText={setPrice}
+              keyboardType="numeric"
+              placeholder="0"
+            />
+          </MzField>
+          <MzField label="Warranty (days)">
+            <MzInput
+              value={warrantyDays}
+              onChangeText={setWarrantyDays}
+              keyboardType="number-pad"
+              placeholder="0"
+            />
+          </MzField>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {(
+              [
+                ["cash", "Cash"],
+                ["bank", "Bank"],
+                ["split", "Split"],
+                ["udhaar", "Udhaar"],
+              ] as const
+            ).map(([m, label]) => (
+              <MzChip
+                key={m}
+                label={label}
+                active={payMode === m}
+                onPress={() => {
+                  setPayMode(m);
+                  if (m === "udhaar") {
+                    setCash("");
+                    setBank("");
+                  }
+                }}
+              />
+            ))}
+          </View>
+
+          {payMode === "cash" || payMode === "split" ? (
+            <MzField label="Cash Received">
+              <MzInput value={cash} onChangeText={setCash} keyboardType="numeric" placeholder="0" />
+            </MzField>
+          ) : null}
+          {payMode === "bank" || payMode === "split" ? (
+            <>
+              <MzField label="Bank Received">
+                <MzInput
+                  value={bank}
+                  onChangeText={setBank}
+                  keyboardType="numeric"
+                  placeholder="0"
+                />
+              </MzField>
+              <MzField label="Bank Account">
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {db.bankAccounts.map((a) => (
+                    <Pressable
+                      key={a.id}
+                      onPress={() => setBankAccountId(a.id)}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        borderRadius: 10,
+                        backgroundColor: bankAccountId === a.id ? mz.navy : mz.ivory,
+                        borderWidth: 1,
+                        borderColor: bankAccountId === a.id ? mz.navy : mz.border,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: bankAccountId === a.id ? mz.gold : mz.text,
+                          fontWeight: "600",
+                          fontSize: 12,
+                        }}
+                      >
+                        {a.bankName}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </MzField>
+            </>
+          ) : null}
+          {remaining > 0 ? (
+            <MzField label="Due date (udhaar)">
+              <MzInput value={dueDate} onChangeText={setDueDate} placeholder="YYYY-MM-DD" />
+            </MzField>
+          ) : null}
+          <MzField label="Note (bill pe print)">
+            <MzInput
+              value={note}
+              onChangeText={setNote}
+              placeholder="Remarks / condition / promise…"
+            />
+          </MzField>
+          <View
+            style={{
+              backgroundColor: "#F3E8D0",
+              borderRadius: 12,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: mz.gold,
+              gap: 6,
+            }}
+          >
+            <Row label="Sale Price" value={formatPkr(priceN)} />
+            <Row label="Received" value={formatPkr(cashN + bankN)} tone={mz.teal} />
+            <Row
+              label="Remaining balance"
+              value={formatPkr(remaining)}
+              tone={remaining > 0 ? mz.rose : mz.teal}
+            />
+          </View>
+          <Pressable
+            onPress={() => setPrintBill((v) => !v)}
+            style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 }}
+          >
+            <View
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 6,
+                borderWidth: 2,
+                borderColor: mz.navy,
+                backgroundColor: printBill ? mz.gold : mz.cardSoft,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {printBill ? <Text style={{ color: mz.navy, fontWeight: "900", fontSize: 12 }}>✓</Text> : null}
+            </View>
+            <Text style={{ color: mz.text, fontWeight: "600", flex: 1 }}>Print bill on save</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setShareWa((v) => !v)}
+            style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 }}
+          >
+            <View
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 6,
+                borderWidth: 2,
+                borderColor: mz.navy,
+                backgroundColor: shareWa ? mz.gold : mz.cardSoft,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {shareWa ? <Text style={{ color: mz.navy, fontWeight: "900", fontSize: 12 }}>✓</Text> : null}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: mz.text, fontWeight: "600" }}>Share receipt on WhatsApp</Text>
+              {(() => {
+                const wa = loadMobizoneReceiptSettings(branchCode).whatsappNumber?.trim();
+                return wa ? (
+                  <Text style={{ color: mz.muted, fontSize: 12, marginTop: 2 }}>
+                    Shop WA (desktop): {wa}
+                  </Text>
+                ) : null;
+              })()}
+            </View>
+          </Pressable>
+        </MzSection>
+
+        <MzPrimaryButton
+          label={printBill ? "Save Sale · Print bill" : "Save Sale"}
+          onPress={onSave}
+        />
+      </ScrollView>
+      <MzImeiScanner
+        visible={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScanned={(code) => applyScan(code)}
+      />
+    </MzShell>
+  );
+}
+
+function Row({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  const mz = useMz();
+  return (
+    <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>
+      <Text style={{ color: mz.muted }}>{label}</Text>
+      <Text style={{ color: tone ?? mz.text, fontWeight: "700" }}>{value}</Text>
+    </View>
+  );
+}

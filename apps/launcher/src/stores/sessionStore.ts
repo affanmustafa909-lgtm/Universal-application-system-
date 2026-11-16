@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import type { AccessTokenClaims } from "../lib/jwt";
+import { createGuardedWebStorage } from "../lib/localStorageGuard";
 
 export type SessionState = {
   accessToken: string | null;
@@ -80,6 +81,7 @@ export const useSessionStore = create<SessionState>()(
     }),
     {
       name: "platform-session-v1",
+      storage: createJSONStorage(() => createGuardedWebStorage()),
       // orderTypeModalShown / seatingModalShown / pharmacyPosContextModalShown intentionally excluded —
       // they must reset to false on every fresh app launch, not persist across restarts.
       partialize: (s) => ({

@@ -1,11 +1,12 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import {
   type BusinessSystemId,
   getBusinessSystem,
   isBusinessSystemId,
 } from "../lib/businessSystems";
 import { getEffectiveSystemLock } from "../lib/deviceInstall";
+import { createGuardedWebStorage } from "../lib/localStorageGuard";
 
 type SystemState = {
   systemId: BusinessSystemId | null;
@@ -27,6 +28,7 @@ export const useSystemStore = create<SystemState>()(
     }),
     {
       name: "platform-system-v1",
+      storage: createJSONStorage(() => createGuardedWebStorage()),
       partialize: (s) => ({ systemId: s.systemId }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SystemState>;

@@ -13,7 +13,7 @@ export function isTauriShell(): boolean {
 /** Local folder hint shown in UI. */
 export const LOCAL_UPDATES_DIR_HINT = "%LOCALAPPDATA%\\Zivra\\updates";
 
-export type SetupChannel = "suite" | "distribution" | "education";
+export type SetupChannel = "suite" | "distribution" | "education" | "mobizone";
 
 export function setupExeFileName(channel: SetupChannel, version: string): string {
   if (channel === "distribution") {
@@ -21,6 +21,9 @@ export function setupExeFileName(channel: SetupChannel, version: string): string
   }
   if (channel === "education") {
     return `EducationFlow-Management-System_${version}_x64-setup.exe`;
+  }
+  if (channel === "mobizone") {
+    return `Zivra-MobiZone-ERP_${version}_x64-setup.exe`;
   }
   return `Zivra-Universal-Management-System_${version}_x64-setup.exe`;
 }
@@ -32,6 +35,9 @@ export function setupExeDownloadUrl(channel: SetupChannel, version: string): str
   if (channel === "education") {
     return DESKTOP_FEEDS.education.downloadTag(version);
   }
+  if (channel === "mobizone") {
+    return DESKTOP_FEEDS.mobizone.downloadTag(version);
+  }
   return DESKTOP_FEEDS.suite.downloadTag(version);
 }
 
@@ -39,6 +45,7 @@ export function setupExeDownloadUrl(channel: SetupChannel, version: string): str
 export function currentSetupChannel(): SetupChannel | null {
   if (PLATFORM_EDITION === "distribution") return "distribution";
   if (PLATFORM_EDITION === "education") return "education";
+  if (PLATFORM_EDITION === "mobizone") return "mobizone";
   if (PLATFORM_EDITION === "suite") return "suite";
   return null;
 }

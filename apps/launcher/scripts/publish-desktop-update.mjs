@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
  *   node scripts/publish-desktop-update.mjs <edition> [version]
  *   node scripts/publish-desktop-update.mjs all [version]
  *
- * Editions: suite | restaurant | general-store | pharmacy | education | all
+ * Editions: suite | restaurant | general-store | pharmacy | education | mobizone | all
  */
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -21,7 +21,14 @@ const updatesDir = join(repoRoot, "dist-installers", "updates");
 const editionArg = (process.argv[2] ?? "").trim();
 const versionArg = (process.argv[3] ?? "").trim();
 
-const DESKTOP_EDITIONS = ["suite", "restaurant", "general-store", "pharmacy", "education"];
+const DESKTOP_EDITIONS = [
+  "suite",
+  "restaurant",
+  "general-store",
+  "pharmacy",
+  "education",
+  "mobizone",
+];
 const owner = "basir2353";
 const repo = "zivra-desktop-updates";
 
@@ -190,7 +197,8 @@ function resolveEditionPackage(edition) {
         return (
           url.includes(name) ||
           nameLower.includes(editionKey) ||
-          (edition === "education" && nameLower.includes("educationflow"))
+          (edition === "education" && nameLower.includes("educationflow")) ||
+          (edition === "mobizone" && nameLower.includes("mobizone"))
         );
       }
       return false;

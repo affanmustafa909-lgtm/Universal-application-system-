@@ -130,8 +130,8 @@ export function SystemSelectPage(): JSX.Element {
     <div className="mx-auto min-h-screen max-w-5xl bg-slate-50 px-6 py-10 dark:bg-slate-950">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">
-            Platform launcher
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-700 dark:text-amber-400">
+            Zivra
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
             Choose your business system

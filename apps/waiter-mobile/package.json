@@ -12,6 +12,7 @@
     "build:apk:win": "node scripts/build-apk.mjs",
     "build:staff-apk:win": "node scripts/build-apk.mjs staff",
     "build:admin-apk:win": "node scripts/build-apk.mjs admin",
+    "build:mobizone-apk:win": "node scripts/build-apk.mjs mobizone",
     "build:rider-apk:win": "node scripts/build-apk.mjs rider",
     "build:waiter-apk:win": "node scripts/build-apk.mjs waiter",
     "typecheck": "tsc -p tsconfig.json --noEmit",

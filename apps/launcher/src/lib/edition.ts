@@ -42,6 +42,8 @@ export const HAS_GENERAL_STORE =
   PLATFORM_EDITION === "suite" || PLATFORM_EDITION === "general-store";
 export const HAS_EDUCATION =
   PLATFORM_EDITION === "suite" || PLATFORM_EDITION === "education";
+export const HAS_MOBIZONE =
+  PLATFORM_EDITION === "suite" || PLATFORM_EDITION === "mobizone";
 
 /** True when this build ships a single locked business system. */
 export function isSingleSystemEdition(): boolean {
@@ -73,5 +75,6 @@ export function isSystemAvailable(id: BusinessSystemId): boolean {
   if (id === "distribution") return HAS_DISTRIBUTION;
   if (id === "general-store") return HAS_GENERAL_STORE;
   if (id === "education") return HAS_EDUCATION;
+  if (id === "mobizone") return HAS_MOBIZONE;
   return false;
 }
