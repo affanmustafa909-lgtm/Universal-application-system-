@@ -16,7 +16,6 @@ import {
   colors,
 } from "../src/components/ui";
 import { ThemeToggle } from "../src/components/ThemeToggle";
-import { getApiBaseUrl } from "../src/lib/apiBase";
 import { decodeAccessToken } from "../src/lib/jwt";
 import { warmApiConnection } from "../src/lib/warmApi";
 import {
@@ -88,10 +87,9 @@ export default function LoginScreen() {
   const [roleTab, setRoleTab] = useState<StaffRole>(defaultRole);
   const [branchCode, setBranchCode] = useState("ISB-GT");
   const [pin, setPin] = useState("");
-  const [email, setEmail] = useState(
-    isMobizoneApp ? "" : isAdminApp ? "admin.restaurant@pops.demo" : ROLE_DEFAULTS[defaultRole].email,
-  );
-  const [password, setPassword] = useState(isMobizoneApp ? "" : isAdminApp ? "Owner@12345" : "changeme-please-01");
+  // Customer APKs: never pre-fill demo/admin credentials.
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [postLoginNav, setPostLoginNav] = useState(false);
@@ -106,9 +104,10 @@ export default function LoginScreen() {
     if (isMobizoneApp) {
       if (!claims || (claims.systemType ?? "").toLowerCase() !== "mobizone") {
         useSessionStore.getState().clear();
-        return null;
+        // Fall through to empty login form (never blank white screen).
+      } else {
+        return <Redirect href={branch ? "/mobizone-home" : "/branch"} />;
       }
-      return <Redirect href={branch ? "/mobizone-home" : "/branch"} />;
     }
     if (isAdminApp) {
       return <Redirect href="/admin-home" />;
@@ -220,11 +219,9 @@ export default function LoginScreen() {
       setPostLoginNav(false);
       const message = err instanceof Error ? err.message : "Login failed";
       if (isMobizoneApp) {
-        setError(`${message}\n\nAPI: ${getApiBaseUrl()}\nSame accounts as desktop EXE.`);
+        setError(message);
       } else if (message.toLowerCase().includes("invalid") && !isAdminApp) {
-        setError(
-          `${message}\n\nDemo for this tab:\n${ROLE_DEFAULTS[roleTab].email} / changeme-please-01`,
-        );
+        setError(message);
       } else {
         setError(message);
       }
@@ -348,17 +345,6 @@ export default function LoginScreen() {
                   onPress={() => void handlePasswordLogin()}
                   loading={loading}
                 />
-                {!isAdminApp ? (
-                  <Subtitle>
-                    Demo: {ROLE_DEFAULTS[roleTab].email} / changeme-please-01
-                  </Subtitle>
-                ) : (
-                  <Subtitle>
-                    Demo: admin.restaurant@pops.demo / Owner@12345
-                    {"\n"}
-                    (or admin@platform.local / Owner@12345)
-                  </Subtitle>
-                )}
               </View>
             ) : (
               <View style={{ gap: 14, marginTop: 8 }}>
@@ -381,11 +367,6 @@ export default function LoginScreen() {
                   loading={loading}
                   disabled={pin.length !== 4}
                 />
-                {roleCopy.demoPin ? (
-                  <Subtitle>
-                    Demo PIN: {roleCopy.demoPin} · Branch: {branchCode || "ISB-GT"}
-                  </Subtitle>
-                ) : null}
               </View>
             )}
 

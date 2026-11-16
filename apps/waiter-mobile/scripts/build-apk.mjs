@@ -111,6 +111,49 @@ function loadEnvApiUrl() {
   process.exit(1);
 }
 
+/**
+ * Short-path trees (D:\pops\…) can go stale. Mirror JS/config from this repo
+ * into the build root so login/API fixes actually ship in the APK.
+ */
+function syncSourcesToShortPath(destAppRoot) {
+  if (resolve(destAppRoot) === resolve(appRoot)) return;
+  if (!isWin) return;
+  console.log(`[build-apk] Syncing sources → ${destAppRoot}`);
+  mkdirSync(destAppRoot, { recursive: true });
+  // /MIR /E copy tree; exclude heavy/native dirs that stay local to the short path.
+  const result = spawnSync(
+    "robocopy",
+    [
+      appRoot,
+      destAppRoot,
+      "/MIR",
+      "/XD",
+      "android",
+      "node_modules",
+      ".expo",
+      "dist",
+      "build",
+      ".git",
+      "/XF",
+      "*.apk",
+      "/NFL",
+      "/NDL",
+      "/NJH",
+      "/NJS",
+      "/nc",
+      "/ns",
+      "/np",
+    ],
+    { stdio: "inherit", shell: false },
+  );
+  // robocopy exit codes 0–7 are success
+  const code = result.status ?? 1;
+  if (code >= 8) {
+    console.error(`[build-apk] robocopy failed with code ${code}`);
+    process.exit(1);
+  }
+}
+
 function resolveBuildPaths() {
   const shortRoots =
     process.env.POPS_SKIP_SHORT_PATH === "1"
@@ -132,6 +175,7 @@ function resolveBuildPaths() {
     ];
     for (const layout of layouts) {
       if (!existsSync(join(layout.appRoot, "package.json"))) continue;
+      syncSourcesToShortPath(layout.appRoot);
       console.log(`[build-apk] Building from ${layout.appRoot} (short path for native CMake)…`);
       return {
         appRoot: layout.appRoot,

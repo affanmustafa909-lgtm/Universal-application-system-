@@ -11,7 +11,6 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { MOBIZONE_DEMO_EMAIL, MOBIZONE_DEMO_PASSWORD } from "./assertMobizoneAccount";
 import { useMzLayout } from "./theme";
 import { MzThemeToggle } from "./ui";
 
@@ -85,10 +84,12 @@ export function MzLoginView({
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="email-address"
-                  placeholder={MOBIZONE_DEMO_EMAIL}
+                  placeholder="Email"
                   placeholderTextColor="rgba(233,238,243,0.35)"
                   value={email}
                   onChangeText={onEmailChange}
+                  textContentType="username"
+                  autoComplete="username"
                 />
               </View>
             </View>
@@ -105,6 +106,8 @@ export function MzLoginView({
                   value={password}
                   onChangeText={onPasswordChange}
                   onSubmitEditing={onSubmit}
+                  textContentType="password"
+                  autoComplete="password"
                 />
               </View>
             </View>
@@ -118,8 +121,11 @@ export function MzLoginView({
 
             <Pressable
               onPress={onSubmit}
-              disabled={loading}
-              style={({ pressed }) => [styles.submit, { opacity: pressed || loading ? 0.88 : 1 }]}
+              disabled={loading || !email.trim() || !password}
+              style={({ pressed }) => [
+                styles.submit,
+                { opacity: pressed || loading || !email.trim() || !password ? 0.88 : 1 },
+              ]}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
@@ -130,10 +136,6 @@ export function MzLoginView({
                 </>
               )}
             </Pressable>
-
-            <Text style={styles.hint}>
-              Same central login as desktop EXE · demo {MOBIZONE_DEMO_EMAIL} / {MOBIZONE_DEMO_PASSWORD}
-            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -27,14 +27,13 @@ export async function passwordLogin(email: string, password: string): Promise<To
   if (!res.ok) {
     const text = await res.text();
     if (res.status === 401) {
-      let message =
-        "Invalid credentials — check email/password. MobiZone demo: admin.mobizone@pops.demo / Owner@12345";
+      let message = "Invalid email or password.";
       try {
         const parsed = JSON.parse(text) as { message?: string };
         if (parsed.message) {
           message =
             parsed.message === "Invalid credentials"
-              ? "Invalid credentials — wrong password for this email, or account not on this API."
+              ? "Invalid email or password."
               : parsed.message;
         }
       } catch {

@@ -12,11 +12,22 @@ function isLocalUrl(url: string): boolean {
   return /localhost|127\.0\.0\.1/i.test(url);
 }
 
+function appVariant(): string {
+  return String(
+    (Constants.expoConfig?.extra as { appVariant?: string } | undefined)?.appVariant ?? "",
+  ).toLowerCase();
+}
+
 /**
  * Resolve API base for every APK / Expo client.
- * Priority: build-time env → app.config extra → live Railway (never silent localhost in release).
+ * MobiZone always uses the live Railway API (same users as desktop EXE).
  */
 export function getApiBaseUrl(): string {
+  // Phone-shop APK must never hit localhost — same accounts as desktop.
+  if (appVariant() === "mobizone") {
+    return LIVE_API_BASE_URL;
+  }
+
   const fromProcess = (
     globalThis as { process?: { env?: Record<string, string | undefined> } }
   ).process?.env?.EXPO_PUBLIC_API_BASE_URL;
@@ -24,7 +35,6 @@ export function getApiBaseUrl(): string {
   const raw = normalizeUrl(String(fromProcess || fromExtra || ""));
 
   if (raw) {
-    // Release/store builds must not stick on localhost if a bad .env leaked in.
     if (isLocalUrl(raw) && !__DEV__) {
       return LIVE_API_BASE_URL;
     }
