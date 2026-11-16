@@ -53,7 +53,12 @@ export function SystemRouteGuard(): JSX.Element {
     const restaurantLeak =
       !isRestaurantFamilySystem(effectiveLock) && isRestaurantExclusivePath(pathname);
     if (crossSystem || restaurantLeak) {
-      return <Navigate to={homePath(effectiveLock)} replace />;
+      const dest = homePath(effectiveLock);
+      // Guard against self-redirect loops when entry path was misconfigured.
+      if (dest === pathname) {
+        return <Navigate to={getErpEntryPath(effectiveLock, hasBranch)} replace />;
+      }
+      return <Navigate to={dest} replace />;
     }
     return <Outlet />;
   }

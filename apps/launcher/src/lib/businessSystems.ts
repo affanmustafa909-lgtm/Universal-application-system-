@@ -271,7 +271,7 @@ export function getErpEntryPath(systemId: BusinessSystemId, hasBranch: boolean):
     return "/pops/education/dashboard";
   }
   if (systemId === "mobizone") {
-    return "/pops/mobizone/sell";
+    return "/pops/mobizone/dashboard";
   }
   // Restaurant dashboard is admin-only; callers with a role should use erpEntryPathForRole.
   return "/pops/pos";

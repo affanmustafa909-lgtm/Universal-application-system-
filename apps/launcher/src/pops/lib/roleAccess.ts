@@ -172,6 +172,14 @@ export function erpEntryPathForRole(
   if (systemId === "general-store") {
     return role === "admin" ? "/pops/store/dashboard" : "/pops/store/pos";
   }
+  // Must never fall through to restaurant /pops/pos — that path is not registered
+  // in locked Mobizone/Education EXEs and causes a blank shell (redirect loop).
+  if (systemId === "mobizone") {
+    return "/pops/mobizone/dashboard";
+  }
+  if (systemId === "education") {
+    return "/pops/education/dashboard";
+  }
 
   switch (role) {
     case "cashier":
