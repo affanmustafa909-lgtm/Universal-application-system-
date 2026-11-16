@@ -10,7 +10,6 @@ import { MzCard, MzEmpty, MzNavyHeader } from "../src/mobizone/ui";
 import { useMobizoneDb } from "../src/mobizone/useMobizone";
 import { useBranchStore } from "../src/stores/branchStore";
 import { useSessionStore } from "../src/stores/sessionStore";
-import { Badge, Separator } from "../src/ui";
 
 const extra = Constants.expoConfig?.extra as { appVariant?: string } | undefined;
 const isMobizoneApp = extra?.appVariant === "mobizone";
@@ -124,9 +123,20 @@ export default function MobizoneHomeScreen(): React.JSX.Element {
             >
               ORDER NOW
             </Text>
-            <Badge tone={mz.accent}>{ready ? "Live" : "Syncing"}</Badge>
+            <View
+              style={{
+                backgroundColor: mz.accent,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 999,
+              }}
+            >
+              <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>
+                {ready ? "Live" : "Syncing"}
+              </Text>
+            </View>
           </View>
-          <Separator style={{ backgroundColor: mz.border }} />
+          <View style={{ height: 1, backgroundColor: mz.border }} />
 
           <Pressable
             onPress={() => router.push("/mobizone-sale" as never)}
