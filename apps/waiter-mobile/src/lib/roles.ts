@@ -1,7 +1,7 @@
 import type { AccessTokenClaims } from "./jwt";
 
 export type StaffRole = "waiter" | "rider" | "cashier";
-export type AppKind = "staff" | "admin" | "staff-locked";
+export type AppKind = "staff" | "admin" | "staff-locked" | "mobizone";
 
 export function resolveStaffRole(claims: AccessTokenClaims | null): StaffRole | null {
   if (!claims) return null;
@@ -42,7 +42,8 @@ export function canTogglePra(claims: AccessTokenClaims | null): boolean {
 export function homeRouteForRole(
   role: StaffRole | null,
   appKind: AppKind = "staff",
-): "/home" | "/rider-home" | "/admin-home" {
+): "/home" | "/rider-home" | "/admin-home" | "/mobizone-home" {
+  if (appKind === "mobizone") return "/mobizone-home";
   if (appKind === "admin") return "/admin-home";
   return role === "rider" ? "/rider-home" : "/home";
 }

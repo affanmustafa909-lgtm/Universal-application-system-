@@ -16,6 +16,7 @@ import {
   colors,
 } from "../src/components/ui";
 import { ThemeToggle } from "../src/components/ThemeToggle";
+import { getApiBaseUrl } from "../src/lib/apiBase";
 import { decodeAccessToken } from "../src/lib/jwt";
 import { warmApiConnection } from "../src/lib/warmApi";
 import {
@@ -25,6 +26,8 @@ import {
   type AppKind,
   type StaffRole,
 } from "../src/lib/roles";
+import { assertMobizoneAccount } from "../src/mobizone/assertMobizoneAccount";
+import { MzLoginView } from "../src/mobizone/MzLoginView";
 import { useBranchStore } from "../src/stores/branchStore";
 import { markOnline } from "../src/stores/connectivityStore";
 import { useSessionStore } from "../src/stores/sessionStore";
@@ -57,7 +60,7 @@ const extra = Constants.expoConfig?.extra as
   | undefined;
 
 const appKind: AppKind = extra?.appKind ?? "staff";
-const isMobizoneApp = extra?.appVariant === "mobizone";
+const isMobizoneApp = extra?.appVariant === "mobizone" || appKind === "mobizone";
 const isAdminApp = appKind === "admin";
 const defaultRole: StaffRole =
   extra?.defaultRole === "rider" || extra?.defaultRole === "cashier" || extra?.defaultRole === "waiter"
@@ -68,7 +71,7 @@ const appName =
   Constants.expoConfig?.name ??
   (isMobizoneApp ? "MobiZone ERP" : isAdminApp ? "POPS Admin" : "POPS Staff");
 
-/** Staff APK shows Waiter | Rider. Locked APKs show one role. Admin has no role tabs. */
+/** Staff APK shows Waiter | Rider. Locked APKs show one role. Admin / MobiZone have no role tabs. */
 const roleTabs: StaffRole[] =
   appKind === "staff" ? ["waiter", "rider"] : appKind === "staff-locked" ? [defaultRole] : [];
 
@@ -86,9 +89,9 @@ export default function LoginScreen() {
   const [branchCode, setBranchCode] = useState("ISB-GT");
   const [pin, setPin] = useState("");
   const [email, setEmail] = useState(
-    isAdminApp ? "admin.restaurant@pops.demo" : ROLE_DEFAULTS[defaultRole].email,
+    isMobizoneApp ? "" : isAdminApp ? "admin.restaurant@pops.demo" : ROLE_DEFAULTS[defaultRole].email,
   );
-  const [password, setPassword] = useState(isAdminApp ? "Owner@12345" : "changeme-please-01");
+  const [password, setPassword] = useState(isMobizoneApp ? "" : isAdminApp ? "Owner@12345" : "changeme-please-01");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [postLoginNav, setPostLoginNav] = useState(false);
@@ -129,7 +132,7 @@ export default function LoginScreen() {
   }
 
   function assertRoleMatches(resolvedRole: StaffRole | null): void {
-    if (isAdminApp) return;
+    if (isAdminApp || isMobizoneApp) return;
     if (roleTab === "rider" && resolvedRole !== "rider") {
       throw new Error("This login is not a Rider account. Switch to the Waiter tab or use rider credentials.");
     }
@@ -143,8 +146,8 @@ export default function LoginScreen() {
 
   async function handlePinLogin(pinValue = pin): Promise<void> {
     setError(null);
-    if (isAdminApp) {
-      setError("Admin app uses Email login. Use email & password for Incharge/Admin.");
+    if (isAdminApp || isMobizoneApp) {
+      setError("This app uses Email login. Use email & password.");
       return;
     }
     if (!/^\d{4}$/.test(pinValue)) {
@@ -184,6 +187,16 @@ export default function LoginScreen() {
       const tokens = await passwordLogin(email.trim(), password);
       const decoded = decodeAccessToken(tokens.accessToken);
 
+      if (isMobizoneApp) {
+        assertMobizoneAccount(decoded);
+        setPostLoginNav(true);
+        clearBranch();
+        setTokens(tokens.accessToken, tokens.refreshToken, decoded, email.trim());
+        markOnline();
+        router.replace("/branch");
+        return;
+      }
+
       if (isAdminApp) {
         if (!isAdminOrIncharge(decoded)) {
           throw new Error("This Admin APK is for Incharge/Admin only. Waiters and riders must use the Staff app.");
@@ -206,7 +219,9 @@ export default function LoginScreen() {
     } catch (err) {
       setPostLoginNav(false);
       const message = err instanceof Error ? err.message : "Login failed";
-      if (message.toLowerCase().includes("invalid") && !isAdminApp) {
+      if (isMobizoneApp) {
+        setError(`${message}\n\nAPI: ${getApiBaseUrl()}\nSame accounts as desktop EXE.`);
+      } else if (message.toLowerCase().includes("invalid") && !isAdminApp) {
         setError(
           `${message}\n\nDemo for this tab:\n${ROLE_DEFAULTS[roleTab].email} / changeme-please-01`,
         );
@@ -216,6 +231,20 @@ export default function LoginScreen() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (isMobizoneApp) {
+    return (
+      <MzLoginView
+        email={email}
+        password={password}
+        loading={loading}
+        error={error}
+        onEmailChange={setEmail}
+        onPasswordChange={setPassword}
+        onSubmit={() => void handlePasswordLogin()}
+      />
+    );
   }
 
   const roleCopy = isAdminApp

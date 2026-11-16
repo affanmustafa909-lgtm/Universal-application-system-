@@ -132,7 +132,7 @@ export function MzLoginView({
             </Pressable>
 
             <Text style={styles.hint}>
-              Demo · {MOBIZONE_DEMO_EMAIL} / {MOBIZONE_DEMO_PASSWORD}
+              Same central login as desktop EXE · demo {MOBIZONE_DEMO_EMAIL} / {MOBIZONE_DEMO_PASSWORD}
             </Text>
           </View>
         </ScrollView>

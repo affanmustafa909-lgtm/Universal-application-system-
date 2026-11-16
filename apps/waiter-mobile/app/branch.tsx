@@ -1,3 +1,4 @@
+import Constants from "expo-constants";
 import { useQuery } from "@tanstack/react-query";
 import { Redirect, useRouter } from "expo-router";
 import { useEffect, useMemo } from "react";
@@ -5,9 +6,15 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { fetchPopsBranches } from "../src/api/operations";
 import { Card, Label, Muted, Screen, Subtitle, Title, colors, Button } from "../src/components/ui";
 import { markOnline } from "../src/stores/connectivityStore";
-import { homeRouteForRole, resolveStaffRole } from "../src/lib/roles";
+import { homeRouteForRole, resolveStaffRole, type AppKind } from "../src/lib/roles";
 import { useBranchStore } from "../src/stores/branchStore";
 import { useSessionStore } from "../src/stores/sessionStore";
+
+const extra = Constants.expoConfig?.extra as
+  | { appKind?: AppKind; appVariant?: string }
+  | undefined;
+const appKind: AppKind =
+  extra?.appVariant === "mobizone" ? "mobizone" : (extra?.appKind ?? "staff");
 
 export default function BranchScreen() {
   const router = useRouter();
@@ -19,7 +26,7 @@ export default function BranchScreen() {
   const clearBranch = useBranchStore((s) => s.clear);
 
   const role = resolveStaffRole(claims);
-  const homeRoute = homeRouteForRole(role);
+  const homeRoute = homeRouteForRole(role, appKind);
 
   const branchesQuery = useQuery({
     queryKey: ["branches"],
@@ -83,9 +90,11 @@ export default function BranchScreen() {
       <View>
         <Title>Select branch</Title>
         <Subtitle>
-          {role === "rider"
-            ? "Choose the branch you are delivering for today."
-            : "Choose the restaurant branch you are serving today."}
+          {appKind === "mobizone"
+            ? "Choose your shop branch (same account as desktop EXE)."
+            : role === "rider"
+              ? "Choose the branch you are delivering for today."
+              : "Choose the restaurant branch you are serving today."}
         </Subtitle>
       </View>
 

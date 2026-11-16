@@ -19,10 +19,11 @@ const variant =
   loadEnvValue("EXPO_PUBLIC_APP_VARIANT") ||
   loadEnvValue("APP_VARIANT") ||
   "staff";
+const LIVE_API = "https://backend-system-production-28a3.up.railway.app";
 const apiBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ||
   loadEnvValue("EXPO_PUBLIC_API_BASE_URL") ||
-  "http://127.0.0.1:3000";
+  LIVE_API;
 
 const variants = {
   /** Combined Waiter + Rider APK — two role tabs, Email | PIN login. */
@@ -64,7 +65,7 @@ const variants = {
     defaultRole: "rider",
     appKind: "staff-locked",
   },
-  /** Zivra MobiZone ERP — phone shop buy/sell APK. */
+  /** Zivra MobiZone ERP — phone shop buy/sell APK (same central Railway users as desktop EXE). */
   mobizone: {
     name: "Zivra MobiZone ERP",
     slug: "mobizone-erp",
@@ -72,8 +73,7 @@ const variants = {
     androidPackage: "com.platform.mobizone.erp",
     iosBundleId: "com.platform.mobizone.erp",
     defaultRole: "admin",
-    /** Same login shell as admin (email/password); routes go to Mobizone home. */
-    appKind: "admin",
+    appKind: "mobizone",
   },
 };
 
