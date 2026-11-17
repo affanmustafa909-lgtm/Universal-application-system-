@@ -412,8 +412,15 @@ function ensureAndroidProject(apiUrl, buildPaths) {
     return;
   }
 
-  const needsPrebuild = !androidExists || packageMismatch;
-  if (!needsPrebuild) return;
+  // forcePrebuild=1 with matching package used to return here without bumping
+  // versionName/versionCode — APK kept shipping the previous native version.
+  const needsPrebuild = !androidExists || packageMismatch || forcePrebuild;
+  if (!needsPrebuild) {
+    forceAppDisplayName(buildPaths.androidDir, variant.displayName);
+    forceAndroidVersion(buildGradle);
+    forceArm64AbiFilters(buildGradle);
+    return;
+  }
 
   // Prefer rename over expo --clean rmdir (Windows often locks android/ mid-build).
   if (existsSync(buildPaths.androidDir)) {
