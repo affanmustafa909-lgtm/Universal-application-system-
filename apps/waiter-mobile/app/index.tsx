@@ -78,9 +78,12 @@ export default function LoginScreen() {
   const router = useRouter();
   const accessToken = useSessionStore((s) => s.accessToken);
   const claims = useSessionStore((s) => s.claims);
+  const sessionHydrated = useSessionStore((s) => s.hydrated);
   const setTokens = useSessionStore((s) => s.setTokens);
+  const clearSession = useSessionStore((s) => s.clear);
   const clearBranch = useBranchStore((s) => s.clear);
   const branch = useBranchStore((s) => s.branch);
+  const branchHydrated = useBranchStore((s) => s.hydrated);
 
   // Staff opens on Email first; PIN remains available as a second option.
   const [loginMode, setLoginMode] = useState<LoginMode>("password");
@@ -100,20 +103,44 @@ export default function LoginScreen() {
     return () => subscription.remove();
   }, [accessToken]);
 
+  // Clear non-Mobizone tokens outside render (render-time clear can blank the tree).
+  useEffect(() => {
+    if (!isMobizoneApp || !sessionHydrated || !accessToken) return;
+    if (!claims || (claims.systemType ?? "").toLowerCase() !== "mobizone") {
+      clearSession();
+    }
+  }, [accessToken, claims, clearSession, sessionHydrated]);
+
+  if (!sessionHydrated || !branchHydrated) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: isMobizoneApp ? "#050a12" : colors.bg,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Text style={{ color: isMobizoneApp ? "#E9EEF3" : colors.text, fontWeight: "600" }}>
+          Starting…
+        </Text>
+      </View>
+    );
+  }
+
   if (accessToken && !loading && !postLoginNav) {
     if (isMobizoneApp) {
       if (!claims || (claims.systemType ?? "").toLowerCase() !== "mobizone") {
-        useSessionStore.getState().clear();
-        // Fall through to empty login form (never blank white screen).
+        // useEffect clears session; keep login shell visible.
       } else {
         return <Redirect href={branch ? "/mobizone-home" : "/branch"} />;
       }
-    }
-    if (isAdminApp) {
+    } else if (isAdminApp) {
       return <Redirect href="/admin-home" />;
+    } else {
+      const home = branch ? homeRouteForRole(resolveStaffRole(claims), appKind) : "/branch";
+      return <Redirect href={home} />;
     }
-    const home = branch ? homeRouteForRole(resolveStaffRole(claims), appKind) : "/branch";
-    return <Redirect href={home} />;
   }
 
   function selectRole(role: StaffRole): void {

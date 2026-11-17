@@ -183,7 +183,6 @@ export default function RootLayout() {
   const hydrateBranch = useBranchStore((s) => s.hydrate);
   const hydrateTheme = useThemeStore((s) => s.hydrate);
   const sessionHydrated = useSessionStore((s) => s.hydrated);
-  const branchHydrated = useBranchStore((s) => s.hydrated);
 
   useEffect(() => {
     void warmApiConnection();
@@ -200,10 +199,8 @@ export default function RootLayout() {
     void bootstrapSession();
   }, [sessionHydrated]);
 
-  if (!sessionHydrated || !branchHydrated) {
-    return null;
-  }
-
+  // Never return null from root layout — Expo Router + Light AppTheme leaves a
+  // permanent white native window. Always mount the Stack; screens wait on hydrate.
   return (
     <RootErrorBoundary>
       <QueryClientProvider client={queryClient}>

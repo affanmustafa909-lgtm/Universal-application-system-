@@ -603,33 +603,64 @@ function writeLocalProperties(androidDirPath) {
 }
 
 /**
- * Light AppTheme + NavigationContainer fallback=null → empty white window on some OEMs.
- * Force a Classic ivory windowBackground so the first native frame matches MobiZone UI.
+ * Light AppTheme + root layout returning null → empty white window on Android.
+ * Must set windowBackground on AppTheme itself (not only SplashScreen).
  */
 function patchAndroidWindowBackground(androidDirPath) {
   const stylesPath = join(androidDirPath, "app", "src", "main", "res", "values", "styles.xml");
   if (!existsSync(stylesPath)) return;
   let text = readFileSync(stylesPath, "utf8");
-  const splashBg = variantArg === "mobizone" ? "#E9EEF3" : "#0B1220";
+  const windowBg = variantArg === "mobizone" ? "#0C1524" : "#0B1220";
   const statusBg = variantArg === "mobizone" ? "#0C1524" : "#0B1220";
-  if (text.includes("android:windowBackground")) {
-    text = text.replace(
-      /<item name="android:windowBackground">[^<]*<\/item>/,
-      `<item name="android:windowBackground">${splashBg}</item>`,
-    );
-  } else {
-    text = text.replace(
-      /(<item name="android:statusBarColor">[^<]*<\/item>)/,
-      `$1\n    <item name="android:windowBackground">${splashBg}</item>`,
-    );
-  }
-  if (text.includes("android:statusBarColor")) {
-    text = text.replace(
-      /<item name="android:statusBarColor">[^<]*<\/item>/,
-      `<item name="android:statusBarColor">${statusBg}</item>`,
-    );
-  }
+
+  // Patch AppTheme block specifically — SplashScreen already has windowBackground,
+  // so a global first-match replace never updates AppTheme (the theme MainActivity uses).
+  text = text.replace(
+    /(<style name="AppTheme"[^>]*>)([\s\S]*?)(<\/style>)/,
+    (_full, open, body, close) => {
+      let next = body;
+      if (/android:windowBackground/.test(next)) {
+        next = next.replace(
+          /<item name="android:windowBackground">[^<]*<\/item>/,
+          `<item name="android:windowBackground">${windowBg}</item>`,
+        );
+      } else if (/android:statusBarColor/.test(next)) {
+        next = next.replace(
+          /(<item name="android:statusBarColor">[^<]*<\/item>)/,
+          `$1\n    <item name="android:windowBackground">${windowBg}</item>`,
+        );
+      } else {
+        next = `\n    <item name="android:windowBackground">${windowBg}</item>${next}`;
+      }
+      if (/android:statusBarColor/.test(next)) {
+        next = next.replace(
+          /<item name="android:statusBarColor">[^<]*<\/item>/,
+          `<item name="android:statusBarColor">${statusBg}</item>`,
+        );
+      }
+      return `${open}${next}${close}`;
+    },
+  );
+
+  // Keep splash aligned with AppTheme so the handoff is not a white flash.
+  text = text.replace(
+    /(<style name="Theme\.App\.SplashScreen"[^>]*>)([\s\S]*?)(<\/style>)/,
+    (_full, open, body, close) => {
+      let next = body;
+      if (/android:windowBackground/.test(next)) {
+        next = next.replace(
+          /<item name="android:windowBackground">[^<]*<\/item>/,
+          `<item name="android:windowBackground">${windowBg}</item>`,
+        );
+      } else {
+        next = `\n    <item name="android:windowBackground">${windowBg}</item>${next}`;
+      }
+      return `${open}${next}${close}`;
+    },
+  );
+
   writeFileSync(stylesPath, text);
+  console.log(`[build-apk] AppTheme windowBackground → ${windowBg}`);
 }
 
 function applyAndroidPatches(buildPaths) {
