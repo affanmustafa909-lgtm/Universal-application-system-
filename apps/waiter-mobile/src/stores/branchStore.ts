@@ -27,20 +27,29 @@ export const useBranchStore = create<BranchState>((set) => ({
   },
 
   hydrate: async () => {
+    const finish = (branch: PopsBranch | null) => set({ branch, hydrated: true });
+    const watchdog = setTimeout(() => {
+      if (useBranchStore.getState().hydrated) return;
+      console.warn("[branchStore] hydrate watchdog — forcing empty branch");
+      finish(null);
+    }, 2500);
+
     try {
       const raw = await secureGet(BRANCH_KEY);
+      clearTimeout(watchdog);
       if (!raw) {
-        set({ hydrated: true });
+        finish(null);
         return;
       }
       try {
-        set({ branch: JSON.parse(raw) as PopsBranch, hydrated: true });
+        finish(JSON.parse(raw) as PopsBranch);
       } catch {
-        set({ branch: null, hydrated: true });
+        finish(null);
       }
     } catch (err) {
       console.warn("[branchStore] hydrate failed:", err);
-      set({ branch: null, hydrated: true });
+      clearTimeout(watchdog);
+      finish(null);
     }
   },
 }));

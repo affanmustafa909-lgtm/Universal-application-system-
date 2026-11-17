@@ -111,28 +111,13 @@ export default function LoginScreen() {
     }
   }, [accessToken, claims, clearSession, sessionHydrated]);
 
-  if (!sessionHydrated || !branchHydrated) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: isMobizoneApp ? "#050a12" : colors.bg,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Text style={{ color: isMobizoneApp ? "#E9EEF3" : colors.text, fontWeight: "600" }}>
-          Starting…
-        </Text>
-      </View>
-    );
-  }
+  // Never block on hydrate — SecureStore hangs on some phones and left users on
+  // "Starting…". Show login immediately; only auto-redirect after hydrate succeeds.
+  const canAutoEnter = sessionHydrated && branchHydrated && !!accessToken && !loading && !postLoginNav;
 
-  if (accessToken && !loading && !postLoginNav) {
+  if (canAutoEnter) {
     if (isMobizoneApp) {
-      if (!claims || (claims.systemType ?? "").toLowerCase() !== "mobizone") {
-        // useEffect clears session; keep login shell visible.
-      } else {
+      if (claims && (claims.systemType ?? "").toLowerCase() === "mobizone") {
         return <Redirect href={branch ? "/mobizone-home" : "/branch"} />;
       }
     } else if (isAdminApp) {

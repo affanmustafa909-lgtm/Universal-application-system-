@@ -43,6 +43,22 @@ export const useSessionStore = create<SessionState>((set) => ({
   },
 
   hydrate: async () => {
+    const finishEmpty = () =>
+      set({
+        accessToken: null,
+        refreshToken: null,
+        claims: null,
+        waiterEmail: null,
+        hydrated: true,
+      });
+
+    // Hard deadline — SecureStore can hang forever on some Android OEMs.
+    const watchdog = setTimeout(() => {
+      if (useSessionStore.getState().hydrated) return;
+      console.warn("[sessionStore] hydrate watchdog — forcing empty session");
+      finishEmpty();
+    }, 2500);
+
     try {
       const currentApiBase = getApiBaseUrl();
       const [access, refresh, email, storedApiBase] = await Promise.all([
@@ -60,13 +76,8 @@ export const useSessionStore = create<SessionState>((set) => ({
           secureDelete(EMAIL_KEY),
           secureDelete(API_BASE_KEY),
         ]);
-        set({
-          accessToken: null,
-          refreshToken: null,
-          claims: null,
-          waiterEmail: null,
-          hydrated: true,
-        });
+        clearTimeout(watchdog);
+        finishEmpty();
         return;
       }
 
@@ -78,6 +89,7 @@ export const useSessionStore = create<SessionState>((set) => ({
           claims = null;
         }
       }
+      clearTimeout(watchdog);
       set({
         accessToken: access,
         refreshToken: refresh,
@@ -87,13 +99,8 @@ export const useSessionStore = create<SessionState>((set) => ({
       });
     } catch (err) {
       console.warn("[sessionStore] hydrate failed:", err);
-      set({
-        accessToken: null,
-        refreshToken: null,
-        claims: null,
-        waiterEmail: null,
-        hydrated: true,
-      });
+      clearTimeout(watchdog);
+      finishEmpty();
     }
   },
 }));
