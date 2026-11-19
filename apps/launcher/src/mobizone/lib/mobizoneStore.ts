@@ -3303,7 +3303,19 @@ function resolveDeviceImei2(
 function thermalShell(
   width: number,
   body: string,
-  opts?: { paperWidthMm?: 58 | 80; fontScale?: number; density?: "compact" | "comfortable"; theme?: "classic" | "dark" },
+  opts?: {
+    paperWidthMm?: 58 | 80;
+    fontScale?: number;
+    density?: "compact" | "comfortable";
+    theme?: "classic" | "dark";
+    design?: {
+      accent: string;
+      text: string;
+      muted: string;
+      border: string;
+      background: string;
+    };
+  },
 ): string {
   const paperMm = opts?.paperWidthMm === 58 ? 58 : 80;
   const scale = Math.min(1.35, Math.max(0.75, opts?.fontScale ?? 1));
@@ -3312,12 +3324,13 @@ function thermalShell(
   const padY = compact ? 2 : 6;
   const padX = compact ? 2 : 4;
   const fs = Math.round(12 * scale);
-  // Screen can be navy; print is always thermal black-on-white (no half black/white).
-  const bg = dark ? "#0b1220" : "#ffffff";
-  const fg = dark ? "#f8fafc" : "#0f172a";
-  const muted = dark ? "#cbd5e1" : "#475569";
-  const accent = dark ? "#5eead4" : "#0f172a";
-  const line = dark ? "#334155" : "#0f172a";
+  // Custom design drives on-screen preview; print stays thermal black-on-white.
+  const d = opts?.design;
+  const bg = d?.background ?? (dark ? "#0b1220" : "#ffffff");
+  const fg = d?.text ?? (dark ? "#f8fafc" : "#0f172a");
+  const muted = d?.muted ?? (dark ? "#cbd5e1" : "#475569");
+  const accent = d?.accent ?? (dark ? "#5eead4" : "#0f172a");
+  const line = d?.border ?? (dark ? "#334155" : "#0f172a");
   return `
 <style>
   @page{size:${paperMm}mm auto;margin:2mm}
@@ -3417,6 +3430,7 @@ export function buildSaleReceiptHtml(
     fontScale: settings.fontScale,
     density: settings.density,
     theme: settings.slipTheme,
+    design: settings.design,
   });
 }
 
@@ -3482,6 +3496,7 @@ export function buildPurchaseReceiptHtml(
     fontScale: settings.fontScale,
     density: settings.density,
     theme: settings.slipTheme,
+    design: settings.design,
   });
 }
 

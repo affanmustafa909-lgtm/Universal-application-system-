@@ -1845,29 +1845,52 @@ function resolveDeviceImei2(
   return (device?.imei2 ?? "").trim();
 }
 
-function thermalShell(width: number, body: string): string {
+function thermalShell(
+  width: number,
+  body: string,
+  settings?: MobizoneReceiptSettings,
+): string {
+  const scale = Math.min(1.35, Math.max(0.75, settings?.fontScale ?? 1));
+  const compact = (settings?.density ?? "compact") === "compact";
+  const paperMm = settings?.paperWidthMm === 58 ? 58 : 80;
+  const d = settings?.design;
+  const bg = d?.background ?? "#ffffff";
+  const fg = d?.text ?? "#0f172a";
+  const muted = d?.muted ?? "#475569";
+  const accent = d?.accent ?? "#0f766e";
+  const line = d?.border ?? accent;
+  const padY = compact ? 4 : 8;
+  const padX = compact ? 4 : 8;
+  const fs = Math.round(12 * scale);
   return `
 <style>
-  @page{margin:4mm}
-  .rcpt{max-width:${width}px;margin:0 auto;font-family:ui-monospace,"Courier New",monospace;font-size:12px;color:#0f172a;line-height:1.4;padding:8px}
-  .rcpt .brand{text-align:center;padding-bottom:6px;border-bottom:2px solid #0f766e;margin-bottom:6px}
-  .rcpt .logo{display:block;margin:0 auto 6px;width:72px;height:72px;object-fit:contain}
-  .rcpt .shop{font-size:17px;font-weight:800;margin:0;text-transform:uppercase;letter-spacing:.04em;color:#0f766e}
-  .rcpt .sub{text-align:center;font-size:11px;margin:2px 0;color:#334155}
-  .rcpt .title{text-align:center;font-size:12px;font-weight:800;margin:8px 0 2px;letter-spacing:.12em;text-transform:uppercase}
-  .rcpt .pill{display:inline-block;border:1.5px solid #0f766e;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;color:#0f766e}
-  .rcpt .dash{text-align:center;letter-spacing:1px;margin:6px 0;color:#64748b;white-space:pre;overflow:hidden}
-  .rcpt .sec{font-size:10px;font-weight:800;margin:8px 0 4px;text-transform:uppercase;letter-spacing:.08em;color:#0f766e}
+  @page{size:${paperMm}mm auto;margin:4mm}
+  html,body{margin:0;padding:0;background:${bg}!important;color:${fg}!important}
+  .rcpt{max-width:${width}px;margin:0 auto;font-family:ui-monospace,"Courier New",monospace;font-size:${fs}px;color:${fg};line-height:${compact ? 1.25 : 1.4};padding:${padY}px ${padX}px;background:${bg}}
+  .rcpt .brand{text-align:center;padding-bottom:${compact ? 4 : 6}px;border-bottom:2px solid ${line};margin-bottom:${compact ? 4 : 6}px}
+  .rcpt .logo{display:block;margin:0 auto ${compact ? 4 : 6}px;width:${compact ? 56 : 72}px;height:${compact ? 56 : 72}px;object-fit:contain}
+  .rcpt .shop{font-size:${Math.round(17 * scale)}px;font-weight:800;margin:0;text-transform:uppercase;letter-spacing:.04em;color:${accent}}
+  .rcpt .sub{text-align:center;font-size:${Math.round(11 * scale)}px;margin:2px 0;color:${muted}}
+  .rcpt .title{text-align:center;font-size:${Math.round(12 * scale)}px;font-weight:800;margin:${compact ? 4 : 8}px 0 2px;letter-spacing:.12em;text-transform:uppercase;color:${fg}}
+  .rcpt .pill{display:inline-block;border:1.5px solid ${accent};border-radius:6px;padding:2px 8px;font-size:${Math.round(10 * scale)}px;font-weight:700;color:${accent}}
+  .rcpt .dash{text-align:center;letter-spacing:1px;margin:${compact ? 3 : 6}px 0;color:${muted};white-space:pre;overflow:hidden}
+  .rcpt .sec{font-size:${Math.round(10 * scale)}px;font-weight:800;margin:${compact ? 4 : 8}px 0 4px;text-transform:uppercase;letter-spacing:.08em;color:${accent}}
   .rcpt .kv{display:flex;justify-content:space-between;gap:10px;margin:2px 0}
-  .rcpt .kv span:first-child{color:#475569}
-  .rcpt .kv span:last-child{text-align:right;font-weight:700}
-  .rcpt .item .name{font-weight:800}
-  .rcpt .item .meta{font-size:11px;color:#475569;font-family:ui-monospace,monospace}
-  .rcpt .totalbox{margin-top:8px;padding:8px 0;border-top:2px solid #0f766e;border-bottom:2px solid #0f766e}
-  .rcpt .totalbox .kv span{font-size:14px;font-weight:800}
-  .rcpt .foot{text-align:center;margin-top:10px;font-size:11px}
-  .rcpt .wa{text-align:center;margin-top:4px;font-size:10px;color:#0f766e;font-weight:700}
-  .rcpt .cut{text-align:center;margin-top:8px;font-size:10px;color:#94a3b8}
+  .rcpt .kv span:first-child{color:${muted}}
+  .rcpt .kv span:last-child{text-align:right;font-weight:700;color:${fg}}
+  .rcpt .item .name{font-weight:800;color:${fg}}
+  .rcpt .item .meta{font-size:${Math.round(11 * scale)}px;color:${muted};font-family:ui-monospace,monospace}
+  .rcpt .totalbox{margin-top:${compact ? 4 : 8}px;padding:${compact ? 4 : 8}px 0;border-top:2px solid ${line};border-bottom:2px solid ${line}}
+  .rcpt .totalbox .kv span{font-size:${Math.round(14 * scale)}px;font-weight:800;color:${fg}}
+  .rcpt .foot{text-align:center;margin-top:${compact ? 6 : 10}px;font-size:${Math.round(11 * scale)}px;color:${muted}}
+  .rcpt .wa{text-align:center;margin-top:4px;font-size:${Math.round(10 * scale)}px;color:${accent};font-weight:700}
+  .rcpt .cut{text-align:center;margin-top:8px;font-size:${Math.round(10 * scale)}px;color:${muted}}
+  @media print{
+    html,body,.rcpt{background:#ffffff!important;color:#000000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .rcpt .shop,.rcpt .title,.rcpt .pill,.rcpt .sec,.rcpt .wa,.rcpt .item .name,.rcpt .kv span:last-child,.rcpt .totalbox .kv span{color:#000000!important;border-color:#000000!important}
+    .rcpt .sub,.rcpt .dash,.rcpt .kv span:first-child,.rcpt .item .meta,.rcpt .foot,.rcpt .cut{color:#222222!important}
+    .rcpt .brand,.rcpt .totalbox{border-color:#000000!important}
+  }
 </style>
 <div class="rcpt">${body}</div>`;
 }
@@ -1924,7 +1947,7 @@ export function buildSaleReceiptHtml(
   ${f.footer && settings.footerText ? `<p class="foot">${escapeHtml(settings.footerText)}</p>` : `<p class="foot">Shukriya — Visit again</p>`}
   ${wa ? `<p class="wa">WhatsApp ${escapeHtml(wa)}</p>` : ""}
   <p class="cut">— ${escapeHtml(settings.shopName || "MobiZone")} phone shop —</p>`;
-  return thermalShell(width, body);
+  return thermalShell(width, body, settings);
 }
 
 export function buildPurchaseReceiptHtml(
@@ -1973,7 +1996,7 @@ export function buildPurchaseReceiptHtml(
   ${f.footer && settings.footerText ? `<p class="foot">${escapeHtml(settings.footerText)}</p>` : `<p class="foot">Shukriya</p>`}
   ${wa ? `<p class="wa">WhatsApp ${escapeHtml(wa)}</p>` : ""}
   <p class="cut">— ${escapeHtml(settings.shopName || "MobiZone")} phone shop —</p>`;
-  return thermalShell(width, body);
+  return thermalShell(width, body, settings);
 }
 
 export async function printSaleReceipt(

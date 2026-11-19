@@ -4,7 +4,9 @@ import { useMobizoneBranchCode, useMobizoneDb } from "../hooks/useMobizone";
 import {
   DEFAULT_MOBIZONE_RECEIPT_SETTINGS,
   MOBIZONE_RECEIPT_FIELD_LABELS,
+  RECEIPT_DESIGN_PRESETS,
   loadMobizoneReceiptSettings,
+  type MobizoneReceiptDesign,
   type MobizoneReceiptFields,
   type MobizoneReceiptSettings,
 } from "../lib/mobizoneReceiptSettings";
@@ -282,12 +284,17 @@ export function MobizoneReceiptSettingsPage(): JSX.Element {
               <MzField label="Slip look">
                 <MzSelect
                   value={settings.slipTheme}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const slipTheme = e.target.value === "classic" ? "classic" : "dark";
                     setSettings((s) => ({
                       ...s,
-                      slipTheme: e.target.value === "classic" ? "classic" : "dark",
-                    }))
-                  }
+                      slipTheme,
+                      design:
+                        slipTheme === "dark"
+                          ? { ...RECEIPT_DESIGN_PRESETS.navy }
+                          : { ...RECEIPT_DESIGN_PRESETS.teal },
+                    }));
+                  }}
                 >
                   <option value="dark">Full black (both sides)</option>
                   <option value="classic">White paper</option>
@@ -301,6 +308,72 @@ export function MobizoneReceiptSettingsPage(): JSX.Element {
                   />
                 </MzField>
               </div>
+            </div>
+          </MzSection>
+
+          <MzSection title="Design colors (preview)">
+            <p className={`mb-2 text-xs ${mutedClass}`}>
+              On-screen / share preview colors. Thermal print stays black on white.
+            </p>
+            <div className="mb-3 flex flex-wrap gap-2">
+              {(
+                [
+                  ["Teal", RECEIPT_DESIGN_PRESETS.teal],
+                  ["Classic", RECEIPT_DESIGN_PRESETS.classic],
+                  ["Navy", RECEIPT_DESIGN_PRESETS.navy],
+                ] as const
+              ).map(([label, preset]) => (
+                <button
+                  key={label}
+                  type="button"
+                  className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold dark:border-slate-600"
+                  onClick={() =>
+                    setSettings((s) => ({
+                      ...s,
+                      design: { ...preset },
+                      slipTheme: label === "Navy" ? "dark" : "classic",
+                    }))
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(
+                [
+                  ["accent", "Accent"],
+                  ["text", "Text"],
+                  ["muted", "Muted"],
+                  ["border", "Border"],
+                  ["background", "Background"],
+                ] as const
+              ).map(([key, label]) => (
+                <MzField key={key} label={label}>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={settings.design[key]}
+                      onChange={(e) =>
+                        setSettings((s) => ({
+                          ...s,
+                          design: { ...s.design, [key]: e.target.value } as MobizoneReceiptDesign,
+                        }))
+                      }
+                      className="h-9 w-12 cursor-pointer rounded border border-slate-300 bg-transparent dark:border-slate-600"
+                    />
+                    <MzInput
+                      value={settings.design[key]}
+                      onChange={(e) =>
+                        setSettings((s) => ({
+                          ...s,
+                          design: { ...s.design, [key]: e.target.value } as MobizoneReceiptDesign,
+                        }))
+                      }
+                    />
+                  </div>
+                </MzField>
+              ))}
             </div>
           </MzSection>
 
@@ -340,7 +413,7 @@ export function MobizoneReceiptSettingsPage(): JSX.Element {
             className="overflow-auto rounded-lg border border-slate-200 p-3 dark:border-slate-700"
             style={{
               maxWidth: settings.paperWidthMm === 58 ? 260 : 340,
-              background: settings.slipTheme === "dark" ? "#0b1220" : "#ffffff",
+              background: settings.design.background,
             }}
             dangerouslySetInnerHTML={{ __html: previewHtml }}
           />

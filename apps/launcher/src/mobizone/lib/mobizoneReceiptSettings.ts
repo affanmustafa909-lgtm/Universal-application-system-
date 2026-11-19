@@ -20,6 +20,14 @@ export type MobizoneReceiptFields = {
   footer: boolean;
 };
 
+export type MobizoneReceiptDesign = {
+  accent: string;
+  text: string;
+  muted: string;
+  border: string;
+  background: string;
+};
+
 export type MobizoneReceiptSettings = {
   shopName: string;
   shopPhone: string;
@@ -45,6 +53,8 @@ export type MobizoneReceiptSettings = {
    * Never loaded from restaurant / POPS Content Updation branding.
    */
   shopLogoUrl: string;
+  /** On-screen / preview colors. Print remains black-on-white for thermal. */
+  design: MobizoneReceiptDesign;
   fields: MobizoneReceiptFields;
 };
 
@@ -70,6 +80,34 @@ export const DEFAULT_MOBIZONE_RECEIPT_FIELDS: MobizoneReceiptFields = {
   footer: true,
 };
 
+export const RECEIPT_DESIGN_PRESETS = {
+  teal: {
+    accent: "#0f766e",
+    text: "#0f172a",
+    muted: "#475569",
+    border: "#0f766e",
+    background: "#ffffff",
+  },
+  classic: {
+    accent: "#0f172a",
+    text: "#0f172a",
+    muted: "#475569",
+    border: "#0f172a",
+    background: "#ffffff",
+  },
+  navy: {
+    accent: "#5eead4",
+    text: "#f8fafc",
+    muted: "#cbd5e1",
+    border: "#334155",
+    background: "#0b1220",
+  },
+} as const satisfies Record<string, MobizoneReceiptDesign>;
+
+export const DEFAULT_MOBIZONE_RECEIPT_DESIGN: MobizoneReceiptDesign = {
+  ...RECEIPT_DESIGN_PRESETS.teal,
+};
+
 export const DEFAULT_MOBIZONE_RECEIPT_SETTINGS: MobizoneReceiptSettings = {
   shopName: "MobiZone",
   shopPhone: "",
@@ -83,6 +121,7 @@ export const DEFAULT_MOBIZONE_RECEIPT_SETTINGS: MobizoneReceiptSettings = {
   density: "compact",
   slipTheme: "classic",
   shopLogoUrl: "",
+  design: { ...DEFAULT_MOBIZONE_RECEIPT_DESIGN },
   fields: { ...DEFAULT_MOBIZONE_RECEIPT_FIELDS },
 };
 
@@ -112,6 +151,35 @@ function storageKey(branchCode: string): string {
   return `mobizone-receipt-settings-v1:${branchCode || "MAIN"}`;
 }
 
+function normalizeHex(raw: unknown, fallback: string): string {
+  const v = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(v)) return v;
+  if (/^#[0-9a-f]{3}$/.test(v)) {
+    const r = v[1];
+    const g = v[2];
+    const b = v[3];
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  return fallback;
+}
+
+export function normalizeMobizoneReceiptDesign(
+  raw: Partial<MobizoneReceiptDesign> | null | undefined,
+  slipTheme?: "classic" | "dark",
+): MobizoneReceiptDesign {
+  const base =
+    slipTheme === "dark" ? RECEIPT_DESIGN_PRESETS.navy : DEFAULT_MOBIZONE_RECEIPT_DESIGN;
+  return {
+    accent: normalizeHex(raw?.accent, base.accent),
+    text: normalizeHex(raw?.text, base.text),
+    muted: normalizeHex(raw?.muted, base.muted),
+    border: normalizeHex(raw?.border, base.border),
+    background: normalizeHex(raw?.background, base.background),
+  };
+}
+
 export function normalizeMobizoneReceiptSettings(
   raw: Partial<MobizoneReceiptSettings> | null | undefined,
 ): MobizoneReceiptSettings {
@@ -121,6 +189,8 @@ export function normalizeMobizoneReceiptSettings(
   const shopLogoUrl = String(raw?.shopLogoUrl ?? "")
     .trim()
     .slice(0, 1_500_000);
+  const slipTheme = raw?.slipTheme === "dark" ? "dark" : "classic";
+  const hasCustomDesign = Boolean(raw?.design && typeof raw.design === "object");
   return {
     shopName: (raw?.shopName ?? DEFAULT_MOBIZONE_RECEIPT_SETTINGS.shopName).trim() || "MobiZone",
     shopPhone,
@@ -136,13 +206,18 @@ export function normalizeMobizoneReceiptSettings(
       return Math.min(1.35, Math.max(0.75, n));
     })(),
     density: raw?.density === "comfortable" ? "comfortable" : "compact",
-    slipTheme: raw?.slipTheme === "dark" ? "dark" : "classic",
+    slipTheme,
     shopLogoUrl:
       shopLogoUrl.startsWith("data:image/") ||
       shopLogoUrl.startsWith("https://") ||
       shopLogoUrl.startsWith("http://")
         ? shopLogoUrl
         : "",
+    design: hasCustomDesign
+      ? normalizeMobizoneReceiptDesign(raw?.design, slipTheme)
+      : slipTheme === "dark"
+        ? { ...RECEIPT_DESIGN_PRESETS.navy }
+        : { ...DEFAULT_MOBIZONE_RECEIPT_DESIGN },
     fields,
   };
 }
