@@ -85,10 +85,14 @@ export function platformFetch(input: RequestInfo | URL, init?: RequestInit): Pro
 export function isLikelyNetworkFailure(err: unknown): boolean {
   if (!(err instanceof Error)) return true;
   const m = err.message;
+  // Match real transport failures only — not auth messages that casually say "network".
   return (
     m === "Load failed" ||
     m === "Failed to fetch" ||
-    /network|fetch|ECONNREFUSED|ENOTFOUND|aborted|timed?\s*out/i.test(m)
+    m.startsWith("Cannot reach the API") ||
+    /ECONNREFUSED|ENOTFOUND|ECONNRESET|ETIMEDOUT|aborted|timed?\s*out|NetworkError|Failed to fetch/i.test(
+      m,
+    )
   );
 }
 

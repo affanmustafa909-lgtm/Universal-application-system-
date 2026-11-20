@@ -237,7 +237,10 @@ export function LoginPage(): JSX.Element {
     navigate(getErpEntryPath(lockedId, false));
   }
 
-  async function tryOfflineLogin(): Promise<boolean> {
+  async function tryOfflineLogin(opts?: {
+    /** When online API failed first, keep that error if no offline profile exists. */
+    onlineError?: string;
+  }): Promise<boolean> {
     const verified = await verifyOfflinePassword(email, password);
     if (verified.ok && verified.identity.lastAccessToken && verified.identity.lastRefreshToken) {
       await completeLogin(verified.identity.lastAccessToken, verified.identity.lastRefreshToken, {
@@ -245,6 +248,12 @@ export function LoginPage(): JSX.Element {
         lastOnlineAt: verified.identity.lastOnlineAt,
       });
       return true;
+    }
+    if (opts?.onlineError && (!verified.ok && verified.reason === "never")) {
+      setError(
+        `${opts.onlineError} Agar pehle is device pe online login ho chuka ho to offline profile save hogi.`,
+      );
+      return false;
     }
     setError(
       verified.ok
@@ -259,18 +268,21 @@ export function LoginPage(): JSX.Element {
     setError(null);
     setLoading(true);
     try {
-      // Prefer local offline profile when browser reports offline or local-only mode.
-      if (!isOnline() || isLocalDataMode()) {
+      // Local-only mode: never hit the cloud API.
+      if (isLocalDataMode()) {
         await tryOfflineLogin();
         return;
       }
+      // Always try online first when not local-only. navigator.onLine is often wrong
+      // (Wi‑Fi on but WebView still reports offline) and was skipping the API entirely.
       try {
         const client = new AuthClient({ baseUrl: getApiBaseUrl() });
         const tokens = await client.login(email, password);
         await completeLogin(tokens.accessToken, tokens.refreshToken);
       } catch (err) {
-        if (isLikelyNetworkFailure(err)) {
-          await tryOfflineLogin();
+        const msg = err instanceof Error ? err.message : "Login failed";
+        if (isLikelyNetworkFailure(err) || !isOnline()) {
+          await tryOfflineLogin({ onlineError: msg });
           return;
         }
         throw err;
@@ -333,7 +345,7 @@ export function LoginPage(): JSX.Element {
           <ThemeToggle />
         </div>
         <div className="mb-3 rounded-lg border border-[color:var(--brand)]/25 bg-[var(--brand-cream)] px-3 py-2 text-center text-xs font-semibold text-[color:var(--ink)]">
-          Design refresh · Desktop v1.0.1 · auto-update live
+          Desktop v{__APP_VERSION__} · auto-update live · API {getApiBaseUrl().replace(/^https?:\/\//, "")}
         </div>
         <div className={`${loginCardClass} border-teal-500/20 shadow-lg shadow-teal-900/5 ring-1 ring-teal-500/35`}>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">
@@ -401,7 +413,7 @@ export function LoginPage(): JSX.Element {
       </div>
 
       <div className="mb-3 rounded-lg border border-[color:var(--brand)]/25 bg-[var(--brand-cream)] px-3 py-2 text-center text-xs font-semibold text-[color:var(--ink)]">
-        Design refresh · Desktop v1.0.1 · auto-update live
+        Desktop v{__APP_VERSION__} · auto-update live
       </div>
 
       <div className={`${loginCardClass} shadow-lg ${accentRing}`}>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { compressAndUploadMedia } from "../../lib/mediaUpload";
 import { mutedClass } from "../../pops/lib/themeClasses";
 import { useMobizoneBranchCode, useMobizoneDb } from "../hooks/useMobizone";
 import {
@@ -205,9 +206,16 @@ export function MobizoneReceiptSettingsPage(): JSX.Element {
                       }
                       const reader = new FileReader();
                       reader.onload = () => {
-                        const dataUrl = typeof reader.result === "string" ? reader.result : "";
-                        setSettings((s) => ({ ...s, shopLogoUrl: dataUrl }));
-                        setMsg(null);
+                        void (async () => {
+                          const dataUrl = typeof reader.result === "string" ? reader.result : "";
+                          if (!dataUrl) return;
+                          const stored = await compressAndUploadMedia(dataUrl, {
+                            filename: file.name || "shop-logo.jpg",
+                            source: "mobizone_sync",
+                          });
+                          setSettings((s) => ({ ...s, shopLogoUrl: stored }));
+                          setMsg(null);
+                        })();
                       };
                       reader.readAsDataURL(file);
                     }}

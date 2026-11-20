@@ -3,6 +3,7 @@
 /** Business module baked into this build. Injected by Vite `define`. */
 declare const __PLATFORM_EDITION__: string;
 declare const __POPS_MOBILE_VARIANT__: string;
+declare const __APP_VERSION__: string;
 
 interface Window {
   __POPS_MOBILE_VARIANT__?: string;

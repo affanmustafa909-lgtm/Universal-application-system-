@@ -45,6 +45,7 @@ import { SuperAdminTaxMapPage } from "./super-admin/SuperAdminTaxMapPage";
 import { SuperAdminPaymentsPage } from "./super-admin/SuperAdminPaymentsPage";
 import { SuperAdminSecurityPage } from "./super-admin/SuperAdminSecurityPage";
 import { SuperAdminBroadcastPage } from "./super-admin/SuperAdminBroadcastPage";
+import { SuperAdminFilesPage } from "./super-admin/SuperAdminFilesPage";
 
 function Protected({ children }: { children: JSX.Element }): JSX.Element {
   const sessionReady = useSessionReady();
@@ -131,6 +132,7 @@ export function App(): JSX.Element {
             <Route path="businesses" element={<SuperAdminBusinessesPage />} />
             <Route path="businesses/:businessId" element={<SuperAdminBusinessDetailPage />} />
             <Route path="users" element={<SuperAdminUsersPage />} />
+            <Route path="files" element={<SuperAdminFilesPage />} />
             <Route path="licences" element={<SuperAdminLicencesPage />} />
             <Route path="tax" element={<SuperAdminTaxMapPage />} />
             <Route path="payments" element={<SuperAdminPaymentsPage />} />

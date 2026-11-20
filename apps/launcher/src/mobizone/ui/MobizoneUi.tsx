@@ -5,9 +5,22 @@ import {
   MzScanTemplateOverlay,
   type MzScanTemplateKind,
 } from "../components/MzScanTemplateOverlay";
+import { compressAndUploadMedia } from "../../lib/mediaUpload";
 import { maybeUploadToGoogleDrive } from "../lib/googleDriveApi";
 import { formatPkr } from "../lib/mobizoneStore";
 import "../mobizone.css";
+
+/** Prefer central platform media (Super Admin File Manager), then Drive, else local data URL. */
+async function storeCompressedMedia(dataUrl: string, filename: string): Promise<string> {
+  const platformUrl = await compressAndUploadMedia(dataUrl, {
+    filename,
+    source: "mobizone_sync",
+  });
+  if (platformUrl !== dataUrl && /^https?:\/\//i.test(platformUrl)) {
+    return platformUrl;
+  }
+  return maybeUploadToGoogleDrive(dataUrl, filename);
+}
 
 export function MzPage({ children }: { children: ReactNode }): JSX.Element {
   return <div className="mz-app space-y-5 md:space-y-6">{children}</div>;
@@ -440,14 +453,14 @@ export function MzPhotoUpload({
           reader.onerror = () => reject(new Error("Could not read video"));
           reader.readAsDataURL(file);
         });
-        const stored = await maybeUploadToGoogleDrive(dataUrl, file.name);
+        const stored = await storeCompressedMedia(dataUrl, file.name);
         onChange(stored);
         setCameraOpen(false);
         setCamErr(null);
         return;
       }
       const dataUrl = await readImageAsDataUrl(file);
-      const stored = await maybeUploadToGoogleDrive(dataUrl, file.name);
+      const stored = await storeCompressedMedia(dataUrl, file.name);
       onChange(stored);
       setCameraOpen(false);
       setCamErr(null);
@@ -464,7 +477,7 @@ export function MzPhotoUpload({
     }
     try {
       const dataUrl = compressVideoFrame(video);
-      void maybeUploadToGoogleDrive(dataUrl, `camera-${Date.now()}.jpg`).then((stored) => {
+      void storeCompressedMedia(dataUrl, `camera-${Date.now()}.jpg`).then((stored) => {
         onChange(stored);
         setCameraOpen(false);
         setCamErr(null);
@@ -515,7 +528,7 @@ export function MzPhotoUpload({
         const reader = new FileReader();
         reader.onloadend = () => {
           const dataUrl = String(reader.result ?? "");
-          void maybeUploadToGoogleDrive(dataUrl, `camera-${Date.now()}.webm`).then((stored) => {
+          void storeCompressedMedia(dataUrl, `camera-${Date.now()}.webm`).then((stored) => {
             onChange(stored);
             setCameraOpen(false);
             setCamErr(null);
@@ -706,7 +719,7 @@ export function MzDocumentUpload({
       }
       try {
         const dataUrl = await readDocumentAsDataUrl(file);
-        const stored = await maybeUploadToGoogleDrive(dataUrl, file.name);
+        const stored = await storeCompressedMedia(dataUrl, file.name);
         next.push({
           id: newDocId(),
           fileName: file.name,

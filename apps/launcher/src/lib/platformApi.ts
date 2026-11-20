@@ -244,3 +244,148 @@ export async function fetchPlatformSystemTypes(): Promise<{ id: SystemType; labe
     });
   });
 }
+
+/* ─── Super Admin File Manager ─────────────────────────────────────────── */
+
+export type PlatformMediaSummaryRow = {
+  organizationId: string;
+  organizationName: string;
+  uploadedByUserId: string | null;
+  userEmail: string;
+  userName: string | null;
+  imageCount: number;
+  videoCount: number;
+  otherCount: number;
+  totalBytes: number;
+  flaggedCount: number;
+  assetCount: number;
+};
+
+export type PlatformMediaSummary = {
+  totals: {
+    usersWithMedia: number;
+    totalBytes: number;
+    flaggedCount: number;
+    assetCount: number;
+  };
+  byUser: PlatformMediaSummaryRow[];
+};
+
+export type PlatformMediaAsset = {
+  id: string;
+  organizationId: string;
+  organizationName: string | null;
+  uploadedByUserId: string | null;
+  userEmail: string | null;
+  kind: string;
+  mimeType: string;
+  originalName: string;
+  byteSize: number;
+  width: number | null;
+  height: number | null;
+  storagePath: string;
+  source: string;
+  flagStatus: string;
+  flagNote: string | null;
+  createdAt: string;
+  url: string;
+};
+
+export async function fetchPlatformMediaSummary(): Promise<PlatformMediaSummary> {
+  const res = await authFetch("/v1/platform/media/summary");
+  return readJson(res, (json) => json as PlatformMediaSummary);
+}
+
+export async function fetchPlatformMedia(params: {
+  organizationId?: string;
+  userId?: string;
+  flagStatus?: string;
+  kind?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ items: PlatformMediaAsset[]; limit: number; offset: number }> {
+  const qs = new URLSearchParams();
+  if (params.organizationId) qs.set("organizationId", params.organizationId);
+  if (params.userId) qs.set("userId", params.userId);
+  if (params.flagStatus) qs.set("flagStatus", params.flagStatus);
+  if (params.kind) qs.set("kind", params.kind);
+  if (params.limit != null) qs.set("limit", String(params.limit));
+  if (params.offset != null) qs.set("offset", String(params.offset));
+  const res = await authFetch(`/v1/platform/media?${qs}`);
+  return readJson(res, (json) => json as { items: PlatformMediaAsset[]; limit: number; offset: number });
+}
+
+export async function flagPlatformMedia(
+  id: string,
+  input: { status: "none" | "flagged" | "approved" | "rejected"; note?: string },
+): Promise<void> {
+  const res = await authFetch(`/v1/platform/media/${id}/flag`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Flag failed (${res.status})`);
+  }
+}
+
+export async function deletePlatformMedia(id: string): Promise<void> {
+  const res = await authFetch(`/v1/platform/media/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Delete failed (${res.status})`);
+  }
+}
+
+export async function reindexPlatformMenuMedia(): Promise<{ imported: number; skipped: number }> {
+  const res = await authFetch("/v1/platform/media/reindex-menu", { method: "POST" });
+  return readJson(res, (json) => json as { imported: number; skipped: number });
+}
+
+export function platformMediaAbsoluteUrl(pathOrUrl: string): string {
+  if (/^https?:\/\//i.test(pathOrUrl) || pathOrUrl.startsWith("data:")) return pathOrUrl;
+  const base = getApiBaseUrl().replace(/\/$/, "");
+  return `${base}${pathOrUrl.startsWith("/") ? "" : "/"}${pathOrUrl}`;
+}
+
+export async function downloadPlatformMedia(id: string, filename: string): Promise<void> {
+  const res = await authFetch(`/v1/platform/media/${id}/download`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Download failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename || "media";
+  a.click();
+  URL.revokeObjectURL(href);
+}
+
+export async function uploadPlatformMediaFile(
+  file: Blob,
+  opts?: { filename?: string; organizationId?: string; source?: string },
+): Promise<{ url: string; id: string; storedBytes: number; originalBytes: number }> {
+  const form = new FormData();
+  form.append("file", file, opts?.filename || "upload.jpg");
+  if (opts?.organizationId) form.append("organizationId", opts.organizationId);
+  if (opts?.source) form.append("source", opts.source);
+  const res = await authFetch("/v1/platform/media/upload", { method: "POST", body: form });
+  return readJson(res, (json) => {
+    const row = json as {
+      id?: string;
+      url?: string;
+      storedBytes?: number;
+      originalBytes?: number;
+    };
+    if (!row.id || !row.url) throw new Error("Invalid upload response");
+    return {
+      id: row.id,
+      url: platformMediaAbsoluteUrl(row.url),
+      storedBytes: Number(row.storedBytes ?? 0),
+      originalBytes: Number(row.originalBytes ?? 0),
+    };
+  });
+}

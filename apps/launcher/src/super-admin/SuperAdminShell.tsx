@@ -31,6 +31,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/super-admin", end: true, label: "Overview" },
       { to: "/super-admin/businesses", label: "Businesses" },
       { to: "/super-admin/users", label: "Users" },
+      { to: "/super-admin/files", label: "Files" },
       { to: "/super-admin/security", label: "Security" },
     ],
   },

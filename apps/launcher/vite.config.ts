@@ -1,5 +1,6 @@
 import federation from "@originjs/vite-plugin-federation";
 import react from "@vitejs/plugin-react";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv } from "vite";
@@ -38,6 +39,9 @@ export default defineConfig(({ mode }) => {
     define: {
       __PLATFORM_EDITION__: JSON.stringify(edition),
       __POPS_MOBILE_VARIANT__: JSON.stringify(process.env.POPS_MOBILE_VARIANT ?? ""),
+      __APP_VERSION__: JSON.stringify(
+        JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")).version as string,
+      ),
     },
     server: {
       host: "127.0.0.1",

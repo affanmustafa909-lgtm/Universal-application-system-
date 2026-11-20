@@ -148,6 +148,7 @@ export const SUPER_ADMIN_PAGE_TITLES: Record<string, string> = {
   "/super-admin": "Overview",
   "/super-admin/businesses": "Businesses",
   "/super-admin/users": "Users",
+  "/super-admin/files": "File Manager",
   "/super-admin/licences": "Licences & modules",
   "/super-admin/tax": "FBR / FPRA / Real PRA",
   "/super-admin/payments": "Payments",
